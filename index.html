@@ -596,7 +596,7 @@
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
       const rotational = spec.kind === 'plant' || spec.kind === 'pen';
-      modelWrap.innerHTML = rotational ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec))) : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
+      modelWrap.innerHTML = rotational ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec))) : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
       applyCamera();
     }
     function applyCamera() {
