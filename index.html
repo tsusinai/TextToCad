@@ -465,8 +465,9 @@
       return 'Desk organizer';
     }
     function displayTitle(title) {
-      if (currentLang !== 'zh') return title;
-      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘' })[title] || title;
+      const normalized = String(title || '').replace(/^Parametric\s+/i, '');
+      if (currentLang !== 'zh') return normalized;
+      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘' })[normalized] || normalized;
     }
     function dimensionsFor(text) {
       const normalized = text.toLowerCase();
@@ -642,7 +643,13 @@
       return modelSpec && isEditIntent(text) ? applyEdit(text, modelSpec) : parseModel(text);
     }
     function canonicalPrompt(spec) {
-      const type = spec.title === 'Storage tray' ? 'storage tray' : (spec.title === 'Cable clip' ? 'cable clip' : (spec.title === 'Plant pot' ? 'plant pot' : (spec.title === 'Lamp base' ? 'lamp base' : 'desk organizer')));
+      const title = String(spec.title || '').toLowerCase();
+      const type = title.includes('tray') || title.includes('托盘') ? 'storage tray'
+        : title.includes('clip') || title.includes('cable') || title.includes('线缆') ? 'cable clip'
+        : title.includes('plant') || title.includes('pot') || title.includes('花盆') ? 'plant pot'
+        : title.includes('lamp') || title.includes('灯') ? 'lamp base'
+        : title.includes('pen') || title.includes('笔') ? 'pen cup'
+        : 'desk organizer';
       return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, and ' + spec.chamfer + ' mm chamfer.';
     }
     function diffSpec(previous, next) {
