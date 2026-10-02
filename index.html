@@ -739,16 +739,19 @@
       camera.panX = 0;
       camera.panY = 0;
       applyCamera();
+      if (threeState.active) resetThreeCamera();
     }
     function bindViewportControls() {
       if (!modelStage) return;
       modelStage.addEventListener('pointerdown', (event) => {
+        if (threeState.active) return;
         if (event.button !== 0 && event.pointerType !== 'touch') return;
         pointerState = { id: event.pointerId, x: event.clientX, y: event.clientY, pan: event.shiftKey || event.button === 1 };
         modelStage.setPointerCapture(event.pointerId);
         modelStage.classList.add('dragging');
       });
       modelStage.addEventListener('pointermove', (event) => {
+        if (threeState.active) return;
         if (!pointerState || pointerState.id !== event.pointerId) return;
         const dx = event.clientX - pointerState.x;
         const dy = event.clientY - pointerState.y;
@@ -772,6 +775,7 @@
       modelStage.addEventListener('pointerup', release);
       modelStage.addEventListener('pointercancel', release);
       modelStage.addEventListener('wheel', (event) => {
+        if (threeState.active) return;
         event.preventDefault();
         camera.zoom = clamp(camera.zoom * (event.deltaY < 0 ? 1.1 : 0.9), 0.55, 2.8);
         applyCamera();
@@ -1176,6 +1180,8 @@
           clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(backendUrl + backendArtifact.glb);
+        else hideThreePreview();
         modelState.textContent = remote ? copy[currentLang].exporting : copy[currentLang].state;
         solved.textContent = remote ? copy[currentLang].exporting : copy[currentLang].solved;
         renderModel(modelSpec, currentView);
@@ -1254,6 +1260,7 @@
         currentView = button.dataset.view;
         resetCamera();
         renderModel(modelSpec || parseModel(prompt.value), currentView);
+        setThreeView(currentView);
       });
     });
     function objFor(spec) {
