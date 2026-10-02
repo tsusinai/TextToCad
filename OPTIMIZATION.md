@@ -49,3 +49,13 @@
 - 后端 GLB 产物接入渐进式 Three.js + OrbitControls 视图；CDN 或 GLB 不可用时自动回退 SVG 预览。
 
 未完成项：真实面级厚度/间隙采样、持久化队列、GLB 离线打包和更完整的多指触控。
+
+## 第四轮 LLM 优化执行
+
+- 高级模式接入 OpenAI-compatible provider；标准模式保持离线可用。
+- 后端增加提示词注入边界、HTTP(S) URL 校验、超时上限、响应字节上限、JSON 解析错误收敛和有限枚举/数值/布尔值校验。
+- 前端发送原始意图与确定性基线，探测 /health 的 LLM 能力，并展示 provider 未配置时的明确状态。
+- 生成响应和 manifest 保留 mode、llm_used、assumptions；LLM 永远不生成或执行 CadQuery 代码。
+- 高级解析出的排水孔、底部走线槽会映射到特征树，保持意图到界面的可见性。
+
+验收：未配置 API 时高级模式可安全回退；非法数值、NaN、错误布尔值和超大响应不会进入几何构建；前端脚本静态语法检查通过。
