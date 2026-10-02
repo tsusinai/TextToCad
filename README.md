@@ -125,7 +125,12 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 
 每个 revision 会保存参数来源、assumptions、特征规划、约束、检查和导出 manifest。后续可以在 IR 上加入版本化 JSON Schema、Feature DAG、约束求解器、面级 DFM 检查和自动修复闭环。
 
-## 当前边界
+## 安全与生产部署
+
+本地 Docker 默认不要求 API key，便于快速试用。公网部署请在 `backend/.env` 设置 `BACKEND_API_KEY`；之后所有 `/v1/*` 请求都必须携带 `X-API-Key`，前端可在加载页面前注入 `window.FORM_CAD_BACKEND_API_KEY`。不要把密钥写进 GitHub Pages 仓库，生产环境应使用 HTTPS、反向代理鉴权、严格 CORS、持久化 `ARTIFACT_ROOT` 和监控。
+
+异步生成队列有进程内上限，满载时返回 HTTP 429。当前缓存和任务状态也是进程内的，Docker 使用单 worker；多副本部署需要外部队列和共享存储。GitHub Pages 连接远程后端时只能使用 HTTPS，`http://localhost` 仅用于同一台机器上的本机调试。
+
 
 - 壁厚、间隙、悬空和拔模目前包含名义估算；真正的面级测量仍是下一阶段。
 - LLM 高级模式需要后端 API key；标准模式无需 API，仍可离线工作。
