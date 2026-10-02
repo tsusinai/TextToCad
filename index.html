@@ -429,6 +429,14 @@
     const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
     const localBackend = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://localhost:8787' : '';
     const backendUrl = (configuredBackend || localBackend).replace(/\/+$/, '');
+    // Optional shared key for a protected self-hosted backend. Prefer injecting
+    // this value at deploy time; query strings are intentionally not accepted.
+    const backendApiKey = String(window.FORM_CAD_BACKEND_API_KEY || '').trim();
+    function backendFetch(url, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (backendApiKey) headers['x-api-key'] = backendApiKey;
+      return fetch(url, Object.assign({}, options, { headers }));
+    }
     let backendArtifact = null;
     let llmAssumptions = [];
     let interpretationSource = 'draft';
@@ -566,7 +574,7 @@
         return;
       }
       try {
-        const response = await fetch(backendUrl + '/health', { headers: { accept: 'application/json' } });
+        const response = await backendFetch(backendUrl + '/health', { headers: { accept: 'application/json' } });
         if (response.ok) {
           const health = await response.json();
           advancedAvailable = Boolean(health.advanced_mode_available);
@@ -947,7 +955,7 @@
         if (threeState.requestController) threeState.requestController.abort();
         const requestController = new AbortController();
         threeState.requestController = requestController;
-        const response = await fetch(url, { signal: requestController.signal });
+        const response = await backendFetch(url, { signal: requestController.signal });
         if (!response.ok) throw new Error('GLB preview returned HTTP ' + response.status);
         const arrayBuffer = await response.arrayBuffer();
         if (sequence !== threeState.loadSeq || requestController.signal.aborted) return;
@@ -1369,25 +1377,25 @@
     async function requestBackend(value, process, signal) {
       if (!backendUrl) return null;
       const payload = { prompt: value, units: 'mm', process: process || selectedProcess, mode: selectedMode };
-      const jobResponse = await fetch(backendUrl + '/v1/jobs', {
+      const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
         signal
       });
       if (jobResponse.status === 404) {
-        const response = await fetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
+        const response = await backendFetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
         if (!response.ok) throw new Error('geometry backend returned ' + response.status);
         return response.json();
       }
       if (!jobResponse.ok) throw new Error('geometry job endpoint returned ' + jobResponse.status);
       const job = await jobResponse.json();
       const jobId = job.job_id;
-      const cancelRemoteJob = () => { fetch(backendUrl + '/v1/jobs/' + jobId, { method: 'DELETE', keepalive: true }).catch(() => {}); };
+      const cancelRemoteJob = () => { backendFetch(backendUrl + '/v1/jobs/' + jobId, { method: 'DELETE', keepalive: true }).catch(() => {}); };
       if (signal) signal.addEventListener('abort', cancelRemoteJob, { once: true });
       try {
         while (true) {
-          const statusResponse = await fetch(backendUrl + '/v1/jobs/' + jobId, { signal });
+          const statusResponse = await backendFetch(backendUrl + '/v1/jobs/' + jobId, { signal });
           if (!statusResponse.ok) throw new Error('geometry job status returned ' + statusResponse.status);
           const status = await statusResponse.json();
           if (status.status === 'succeeded') return status.result;
@@ -1576,18 +1584,32 @@
       return rows.join('\\n') + '\\n';
     }
     updateExportButtons();
+    async function downloadBackendArtifact(path, format) {
+      if (!backendUrl || !path) return;
+      const response = await backendFetch(backendUrl + path);
+      if (!response.ok) throw new Error('artifact download returned ' + response.status);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'texttocad-model.' + format;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    }
     function bindArtifactExport(button, format) {
       if (!button) return;
       button.addEventListener('click', () => {
         if (!backendArtifact || !backendArtifact[format]) return;
-        window.location.href = backendUrl + backendArtifact[format];
+        downloadBackendArtifact(backendArtifact[format], format).catch(() => setGenerationError(currentLang === 'zh' ? '导出失败，请检查后端连接。' : 'Export failed; check the backend connection.'));
       });
     }
     bindArtifactExport(export3mf, '3mf');
     bindArtifactExport(exportGlb, 'glb');
     if (exportStep) exportStep.addEventListener('click', () => {
       if (!backendArtifact || !backendArtifact.step) return;
-      window.location.href = backendUrl + backendArtifact.step;
+      downloadBackendArtifact(backendArtifact.step, 'step').catch(() => setGenerationError(currentLang === 'zh' ? '导出失败，请检查后端连接。' : 'Export failed; check the backend connection.'));
     });
     document.getElementById('exportObj').addEventListener('click', () => {
       const spec = modelSpec || parseModel(prompt.value);
