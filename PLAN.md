@@ -74,3 +74,17 @@ Acceptance target: long-running jobs survive page refreshes and artifacts remain
 ## Measurement
 
 Track interpretation confirmation rate, valid-B-Rep rate, median generation time, backend failure rate, revision restore rate, export success rate, and manufacturing check failures by process profile.
+
+
+## Astra 全局优化执行（2026-10-02）
+
+本轮已完成第一批 P0 稳定性与体验改进：
+
+- 后端生成后持久化 \`manifest.json\`，并让 \`export_ready\` 只在 STEP、STL、分析文件及可选预览文件实际写入后变为 true。
+- 生成开始时清理超时产物；生成失败会删除当前模型的部分产物，避免磁盘泄漏。
+- 前后端统一托盘、线缆夹、花盆、灯座、笔筒的类型与标题，连续编辑时保留模型类型。
+- 前端生成请求加入 \`AbortController\`、序列号防竞态、异常收敛和明确的本地预览提示。
+- 3D 预览支持拖动旋转、Shift+拖动平移、滚轮缩放、双击/ FIT 复位，视图切换会回到可预测的相机状态；交互提示随中英文切换。
+- STEP/3MF/GLB 按后端真实返回的能力显示，避免点击后再触发无效生成。
+
+验证标准：主分支和 \`gh-pages\` 的前端脚本通过 \`new Function\` 语法检查；两分支 index 内容一致；后端静态审查确认清单写入、产物清理、类型解析和失败回收路径存在。
