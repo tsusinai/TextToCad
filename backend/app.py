@@ -325,33 +325,47 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
         f"The deterministic baseline is {json.dumps(baseline.model_dump())}. "
         "Return assumptions in the same language as the user when possible."
     )
-    payload = {
+    base_payload = {
         "model": LLM_MODEL,
         "temperature": 0,
-        "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
     }
-    request = urllib.request.Request(
-        LLM_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"},
-        method="POST",
-    )
+
+    def request_body(payload: dict[str, Any]) -> dict[str, Any]:
+        request = urllib.request.Request(
+            LLM_API_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > LLM_MAX_RESPONSE_BYTES:
+                    raise RuntimeError("LLM provider response exceeded the configured size limit")
+                raw_body = response.read(LLM_MAX_RESPONSE_BYTES + 1)
+                if len(raw_body) > LLM_MAX_RESPONSE_BYTES:
+                    raise RuntimeError("LLM provider response exceeded the configured size limit")
+                return json.loads(raw_body.decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise RuntimeError("LLM provider timed out or was unreachable") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise RuntimeError("LLM provider returned invalid JSON") from exc
+
     try:
-        with urllib.request.urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
-            content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > LLM_MAX_RESPONSE_BYTES:
-                raise RuntimeError("LLM provider response exceeded the configured size limit")
-            raw_body = response.read(LLM_MAX_RESPONSE_BYTES + 1)
-            if len(raw_body) > LLM_MAX_RESPONSE_BYTES:
-                raise RuntimeError("LLM provider response exceeded the configured size limit")
-            body = json.loads(raw_body.decode("utf-8"))
+        body = request_body({**base_payload, "response_format": {"type": "json_object"}})
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"LLM provider returned HTTP {exc.code}") from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise RuntimeError("LLM provider timed out or was unreachable") from exc
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise RuntimeError("LLM provider returned invalid JSON") from exc
+        # Some OpenAI-compatible providers reject response_format even though
+        # they can still return JSON. Retry once without it, then validate the
+        # returned content with the same strict parser below.
+        if exc.code not in {400, 404, 422}:
+            raise RuntimeError(f"LLM provider returned HTTP {exc.code}") from exc
+        try:
+            body = request_body(base_payload)
+        except urllib.error.HTTPError as retry_exc:
+            raise RuntimeError(f"LLM provider returned HTTP {retry_exc.code}") from retry_exc
     try:
         content = body["choices"][0]["message"]["content"]
         if isinstance(content, list):
