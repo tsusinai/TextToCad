@@ -59,3 +59,18 @@
 - 高级解析出的排水孔、底部走线槽会映射到特征树，保持意图到界面的可见性。
 
 验收：未配置 API 时高级模式可安全回退；非法数值、NaN、错误布尔值和超大响应不会进入几何构建；前端脚本静态语法检查通过。
+
+## Astra 第四轮审查执行
+
+Astra 专项审查后已执行：
+
+- GLB 替换前释放旧 geometry、material、texture，避免连续生成后 GPU 内存累积。
+- 只有真实 GLB 处于可见状态时才运行 Three.js 渲染循环；隐藏或降级到 SVG 时停止循环。
+- GLB fetch 使用 AbortController，快速重新生成时旧下载不会覆盖新模型。
+- 生成开始立即清理旧 GLB 并渲染当前草稿，避免页面继续显示上一版实体。
+- 无后端或 GLB 不可用时，交互提示明确标记为“概念预览/SVG 降级”，避免把预览层误认为已生成真实 3D B-Rep。
+- OpenAI-compatible provider 对 response_format 不兼容时，后端仅对 400/404/422 重试一次无该字段的请求，返回仍经过同一套 JSON 与参数边界校验。
+- 取消已完成但来不及中断 OCCT 的 job 时，worker 会删除刚写入的 artifact，避免取消请求造成磁盘泄漏。
+- 语言切换保留 LLM 来源和 assumptions；高级 revision 恢复时优先使用原始自然语言。
+
+尚需真实部署环境验证：不同 trimesh/Three.js 版本的坐标轴约定、WebGL 设备差异，以及运行中的 CadQuery 线程是否需要进程级 worker 隔离。
