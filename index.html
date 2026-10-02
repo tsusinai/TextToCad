@@ -434,7 +434,7 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
-    const threeState = { active: false, ready: false, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, resize: null, loadSeq: 0 };
+    const threeState = { active: false, ready: false, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, resize: null, animationFrame: null, requestController: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
@@ -690,10 +690,46 @@
       for (let i = 1; i < spec.compartments; i += 1) lines.push('<line x1="' + (x + i*w/spec.compartments).toFixed(1) + '" y1="' + (y + 16).toFixed(1) + '" x2="' + (x + i*w/spec.compartments).toFixed(1) + '" y2="' + (y + h - 16).toFixed(1) + '" stroke="#243323" stroke-width="3"/>');
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated front view CAD model"><rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(18, spec.chamfer * 2) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><rect x="' + (x+14).toFixed(1) + '" y="' + (y+14).toFixed(1) + '" width="' + (w-28).toFixed(1) + '" height="' + (h-28).toFixed(1) + '" rx="10" fill="#b8d99a" opacity=".65"/>' + lines.join('') + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
     }
+    function disposeThreeObject(object) {
+      if (!object) return;
+      object.traverse((node) => {
+        if (node.geometry && typeof node.geometry.dispose === 'function') node.geometry.dispose();
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.filter(Boolean).forEach((material) => {
+          ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'].forEach((key) => {
+            if (material[key] && typeof material[key].dispose === 'function') material[key].dispose();
+          });
+          if (typeof material.dispose === 'function') material.dispose();
+        });
+      });
+    }
+    function stopThreeRenderLoop() {
+      if (threeState.animationFrame) cancelAnimationFrame(threeState.animationFrame);
+      threeState.animationFrame = null;
+    }
+    function startThreeRenderLoop() {
+      if (threeState.animationFrame || !threeState.active) return;
+      const render = () => {
+        threeState.animationFrame = null;
+        if (!threeState.active || !threeState.renderer || !threeState.scene || !threeState.camera) return;
+        if (threeState.controls) threeState.controls.update();
+        threeState.renderer.render(threeState.scene, threeState.camera);
+        threeState.animationFrame = requestAnimationFrame(render);
+      };
+      render();
+    }
     function hideThreePreview() {
       threeState.loadSeq += 1;
       threeState.active = false;
-      if (threeState.scene && threeState.model) threeState.scene.remove(threeState.model);
+      if (threeState.requestController) {
+        threeState.requestController.abort();
+        threeState.requestController = null;
+      }
+      stopThreeRenderLoop();
+      if (threeState.scene && threeState.model) {
+        threeState.scene.remove(threeState.model);
+        disposeThreeObject(threeState.model);
+      }
       threeState.model = null;
       if (threeViewport) { threeViewport.classList.remove('active'); threeViewport.setAttribute('aria-hidden', 'true'); }
       if (modelWrap) modelWrap.style.display = '';
@@ -757,30 +793,50 @@
           threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
           if (threeState.resizeObserver) threeState.resizeObserver.observe(threeViewport); else window.addEventListener('resize', resize);
           resize();
-          const animate = () => { if (threeState.renderer && threeState.scene && threeState.camera) { threeState.controls.update(); threeState.renderer.render(threeState.scene, threeState.camera); } requestAnimationFrame(animate); };
-          animate();
+          // Rendering starts only while a GLB is visible; hidden previews do not
+          // keep a permanent animation loop or consume GPU time.
+
         }
         const loader = new GLTFLoader();
-        loader.load(url, (gltf) => {
-          if (sequence !== threeState.loadSeq) return;
-          if (threeState.model) threeState.scene.remove(threeState.model);
-          threeState.model = gltf.scene;
-          // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
-          // imported root so top/front views and orbit controls match the SVG preview.
-          threeState.model.rotation.x = -Math.PI / 2;
-          threeState.model.updateMatrixWorld(true);
-          threeState.scene.add(threeState.model);
-          threeState.active = true;
-          threeViewport.classList.add('active');
-          threeViewport.setAttribute('aria-hidden', 'false');
-          modelWrap.style.display = 'none';
-          requestAnimationFrame(() => {
-            if (sequence !== threeState.loadSeq || !threeState.model) return;
-            if (threeState.resize) threeState.resize();
-            fitThreeModel();
-            setThreeView(currentView);
-          });
-        }, undefined, (error) => { console.warn('GLB preview unavailable; retaining SVG fallback.', error); hideThreePreview(); });
+        if (threeState.requestController) threeState.requestController.abort();
+        const requestController = new AbortController();
+        threeState.requestController = requestController;
+        const response = await fetch(url, { signal: requestController.signal });
+        if (!response.ok) throw new Error('GLB preview returned HTTP ' + response.status);
+        const arrayBuffer = await response.arrayBuffer();
+        if (sequence !== threeState.loadSeq || requestController.signal.aborted) return;
+        const resourcePath = url.slice(0, url.lastIndexOf('/') + 1);
+        const gltf = await new Promise((resolve, reject) => {
+          loader.parse(arrayBuffer, resourcePath, resolve, reject);
+        });
+        if (sequence !== threeState.loadSeq || requestController.signal.aborted) return;
+        if (threeState.model) {
+          threeState.scene.remove(threeState.model);
+          disposeThreeObject(threeState.model);
+        }
+        threeState.model = gltf.scene;
+        // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
+        // imported root so top/front views and orbit controls match the SVG preview.
+        threeState.model.rotation.x = -Math.PI / 2;
+        threeState.model.updateMatrixWorld(true);
+        threeState.scene.add(threeState.model);
+        threeState.active = true;
+        threeViewport.classList.add('active');
+        threeViewport.setAttribute('aria-hidden', 'false');
+        modelWrap.style.display = 'none';
+        if (threeState.requestController === requestController) threeState.requestController = null;
+        requestAnimationFrame(() => {
+          if (sequence !== threeState.loadSeq || !threeState.model) return;
+          if (threeState.resize) threeState.resize();
+          fitThreeModel();
+          setThreeView(currentView);
+          startThreeRenderLoop();
+        });
+      } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
+        if (sequence === threeState.loadSeq) hideThreePreview();
+      }
       } catch (error) {
         console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
         if (sequence === threeState.loadSeq) hideThreePreview();
