@@ -547,7 +547,7 @@
       modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
       applyCamera();
     }
-    function updateProcessHint    function applyCamera() {
+    function applyCamera() {
       if (!modelWrap) return;
       modelWrap.style.transform = 'translate(' + camera.panX.toFixed(1) + 'px,' + (camera.panY - 7).toFixed(1) + 'px) scale(' + camera.zoom.toFixed(3) + ') rotateX(' + camera.rotateX.toFixed(1) + 'deg) rotateY(' + camera.rotateY.toFixed(1) + 'deg)';
     }
@@ -599,7 +599,7 @@
       modelStage.addEventListener('contextmenu', (event) => event.preventDefault());
       if (fitView) fitView.addEventListener('click', resetCamera);
     }
-(profileOverride) {
+    function updateProcessHint(profileOverride) {
       const profile = profileOverride || processProfiles[selectedProcess];
       if (!profile || !processProfileHint) return;
       const minWall = profile.minWall !== undefined ? profile.minWall : profile.min_wall;
