@@ -401,6 +401,14 @@ def build_geometry(params: ModelParameters) -> Any:
                 shape = shape.cut(drainage_hole)
         return shape
 
+    if params.kind == "lamp":
+        # The cable channel is recessed from the underside so the lamp base
+        # keeps a clean top surface while matching the prompt intent.
+        channel_w = max(6.0, min(w * 0.4, w - 2 * wall))
+        channel_d = max(4.0, min(d * 0.22, d - 2 * wall))
+        channel = cq.Workplane("XY").box(channel_w, channel_d, max(1.0, wall * 1.6), centered=(True, True, False)).translate((0, d * 0.28, -0.1))
+        return outer.cut(channel)
+
     if params.kind == "clip":
         # A manufacturable cable clip: a rounded base plus a centered cable
         # relief cut. The cut opens from the top and leaves a strong bottom.
