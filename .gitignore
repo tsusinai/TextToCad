@@ -1,0 +1,6 @@
+# Local secrets and generated CAD artifacts
+backend/.env
+backend/artifacts/
+.env
+.env.*
+!.env.example
