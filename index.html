@@ -775,6 +775,128 @@
       threeState.controls.update();
     }
     function resetThreeCamera() { fitThreeModel(); setThreeView(currentView); }
+    async function ensureThreeRenderer() {
+      if (threeState.renderer && threeState.THREE) return threeState.THREE;
+      if (threeState.rendererPromise) return threeState.rendererPromise;
+      threeState.rendererPromise = (async () => {
+        const THREE = await import('three');
+        const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+        if (threeState.renderer && threeState.THREE) return threeState.THREE;
+        threeState.THREE = THREE;
+        threeState.scene = new THREE.Scene();
+        threeState.scene.background = new THREE.Color(0x252724);
+        threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
+        threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        threeState.renderer.domElement.setAttribute('aria-label', 'Interactive generated 3D model');
+        if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        threeViewport.appendChild(threeState.renderer.domElement);
+        threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
+        threeState.controls.enableDamping = true;
+        threeState.controls.dampingFactor = .08;
+        threeState.controls.screenSpacePanning = true;
+        threeState.controls.minDistance = .05;
+        threeState.controls.maxDistance = 100000;
+        threeState.scene.add(new THREE.HemisphereLight(0xeaf4d4, 0x252724, 1.8));
+        const key = new THREE.DirectionalLight(0xffffff, 2.2);
+        key.position.set(3, 5, 4);
+        threeState.scene.add(key);
+        const resize = () => {
+          const width = threeViewport.clientWidth || 1;
+          const height = threeViewport.clientHeight || 1;
+          threeState.camera.aspect = width / height;
+          threeState.camera.updateProjectionMatrix();
+          threeState.renderer.setSize(width, height, false);
+        };
+        threeState.resize = resize;
+        threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
+        if (threeState.resizeObserver) threeState.resizeObserver.observe(threeViewport);
+        else window.addEventListener('resize', resize);
+        resize();
+        return THREE;
+      })();
+      try {
+        return await threeState.rendererPromise;
+      } finally {
+        threeState.rendererPromise = null;
+      }
+    }
+
+    function makeLocalMaterial(THREE, color, roughness = .55, metalness = .04) {
+      return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    }
+
+    function buildLocalThreeModel(THREE, spec) {
+      const root = new THREE.Group();
+      const body = makeLocalMaterial(THREE, 0xddf79b);
+      const side = makeLocalMaterial(THREE, 0x9fca82);
+      const inner = makeLocalMaterial(THREE, 0x6e9e68);
+      const dark = makeLocalMaterial(THREE, 0x252724, .72);
+      const accent = makeLocalMaterial(THREE, 0xb9d98f, .42);
+      const box = (width, height, depth, x, y, z, material) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.max(width, .1), Math.max(height, .1), Math.max(depth, .1)), material);
+        mesh.position.set(x, y, z);
+        root.add(mesh);
+        return mesh;
+      };
+      const cylinder = (radius, height, x, y, z, material, openEnded = false) => {
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(radius, .1), Math.max(radius, .1), Math.max(height, .1), 64, 1, openEnded), material);
+        mesh.position.set(x, y, z);
+        root.add(mesh);
+        return mesh;
+      };
+      const width = Math.max(Number(spec.width) || 120, 10);
+      const depth = Math.max(Number(spec.depth) || 80, 10);
+      const height = Math.max(Number(spec.height) || 42, 5);
+      const wall = Math.min(Math.max(Number(spec.wall) || 3, 1.2), Math.min(width, depth) / 3);
+      const bottom = Math.min(Math.max(Number(spec.bottom) || wall, 1.2), Math.max(height - 1, 1.2));
+      const kind = spec.kind || 'organizer';
+
+      if (kind === 'plant' || kind === 'pen') {
+        const radius = Math.min(width, depth) / 2;
+        const innerRadius = Math.max(radius - wall, 1);
+        cylinder(radius, height, 0, height / 2, 0, side, true);
+        cylinder(innerRadius, bottom, 0, bottom / 2, 0, body, false);
+        cylinder(Math.max(innerRadius - .8, .5), .35, 0, bottom + .18, 0, inner, false);
+        if (kind === 'plant' && Number(spec.drainage_holes) > 0) {
+          const holeRadius = Math.max(.7, Math.min(2.5, wall * .4));
+          const offset = radius * .35;
+          [[-offset, 0], [offset, 0], [0, offset], [0, -offset]].slice(0, Math.min(4, Number(spec.drainage_holes))).forEach(([x, z]) => {
+            cylinder(holeRadius, .5, x, bottom + .45, z, dark, false);
+          });
+        }
+      } else if (kind === 'tray' || kind === 'organizer') {
+        const innerWidth = Math.max(width - wall * 2, 2);
+        const innerDepth = Math.max(depth - wall * 2, 2);
+        const wallHeight = Math.max(height - bottom, 1);
+        box(width, bottom, depth, 0, bottom / 2, 0, side);
+        box(innerWidth, .25, innerDepth, 0, bottom + .13, 0, inner);
+        box(wall, wallHeight, depth, -(width - wall) / 2, bottom + wallHeight / 2, 0, body);
+        box(wall, wallHeight, depth, (width - wall) / 2, bottom + wallHeight / 2, 0, body);
+        box(innerWidth, wallHeight, wall, 0, bottom + wallHeight / 2, -(depth - wall) / 2, side);
+        box(innerWidth, wallHeight, wall, 0, bottom + wallHeight / 2, (depth - wall) / 2, side);
+        const compartments = Math.max(1, Math.min(12, Number(spec.compartments) || 1));
+        for (let index = 1; index < compartments; index += 1) {
+          const x = -innerWidth / 2 + innerWidth * index / compartments;
+          box(wall, wallHeight, innerDepth, x, bottom + wallHeight / 2, 0, accent);
+        }
+      } else if (kind === 'clip') {
+        const railHeight = Math.max(height - wall, 1);
+        box(width, wall, depth, 0, wall / 2, 0, side);
+        box(wall, railHeight, depth, -(width - wall) / 2, wall + railHeight / 2, 0, body);
+        box(wall, railHeight, depth, (width - wall) / 2, wall + railHeight / 2, 0, body);
+        box(Math.max(width - wall * 2, 2), railHeight, wall, 0, wall + railHeight / 2, -(depth - wall) / 2, accent);
+        box(Math.max(width - wall * 2, 2), railHeight, wall, 0, wall + railHeight / 2, (depth - wall) / 2, accent);
+      } else {
+        box(width, height, depth, 0, height / 2, 0, body);
+        if (kind === 'lamp' && spec.cable_channel) {
+          box(Math.min(width * .4, width - wall * 2), Math.min(wall * 1.6, height * .35), Math.min(depth * .22, depth - wall * 2), 0, .5, depth * .28, dark);
+        }
+      }
+      root.userData.previewSource = 'local';
+      return root;
+    }
+
     async function loadThreePreview(url) {
       if (!url || !threeViewport) { hideThreePreview(); return; }
       const sequence = ++threeState.loadSeq;
