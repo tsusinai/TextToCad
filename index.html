@@ -82,6 +82,23 @@
     .process-copy small { display: block; margin-top: 5px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
     .process-select { min-width: 156px; border: 1px solid #d1d5c9; border-radius: 10px; padding: 9px 10px; background: white; color: var(--ink); font-size: 12px; font-weight: 700; }
     .process-select:focus { outline: 2px solid #b9d58d; outline-offset: 2px; }
+    .issue-badge { margin-left: 12px; border-radius: 999px; padding: 6px 9px; background: #30342f; color: #a3aaa0; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+    .issue-badge.warn { background: #5d4730; color: #ffd98b; }
+    .analysis-strip { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e3e5dc; }
+    .analysis-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .analysis-summary { color: #66805b; font-size: 11px; font-weight: 700; }
+    .wall-map { display: grid; gap: 7px; margin-top: 10px; }
+    .wall-segment { display: grid; grid-template-columns: 76px 1fr 58px; gap: 8px; align-items: center; font-size: 10px; }
+    .wall-segment-label { color: #5f625b; }
+    .wall-segment-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e2e5dd; }
+    .wall-segment-bar { height: 100%; border-radius: inherit; background: #9fca82; }
+    .wall-segment.fail .wall-segment-bar { background: #e8997e; }
+    .wall-segment-value { color: #7a7c74; text-align: right; }
+    .issue-list { display: grid; gap: 7px; margin-top: 10px; }
+    .issue-item { padding: 9px 10px; border-left: 3px solid #9fca82; border-radius: 8px; background: #fff; color: #5f625b; font-size: 11px; line-height: 1.35; }
+    .issue-item.warn { border-left-color: #e6b65c; background: #fffaf0; }
+    .issue-item.error { border-left-color: #e8997e; background: #fff2ef; }
+    .issue-empty { color: #7a7c74; font-size: 11px; }
     .generate { width: 100%; height: 52px; margin-top: 24px; border: 0; border-radius: 14px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; font-size: 14px; font-weight: 700; transition: transform .2s ease, background .2s ease; }
     .generate:hover { transform: translateY(-2px); background: #30332c; }
     .generate.loading { background: #506847; }
@@ -210,7 +227,7 @@
       <div class="content">
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
-            <span class="viewport-label">LIVE PREVIEW</span>
+            <span class="viewport-label">LIVE PREVIEW</span><span class="issue-badge" id="issueBadge">READY</span>
             <div class="view-controls">
               <button class="view-pill active" type="button" data-view="iso">ISOMETRIC</button>
               <button class="view-pill" type="button" data-view="top">TOP</button>
@@ -240,7 +257,7 @@
           </div>
           <div class="viewport-footer">
             <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC BODY</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
-            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button>
+            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button>
           </div>
         </section>
         <section class="params">
@@ -274,6 +291,11 @@
               <div class="plan-item"><span class="check" id="checkDraft">✓</span><div><strong id="planDraft">Print orientation</strong><small id="planDraftMeta">Low support volume</small></div></div>
               <div class="plan-item"><span class="check" id="checkExport">✓</span><div><strong id="planExport">Export target</strong><small id="planExportMeta">STEP · IGES · GLB</small></div></div>
             </div>
+            <div class="analysis-strip">
+              <div class="analysis-head"><span class="section-label" id="analysisLabel">WALL THICKNESS MAP</span><span class="analysis-summary" id="analysisSummary">No issues</span></div>
+              <div class="wall-map" id="wallMap"></div>
+              <div class="issue-list" id="issueList"></div>
+            </div>
           </div>
         </section>
       </div>
@@ -290,6 +312,13 @@
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
     const exportStep = document.getElementById('exportStep');
+    const export3mf = document.getElementById('export3mf');
+    const exportGlb = document.getElementById('exportGlb');
+    const issueBadge = document.getElementById('issueBadge');
+    const analysisLabel = document.getElementById('analysisLabel');
+    const analysisSummary = document.getElementById('analysisSummary');
+    const wallMap = document.getElementById('wallMap');
+    const issueList = document.getElementById('issueList');
     const interpretationLabel = document.getElementById('interpretationLabel');
     const interpretationStatus = document.getElementById('interpretationStatus');
     const interpretationSummary = document.getElementById('interpretationSummary');
@@ -328,8 +357,8 @@
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', analysisLabel: 'WALL THICKNESS MAP', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', analysisLabel: '壁厚采样图', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -357,6 +386,9 @@
       document.querySelector('[data-view="front"]').textContent = t.front;
       document.getElementById('exportObj').textContent = t.export;
       if (exportStep) exportStep.textContent = t.exportStep;
+      if (export3mf) export3mf.textContent = t.export3mf;
+      if (exportGlb) exportGlb.textContent = t.exportGlb;
+      analysisLabel.textContent = t.analysisLabel;
       interpretationLabel.textContent = t.interpretation;
       revisionLabel.textContent = t.revision;
       clearRevisions.textContent = t.clear;
@@ -616,6 +648,70 @@
       if (state === 'warn') element.classList.add('warn');
       if (state === false) element.classList.add('fail');
     }
+    function localAnalysis(spec) {
+      const profile = processProfiles[selectedProcess];
+      const issues = [];
+      if ((spec.wall || 3) < profile.minWall) issues.push({ code: 'wall_thickness', severity: 'error', message: 'Wall thickness is below the process minimum.', message_zh: '壁厚低于当前工艺最小值。' });
+      if (spec.chamfer > 0 && spec.chamfer < profile.minRadius) issues.push({ code: 'edge_treatment', severity: 'warning', message: 'Edge treatment is below the process radius.', message_zh: '边缘处理小于当前工艺半径。' });
+      if ((spec.wall || 3) < profile.clearance) issues.push({ code: 'clearance', severity: 'warning', message: 'Clearance is below the process recommendation.', message_zh: '间隙低于当前工艺建议值。' });
+      if (profile.maxOverhang < 45) issues.push({ code: 'overhang', severity: 'warning', message: 'Review support strategy for this process.', message_zh: '请复核当前工艺的支撑策略。' });
+      if (profile.draftAngle > 0) issues.push({ code: 'draft_angle', severity: 'warning', message: 'This process needs an explicit draft feature.', message_zh: '当前工艺需要明确的拔模特征。' });
+      return {
+        process: selectedProcess,
+        profile,
+        wall_map: [
+          { region: 'outer wall', region_zh: '外壁', nominal_mm: spec.wall || 3, minimum_mm: spec.wall || 3, status: (spec.wall || 3) >= profile.minWall ? 'pass' : 'fail' },
+          { region: 'bottom', region_zh: '底板', nominal_mm: spec.bottom || spec.wall || 3, minimum_mm: spec.bottom || spec.wall || 3, status: (spec.bottom || spec.wall || 3) >= profile.minWall ? 'pass' : 'fail' }
+        ],
+        issues,
+        manufacturing_ready: issues.every((issue) => issue.severity !== 'error')
+      };
+    }
+    function updateAnalysis(analysis) {
+      const data = analysis || localAnalysis(modelSpec || parseModel(prompt.value));
+      const profile = data.profile || processProfiles[selectedProcess];
+      const samples = data.wall_map || [];
+      wallMap.innerHTML = '';
+      samples.forEach((sample) => {
+        const row = document.createElement('div');
+        row.className = 'wall-segment ' + (sample.status === 'pass' ? '' : 'fail');
+        const label = document.createElement('span');
+        label.className = 'wall-segment-label';
+        label.textContent = currentLang === 'zh' ? (sample.region_zh || sample.region) : sample.region;
+        const track = document.createElement('div');
+        track.className = 'wall-segment-track';
+        const bar = document.createElement('div');
+        bar.className = 'wall-segment-bar';
+        const minimum = profile.minWall !== undefined ? profile.minWall : profile.min_wall;
+        bar.style.width = Math.min(100, Math.max(18, Number(sample.minimum_mm || 0) / Number(minimum || 1) * 62)) + '%';
+        track.appendChild(bar);
+        const value = document.createElement('span');
+        value.className = 'wall-segment-value';
+        value.textContent = Number(sample.minimum_mm || 0).toFixed(1) + ' mm';
+        row.appendChild(label);
+        row.appendChild(track);
+        row.appendChild(value);
+        wallMap.appendChild(row);
+      });
+      issueList.innerHTML = '';
+      const issues = data.issues || [];
+      issueBadge.classList.toggle('warn', issues.length > 0);
+      issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : 'READY';
+      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : copy[currentLang].noIssues;
+      if (!issues.length) {
+        const empty = document.createElement('div');
+        empty.className = 'issue-empty';
+        empty.textContent = copy[currentLang].noIssues;
+        issueList.appendChild(empty);
+        return;
+      }
+      issues.forEach((issue) => {
+        const item = document.createElement('div');
+        item.className = 'issue-item ' + (issue.severity || 'warning');
+        item.textContent = currentLang === 'zh' ? (issue.message_zh || issue.message) : issue.message;
+        issueList.appendChild(item);
+      });
+    }
     function updateChecks(spec, remoteChecks) {
       if (!spec) return;
       const profile = (backendArtifact && backendArtifact.profile) || processProfiles[selectedProcess];
@@ -639,6 +735,7 @@
       document.getElementById('planRadiusMeta').textContent = checks.radius ? (currentLang === 'zh' ? '边缘半径符合工艺' : 'process radius passes') : (currentLang === 'zh' ? '倒角半径需要复核' : 'review process radius');
       document.getElementById('planDraftMeta').textContent = checks.draft ? (currentLang === 'zh' ? '悬空、拔模和间隙通过' : 'overhang, draft and clearance pass') : (currentLang === 'zh' ? '悬空、拔模或间隙需复核' : 'review overhang, draft or clearance');
       document.getElementById('planExportMeta').textContent = checks.export ? (remoteChecks ? profile.label + ' · STEP · STL' : 'OBJ preview · backend offline') : (currentLang === 'zh' ? '导出未就绪' : 'export not ready');
+      updateAnalysis((backendArtifact && backendArtifact.analysis) || localAnalysis(spec));
       Object.entries(checkEls).forEach(([key, element]) => {
         const item = element && element.parentElement && element.parentElement.parentElement;
         if (item) { item.classList.remove('warn', 'fail'); if (checks[key] !== true) item.classList.add('warn'); }
@@ -721,7 +818,7 @@
         tolerance: remoteParams.tolerance || processProfiles[selectedProcess].tolerance,
         clearance: remoteParams.clearance || processProfiles[selectedProcess].clearance
       } : nextSpec;
-      backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process }) : null;
+      backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
       renderModel(modelSpec, currentView);
       bodyValue.textContent = displayTitle(modelSpec.title);
       sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
@@ -742,6 +839,7 @@
       backendArtifact = null;
       updateProcessHint();
       updateChecks(modelSpec || parseModel(prompt.value), null);
+      updateAnalysis(localAnalysis(modelSpec || parseModel(prompt.value)));
       if (modelSpec) generateModel();
     });
     prompt.addEventListener('input', () => {
@@ -771,6 +869,17 @@
       return rows.join('\\n') + '\\n';
     }
     if (exportStep && backendUrl) exportStep.style.display = 'inline-flex';
+    if (export3mf && backendUrl) export3mf.style.display = 'inline-flex';
+    if (exportGlb && backendUrl) exportGlb.style.display = 'inline-flex';
+    function bindArtifactExport(button, format) {
+      if (!button) return;
+      button.addEventListener('click', () => {
+        if (!backendArtifact || !backendArtifact[format]) { generateModel(); return; }
+        window.location.href = backendUrl + backendArtifact[format];
+      });
+    }
+    bindArtifactExport(export3mf, '3mf');
+    bindArtifactExport(exportGlb, 'glb');
     if (exportStep) exportStep.addEventListener('click', () => {
       if (!backendArtifact || !backendArtifact.step) { generateModel(); return; }
       window.location.href = backendUrl + backendArtifact.step;
