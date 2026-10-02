@@ -445,6 +445,12 @@
       if (exportGlb) exportGlb.textContent = t.exportGlb;
       if (fitView) fitView.textContent = t.fit;
       if (cancelGeneration) cancelGeneration.textContent = t.cancel;
+      if (document.getElementById('paramWidthLabel')) document.getElementById('paramWidthLabel').textContent = currentLang === 'zh' ? '宽度' : 'WIDTH';
+      if (document.getElementById('paramDepthLabel')) document.getElementById('paramDepthLabel').textContent = currentLang === 'zh' ? '深度' : 'DEPTH';
+      if (document.getElementById('paramHeightLabel')) document.getElementById('paramHeightLabel').textContent = currentLang === 'zh' ? '高度' : 'HEIGHT';
+      if (document.getElementById('paramWallLabel')) document.getElementById('paramWallLabel').textContent = currentLang === 'zh' ? '壁厚' : 'WALL';
+      if (document.getElementById('paramChamferLabel')) document.getElementById('paramChamferLabel').textContent = currentLang === 'zh' ? '倒角' : 'CHAMFER';
+      if (document.getElementById('paramBottomLabel')) document.getElementById('paramBottomLabel').textContent = currentLang === 'zh' ? '底厚' : 'BOTTOM';
       if (editParameters) editParameters.textContent = t.editParameters;
       if (applyParameters) applyParameters.textContent = t.applyParameters;
       if (resetParameters) resetParameters.textContent = t.resetParameters;
@@ -951,6 +957,22 @@
       renderRevisions();
     }
     clearRevisions.addEventListener('click', () => { revisions = []; persistRevisions(); renderRevisions(); });
+    function syncParameterEditor(spec) {
+      if (!spec) return;
+      Object.entries(parameterFields).forEach(([key, field]) => { if (field) field.value = Number(spec[key] ?? 0).toFixed(1); });
+    }
+    function applyParameterEditor() {
+      const base = Object.assign({}, modelSpec || parseModel(prompt.value));
+      const values = {};
+      for (const [key, field] of Object.entries(parameterFields)) values[key] = Number(field && field.value);
+      const valid = Number.isFinite(values.width) && values.width >= 10 && values.width <= 1000 && Number.isFinite(values.depth) && values.depth >= 10 && values.depth <= 1000 && Number.isFinite(values.height) && values.height >= 5 && values.height <= 1000 && Number.isFinite(values.wall) && values.wall >= 1.2 && values.wall <= Math.min(values.width, values.depth) / 3 && Number.isFinite(values.chamfer) && values.chamfer >= 0 && values.chamfer <= Math.min(values.width, values.depth, values.height) / 4 && Number.isFinite(values.bottom) && values.bottom >= 1.2 && values.bottom < values.height;
+      if (!valid) { setGenerationError(currentLang === 'zh' ? '参数范围无效，请检查尺寸和壁厚。' : 'Parameter range is invalid. Check dimensions and wall thickness.'); return; }
+      const next = Object.assign(base, values);
+      prompt.value = canonicalPrompt(next);
+      parameterEditor.hidden = true;
+      updateInterpretation(next, 'draft');
+      generateModel();
+    }
     function setGenerationError(message) {
       if (!generationError) return;
       generationError.textContent = message || '';
@@ -1104,6 +1126,9 @@
       }
     }
     generate.addEventListener('click', generateModel);
+    if (editParameters) editParameters.addEventListener('click', () => { const spec = modelSpec || parseModel(prompt.value); syncParameterEditor(spec); parameterEditor.hidden = !parameterEditor.hidden; });
+    if (applyParameters) applyParameters.addEventListener('click', applyParameterEditor);
+    if (resetParameters) resetParameters.addEventListener('click', () => syncParameterEditor(modelSpec || parseModel(prompt.value)));
     if (cancelGeneration) cancelGeneration.addEventListener('click', () => {
       if (!generationController) return;
       generationController.abort();
