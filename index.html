@@ -936,14 +936,36 @@
     }
     async function requestBackend(value, process, signal) {
       if (!backendUrl) return null;
-      const response = await fetch(backendUrl + '/v1/models', {
+      const payload = { prompt: value, units: 'mm', process: process || selectedProcess };
+      const jobResponse = await fetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: value, units: 'mm', process: process || selectedProcess }),
+        body: JSON.stringify(payload),
         signal
       });
-      if (!response.ok) throw new Error('geometry backend returned ' + response.status);
-      return response.json();
+      if (jobResponse.status === 404) {
+        const response = await fetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
+        if (!response.ok) throw new Error('geometry backend returned ' + response.status);
+        return response.json();
+      }
+      if (!jobResponse.ok) throw new Error('geometry job endpoint returned ' + jobResponse.status);
+      const job = await jobResponse.json();
+      const jobId = job.job_id;
+      const cancelRemoteJob = () => { fetch(backendUrl + '/v1/jobs/' + jobId, { method: 'DELETE', keepalive: true }).catch(() => {}); };
+      if (signal) signal.addEventListener('abort', cancelRemoteJob, { once: true });
+      try {
+        while (true) {
+          const statusResponse = await fetch(backendUrl + '/v1/jobs/' + jobId, { signal });
+          if (!statusResponse.ok) throw new Error('geometry job status returned ' + statusResponse.status);
+          const status = await statusResponse.json();
+          if (status.status === 'succeeded') return status.result;
+          if (status.status === 'cancelled') throw Object.assign(new Error('job cancelled'), { name: 'AbortError' });
+          if (status.status === 'failed') throw new Error((status.error && status.error.detail) || 'geometry job failed');
+          await waitWithSignal(350, signal);
+        }
+      } finally {
+        if (signal) signal.removeEventListener('abort', cancelRemoteJob);
+      }
     }
     function waitWithSignal(ms, signal) {
       return new Promise((resolve, reject) => {
