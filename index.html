@@ -890,11 +890,23 @@
       if (!response.ok) throw new Error('geometry backend returned ' + response.status);
       return response.json();
     }
+    function waitWithSignal(ms, signal) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        if (!signal) return;
+        if (signal.aborted) { clearTimeout(timer); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); return; }
+        signal.addEventListener('abort', () => { clearTimeout(timer); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
+      });
+    }
     async function generateModel() {
       if (generationController) generationController.abort();
       const sequence = ++generationSeq;
       generationController = new AbortController();
+      const timeoutId = setTimeout(() => { generationController.abort(); }, 30000);
+      let timedOut = false;
+      const timeoutWatcher = setTimeout(() => { timedOut = true; }, 29950);
       generate.classList.add('loading');
+      if (cancelGeneration) cancelGeneration.hidden = false;
       setGenerationError('');
       backendArtifact = null;
       updateExportButtons();
@@ -913,16 +925,23 @@
         try {
           remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal);
         } catch (error) {
-          if (error.name === 'AbortError') return;
+          if (error.name === 'AbortError') {
+            if (timedOut) setGenerationError(copy[currentLang].timeoutError);
+            else setGenerationError(copy[currentLang].cancelled);
+            return;
+          }
           backendError = error;
           console.warn('Geometry backend unavailable; using local preview.', error);
         }
         if (sequence !== generationSeq) return;
-        await new Promise((resolve) => setTimeout(resolve, remote ? 120 : 720));
+        modelState.textContent = copy[currentLang].building;
+        solved.textContent = copy[currentLang].building;
+        await waitWithSignal(remote ? 120 : 720, generationController.signal);
         if (sequence !== generationSeq) return;
         const remoteParams = remote && remote.parameters ? remote.parameters : {};
         modelSpec = remote ? {
           title: remote.title || titleFor(value),
+          kind: remoteParams.kind || kindForTitle(remote.title || nextSpec.title),
           width: remoteParams.width ?? nextSpec.width,
           depth: remoteParams.depth ?? nextSpec.depth,
           height: remoteParams.height ?? nextSpec.height,
@@ -935,6 +954,8 @@
           clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        modelState.textContent = remote ? copy[currentLang].exporting : copy[currentLang].state;
+        solved.textContent = remote ? copy[currentLang].exporting : copy[currentLang].solved;
         renderModel(modelSpec, currentView);
         bodyValue.textContent = displayTitle(modelSpec.title);
         sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
@@ -948,21 +969,33 @@
         if (backendError && backendUrl) setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
         saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
       } catch (error) {
-        if (error.name === 'AbortError') return;
+        if (error.name === 'AbortError') {
+          if (timedOut) setGenerationError(copy[currentLang].timeoutError);
+          else setGenerationError(copy[currentLang].cancelled);
+          return;
+        }
         console.error('Model generation failed.', error);
         if (sequence === generationSeq) {
           setGenerationError(currentLang === 'zh' ? '生成失败，请检查描述后重试。' : 'Generation failed. Check the description and retry.');
           modelState.textContent = currentLang === 'zh' ? '生成失败' : 'Generation failed';
         }
       } finally {
+        clearTimeout(timeoutId);
+        clearTimeout(timeoutWatcher);
         if (sequence === generationSeq) {
           generate.classList.remove('loading');
+          if (cancelGeneration) cancelGeneration.hidden = true;
           generateLabel.textContent = copy[currentLang].regenerate;
           generationController = null;
         }
       }
     }
     generate.addEventListener('click', generateModel);
+    if (cancelGeneration) cancelGeneration.addEventListener('click', () => {
+      if (!generationController) return;
+      generationController.abort();
+      setGenerationError(copy[currentLang].cancelled);
+    });
     bindViewportControls();
     processSelect.addEventListener('change', () => {
       selectedProcess = processSelect.value;
