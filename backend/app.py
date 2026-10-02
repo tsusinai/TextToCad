@@ -101,6 +101,7 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
     ]
     footprint = _number_after(text, [
         r"(?:footprint|占地|底面)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:footprint|占地|底面)",
     ])
     width = _number_after(text, [
         r"(?:width|wide|宽)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
