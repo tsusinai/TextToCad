@@ -107,3 +107,7 @@ Track interpretation confirmation rate, valid-B-Rep rate, median generation time
 - 前端保留原始自然语言与基线参数，支持中英文模式切换、后端能力探测和高级特征树展示。
 
 下一轮：增加结构化 JSON Schema 校验、provider 预算与速率限制、可选的二次几何修复建议，以及真实 CadQuery 回归样例集。
+
+## 第四轮后续校验
+
+Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命周期清理、取消旧加载、隐藏时停止渲染、SVG 概念预览提示、LLM provider 兼容回退和取消任务产物清理。上线前仍需用真实生成的 organizer/plant/lamp GLB 样例核对 Z-up 到 Y-up 的三视图方向，并在带 WebGL 的浏览器完成连续生成压力验证。
