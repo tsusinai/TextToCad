@@ -284,6 +284,8 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
         chamfer=chamfer,
         wall=wall,
         bottom=bottom,
+        drainage_holes=3 if kind == "plant" else 0,
+        cable_channel=kind == "lamp",
         process=process,
         tolerance=float(PROCESS_PROFILES[process]["tolerance"]),
         clearance=float(PROCESS_PROFILES[process]["clearance"]),
