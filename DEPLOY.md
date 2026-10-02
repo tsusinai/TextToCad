@@ -18,7 +18,7 @@ or:
     docker build -t texttocad-backend ./backend
     docker run --rm -p 8787:8787 -v texttocad-artifacts:/data texttocad-backend
 
-Set `CORS_ORIGINS` to the deployed Pages origin and pass the API URL to the UI with `?backend=https://your-api.example.com`.
+Set `CORS_ORIGINS` to the deployed Pages origin and pass the API URL to the UI with `?backend=https://your-api.example.com`. For a public service also set `BACKEND_API_KEY`; the UI sends it when `window.FORM_CAD_BACKEND_API_KEY` is injected before the app loads. CORS alone is not authentication.
 
 ## 本机 Docker + DeepSeek 配置
 
@@ -32,7 +32,7 @@ Set `CORS_ORIGINS` to the deployed Pages origin and pass the API URL to the UI w
     LLM_API_URL=https://api.deepseek.com/chat/completions
     LLM_MODEL=deepseek-chat
 
-如果你的 DeepSeek Flash 服务使用不同的兼容地址或模型名，只修改 LLM_API_URL 和 LLM_MODEL。不要把 backend/.env 提交到 Git。
+如果你的 DeepSeek Flash 服务使用不同的兼容地址或模型名，只修改 LLM_API_URL 和 LLM_MODEL。生产环境建议同时设置 `BACKEND_API_KEY`。不要把 backend/.env 提交到 Git。
 
 3. 构建并启动 CadQuery/OCCT 服务：
 
@@ -55,3 +55,11 @@ GitHub Pages 前端也可以连接本机后端，但浏览器访问本机时应�
     https://tsusinai.github.io/TextToCad/?backend=http://localhost:8787
 
 这只适合本机调试；云端发布时应把 backend URL 换成 HTTPS 地址，并将 CORS_ORIGINS 限制为实际前端域名。
+
+
+## 生产上线检查
+
+- 使用 HTTPS 的 API 地址；GitHub Pages 无法安全调用远程 HTTP。
+- 设置 `BACKEND_API_KEY`、严格的 `CORS_ORIGINS`，并在反向代理层增加访问日志和限流。
+- 保持 Docker 单 worker，或把任务队列、缓存和 `ARTIFACT_ROOT` 迁移到共享基础设施。
+- `analysis.manufacturing_ready` 是名义规则结果；出现 warning 时仍需工程师复核。
