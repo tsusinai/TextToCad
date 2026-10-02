@@ -426,7 +426,9 @@
     processSelect.value = selectedProcess;
     if (generationMode) generationMode.value = selectedMode;
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
-    const backendUrl = (window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '').replace(/\/+$/, '');
+    const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
+    const localBackend = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://localhost:8787' : '';
+    const backendUrl = (configuredBackend || localBackend).replace(/\/+$/, '');
     let backendArtifact = null;
     let llmAssumptions = [];
     let interpretationSource = 'draft';
