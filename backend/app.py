@@ -156,7 +156,7 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
 
     chamfer = _number_after(text, [
         r"(?:chamfer|radius|倒角|圆角|圆弧|半径)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|radius|倒角|圆角)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
     ]) or 2.0
 
     wall = _number_after(text, [
