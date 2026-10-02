@@ -392,7 +392,14 @@ def build_geometry(params: ModelParameters) -> Any:
         inner_height = max(1.0, h - bottom)
         outer_round = cq.Workplane("XY").circle(radius).extrude(h)
         inner = cq.Workplane("XY").circle(inner_radius).extrude(inner_height).translate((0, 0, bottom))
-        return outer_round.cut(inner)
+        shape = outer_round.cut(inner)
+        if params.kind == "plant":
+            hole_radius = max(0.8, min(3.0, wall * 0.45))
+            hole_offset = radius * 0.35
+            for x, y in ((-hole_offset, 0), (hole_offset, 0), (0, hole_offset)):
+                drainage_hole = cq.Workplane("XY").circle(hole_radius).extrude(bottom + 2.0).translate((x, y, -1.0))
+                shape = shape.cut(drainage_hole)
+        return shape
 
     if params.kind == "clip":
         # A manufacturable cable clip: a rounded base plus a centered cable
