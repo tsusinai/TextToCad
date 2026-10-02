@@ -4,3 +4,4 @@ backend/artifacts/
 .env
 .env.*
 !.env.example
+!backend/.env.example
