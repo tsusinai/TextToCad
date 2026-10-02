@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Literal
@@ -34,6 +36,7 @@ APP_DIR = Path(__file__).resolve().parent
 ARTIFACT_ROOT = Path(os.getenv("ARTIFACT_ROOT", APP_DIR / "artifacts"))
 ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 MAX_PROMPT_LENGTH = 4000
+ARTIFACT_TTL_SECONDS = int(os.getenv("ARTIFACT_TTL_SECONDS", "86400"))
 
 PROCESS_PROFILES: dict[str, dict[str, Any]] = {
     "fdm": {
@@ -146,6 +149,15 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     elif any(token in text for token in ("clip", "cable", "wire", "线缆", "电缆", "夹")):
         kind = "clip"
         title = "Parametric cable clip"
+    elif any(token in text for token in ("plant", "pot", "花盆", "植物")):
+        kind = "plant"
+        title = "Parametric plant pot"
+    elif any(token in text for token in ("lamp", "灯")):
+        kind = "lamp"
+        title = "Parametric lamp base"
+    elif any(token in text for token in ("pen", "笔")):
+        kind = "pen"
+        title = "Parametric pen cup"
     else:
         kind = "block"
         title = "Parametric solid"
@@ -197,7 +209,14 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     width = width or (generic_numbers[0] if generic_numbers else 120.0)
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) > 1 else width * 0.67))
-    default_height = 18.0 if kind == "tray" else 42.0 if kind == "organizer" else 24.0
+    default_height = (
+        18.0 if kind == "tray"
+        else 42.0 if kind == "organizer"
+        else 82.0 if kind == "plant"
+        else 95.0 if kind == "pen"
+        else 40.0 if kind == "lamp"
+        else 24.0
+    )
     generic_height = next(
         (value for value in generic_numbers[2:] ),
         None,
@@ -350,6 +369,16 @@ def build_geometry(params: ModelParameters) -> Any:
                 shape = shape.union(divider)
         return shape
 
+    if params.kind in ("plant", "pen"):
+        # Rotational containers share a stable hollow profile with the same
+        # wall and bottom parameters as trays, keeping UI and B-Rep semantics aligned.
+        radius = min(w, d) / 2
+        inner_radius = max(1.0, radius - wall)
+        inner_height = max(1.0, h - bottom)
+        outer_round = cq.Workplane("XY").circle(radius).extrude(h)
+        inner = cq.Workplane("XY").circle(inner_radius).extrude(inner_height).translate((0, 0, bottom))
+        return outer_round.cut(inner)
+
     if params.kind == "clip":
         # A manufacturable cable clip: a rounded base plus a centered cable
         # relief cut. The cut opens from the top and leaves a strong bottom.
@@ -382,7 +411,8 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
         "overhang": "overhang" not in issue_codes,
         "draft_angle": "draft_angle" not in issue_codes,
         "clearance": "clearance" not in issue_codes,
-        "export_ready": True,
+        # Export readiness is set to true only after all files have been written.
+        "export_ready": False,
     }
 
 
@@ -464,6 +494,10 @@ def _write_artifacts(
         except Exception:
             preview_files = {}
     analysis_path.write_text(json.dumps(analysis, indent=2), encoding="utf-8")
+    export_paths = [step_path, stl_path, analysis_path, *preview_files.values()]
+    checks["export_ready"] = all(path.exists() and path.stat().st_size > 0 for path in export_paths)
+    if not checks["export_ready"]:
+        raise RuntimeError("one or more generated artifacts are empty")
     manifest = {
         "model_id": model_id,
         "title": title,
@@ -477,6 +511,8 @@ def _write_artifacts(
         "generator": "TextToCad geometry backend 0.3.0",
         "formats": ["step", "stl"] + sorted(preview_files),
     }
+    manifest_path = model_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     artifacts = {
         "step": f"/v1/models/{model_id}/download?format=step",
         "stl": f"/v1/models/{model_id}/download?format=stl",
@@ -485,6 +521,21 @@ def _write_artifacts(
     for format_name in preview_files:
         artifacts[format_name] = f"/v1/models/{model_id}/download?format={format_name}"
     return artifacts, step_schema
+
+
+def cleanup_artifacts() -> None:
+    """Remove expired model directories so repeated previews cannot fill the disk."""
+    if ARTIFACT_TTL_SECONDS <= 0:
+        return
+    cutoff = time.time() - ARTIFACT_TTL_SECONDS
+    for model_dir in ARTIFACT_ROOT.iterdir():
+        if not model_dir.is_dir() or model_dir.stat().st_mtime >= cutoff:
+            continue
+        try:
+            shutil.rmtree(model_dir)
+        except OSError:
+            # Cleanup is best effort and must never block a new generation.
+            continue
 
 
 app = FastAPI(
@@ -529,6 +580,7 @@ def get_process_profiles() -> dict[str, dict[str, Any]]:
 
 @app.post("/v1/models", response_model=GenerateResponse)
 def generate_model(request: GenerateRequest) -> GenerateResponse:
+    cleanup_artifacts()
     try:
         title, params = parse_prompt(request.prompt, request.process)
         shape = build_geometry(params)
