@@ -4,8 +4,8 @@ Natural-language to CAD workspace with a front-design interface and a CadQuery g
 
 ## What is included
 
-- Natural-language prompt parsing with English and Chinese dimensions.
-- Browser preview with generated isometric, top, and front projections.
+- Natural-language prompt parsing with English and Chinese dimensions, including tray, organizer, cable clip, plant pot, lamp base, and pen cup families.
+- Browser preview with generated isometric, top, and front projections, plus drag orbit, Shift-drag pan, wheel zoom, FIT reset, and touch pointer controls.
 - Optional backend connection for validated OCCT B-Rep geometry.
 - STEP and STL artifact generation from the backend, with optional 3MF/GLB previews; local OBJ fallback in the static demo.
 - Responsive static front end with no build step.
@@ -15,9 +15,9 @@ Natural-language to CAD workspace with a front-design interface and a CadQuery g
 The production path lives in backend:
 
 1. POST /v1/models parses a prompt into bounded millimetre parameters.
-2. CadQuery/OCCT builds a tray, organizer, cable clip, or solid.
+2. CadQuery/OCCT builds a tray, organizer, cable clip, plant pot, lamp base, pen cup, or solid.
 3. B-Rep validity, single-solid, volume, and bounding-box checks run before export.
-4. Validated STEP and STL artifacts are written to persistent storage and exposed by download URLs.
+4. Validated STEP and STL artifacts are written to persistent storage and exposed by download URLs; manifest files are persisted for reproducibility, with TTL cleanup and repeat-prompt caching.
 
 Run it locally:
 
