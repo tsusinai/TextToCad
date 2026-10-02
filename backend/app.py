@@ -934,6 +934,10 @@ async def require_backend_key(request: Request, call_next: Any) -> Any:
                 )
             bucket.append(now)
             REQUEST_BUCKETS[client_ip] = bucket
+            if len(REQUEST_BUCKETS) > 2048:
+                for bucket_ip, timestamps in list(REQUEST_BUCKETS.items()):
+                    if not timestamps or now - timestamps[-1] >= RATE_LIMIT_WINDOW_SECONDS:
+                        REQUEST_BUCKETS.pop(bucket_ip, None)
     return await call_next(request)
 
 
