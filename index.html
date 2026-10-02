@@ -529,6 +529,32 @@
       return { title: titleFor(text), kind: kindForTitle(titleFor(text)), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
+    function renderRotationalIso(spec) {
+      const diameter = clamp(Math.max(spec.width, spec.depth) / 90, .75, 1.55) * 170;
+      const rx = diameter / 2;
+      const ry = rx * .31;
+      const top = 105;
+      const bottom = clamp(spec.height / 82, .75, 1.65) * 190 + top;
+      const cx = 260;
+      const holes = spec.kind === 'plant' ? [cx - 42, cx, cx + 42].map((x) => '<ellipse cx="' + x + '" cy="' + (top + 7) + '" rx="8" ry="4" fill="#252724" class="accent"/>').join('') : '';
+      const body = 'M ' + (cx - rx) + ' ' + top + ' C ' + (cx - rx) + ' ' + (top - ry) + ' ' + (cx + rx) + ' ' + (top - ry) + ' ' + (cx + rx) + ' ' + top + ' L ' + (cx + rx) + ' ' + bottom + ' C ' + (cx + rx) + ' ' + (bottom + ry) + ' ' + (cx - rx) + ' ' + (bottom + ry) + ' ' + (cx - rx) + ' ' + bottom + ' Z';
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rotational CAD model"><ellipse cx="260" cy="350" rx="150" ry="18" fill="#0d0f0d" opacity=".42"/><path d="' + body + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><ellipse cx="260" cy="' + top + '" rx="' + rx + '" ry="' + ry + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><ellipse cx="260" cy="' + (top + 4) + '" rx="' + Math.max(18, rx - 18) + '" ry="' + Math.max(8, ry - 8) + '" fill="#252724" stroke="#ddf79b" stroke-width="3"/>' + holes + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">' + (spec.kind === 'plant' ? 'PLANT POT' : 'PEN CUP') + ' / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
+    function renderRotationalTop(spec) {
+      const diameter = clamp(Math.max(spec.width, spec.depth) / 90, .75, 1.55) * 220;
+      const rx = diameter / 2;
+      const ry = rx * .31;
+      const holes = spec.kind === 'plant' ? [220, 260, 300].map((x) => '<circle cx="' + x + '" cy="205" r="8" fill="#252724" class="accent"/>').join('') : '';
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated top view CAD model"><ellipse cx="260" cy="205" rx="' + rx + '" ry="' + Math.max(42, ry * 1.45) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><ellipse cx="260" cy="205" rx="' + Math.max(18, rx - 22) + '" ry="' + Math.max(20, ry * 1.1) + '" fill="#252724" stroke="#b8d99a" stroke-width="3"/>' + holes + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + spec.width + ' mm diameter</text></svg>';
+    }
+    function renderRotationalFront(spec) {
+      const w = clamp(Math.max(spec.width, spec.depth) / 90, .75, 1.55) * 210;
+      const h = clamp(spec.height / 82, .7, 1.7) * 190;
+      const x = (520 - w) / 2;
+      const y = (350 - h) / 2;
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated front view CAD model"><path d="M ' + x + ' ' + (y + 18) + ' Q ' + (x + w / 2) + ' ' + y + ' ' + (x + w) + ' ' + (y + 18) + ' L ' + (x + w) + ' ' + (y + h - 18) + ' Q ' + (x + w / 2) + ' ' + (y + h) + ' ' + x + ' ' + (y + h - 18) + ' Z" fill="#9fca82" stroke="#243323" stroke-width="4"/><path d="M ' + (x + 16) + ' ' + (y + 30) + ' Q ' + (x + w / 2) + ' ' + (y + 16) + ' ' + (x + w - 16) + ' ' + (y + 30) + '" fill="none" stroke="#b8d99a" stroke-width="8"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
+
     function renderIso(spec) {
       const w = clamp(spec.width / 120, .7, 1.6) * 240;
       const d = clamp(spec.depth / 80, .7, 1.6) * 170;
@@ -569,7 +595,8 @@
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
-      modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
+      const rotational = spec.kind === 'plant' || spec.kind === 'pen';
+      modelWrap.innerHTML = rotational ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec))) : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
       applyCamera();
     }
     function applyCamera() {
