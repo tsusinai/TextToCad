@@ -89,3 +89,7 @@ Track interpretation confirmation rate, valid-B-Rep rate, median generation time
 - STEP/3MF/GLB 按后端真实返回的能力显示，避免点击后再触发无效生成。
 
 验证标准：主分支和 \`gh-pages\` 的前端脚本通过 \`new Function\` 语法检查；两分支 index 内容一致；后端静态审查确认清单写入、产物清理、类型解析和失败回收路径存在。
+
+## Astra 第二轮体验优化（2026-10-02）
+
+已完成生成取消/超时、阶段状态、名义制造评审、模型类型语义预览、花盆排水孔、灯座走线槽、键盘视图操作、无障碍视图状态和移动端导出换行。真实 GLB 对象视图与面级分析保留为下一阶段。
