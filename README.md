@@ -41,3 +41,7 @@ Open index.html directly or serve the repository with any static server. Without
 
 GitHub Pages is published from the gh-pages branch:
 https://tsusinai.github.io/TextToCad/
+
+## Product plan
+
+The phased roadmap and Phase 1 acceptance criteria are in [PLAN.md](PLAN.md).
