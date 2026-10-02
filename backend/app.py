@@ -7,7 +7,7 @@ import re
 import shutil
 import time
 import uuid
-from threading import Lock, Thread
+from threading import BoundedSemaphore, Lock, Thread
 from pathlib import Path
 from typing import Any, Literal
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -117,6 +117,8 @@ CACHE_LOCK = Lock()
 MODEL_CACHE: dict[str, GenerateResponse] = {}
 JOB_LOCK = Lock()
 JOBS: dict[str, dict[str, Any]] = {}
+MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
+GENERATION_SEMAPHORE = BoundedSemaphore(MAX_CONCURRENT_JOBS)
 
 
 def _cache_key(request: GenerateRequest) -> str:
@@ -670,7 +672,8 @@ def _run_job(job_id: str, request: GenerateRequest) -> None:
             return
         job["status"] = "running"
     try:
-        result = generate_model(request)
+        with GENERATION_SEMAPHORE:
+            result = generate_model(request)
         with JOB_LOCK:
             job = JOBS.get(job_id)
             if not job:
