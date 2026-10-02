@@ -181,8 +181,71 @@ def _bounded(value: float, minimum: float, maximum: float) -> float:
     return round(max(minimum, min(maximum, value)), 2)
 
 
-def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameters]:
+UNIT_FACTORS_MM: dict[str, float] = {
+    "mm": 1.0,
+    "毫米": 1.0,
+    "cm": 10.0,
+    "厘米": 10.0,
+    "m": 1000.0,
+    "米": 1000.0,
+    "in": 25.4,
+    "inch": 25.4,
+    "inches": 25.4,
+    "英寸": 25.4,
+}
+SUPPORTED_REQUEST_UNITS = Literal["mm", "cm", "m", "in"]
+
+
+def _normalize_units(prompt: str, requested_units: str) -> tuple[str, float, bool, list[dict[str, Any]]]:
+    """Convert explicit units to millimetres while preserving input provenance."""
     text = " ".join(prompt.strip().lower().split())
+    spans: list[dict[str, Any]] = []
+    explicit_units: set[str] = set()
+    unit_pattern = re.compile(
+        r"(?<![a-z\d])(\d+(?:\.\d+)?)\s*(mm|毫米|cm|厘米|m|米|inches?|英寸)(?![a-z])",
+        flags=re.IGNORECASE,
+    )
+
+    def replace(match: re.Match[str]) -> str:
+        raw_value = float(match.group(1))
+        raw_unit = match.group(2).lower()
+        factor = UNIT_FACTORS_MM[raw_unit]
+        explicit_units.add(raw_unit)
+        value_mm = raw_value * factor
+        spans.append({
+            "raw": match.group(0),
+            "value": raw_value,
+            "unit": raw_unit,
+            "value_mm": round(value_mm, 6),
+        })
+        return f"{value_mm:.6g} mm"
+
+    converted = unit_pattern.sub(replace, text)
+    requested_factor = UNIT_FACTORS_MM.get(requested_units, 1.0)
+    if explicit_units:
+        return converted, 1.0, True, spans
+    return converted, requested_factor, False, spans
+
+
+def _parameter_provenance(
+    field_sources: dict[str, str],
+    unit_meta: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "units": unit_meta,
+        "fields": {
+            field: {"source": source, "status": "resolved"}
+            for field, source in field_sources.items()
+        },
+    }
+
+
+def parse_prompt_detailed(
+    prompt: str,
+    process: str = "fdm",
+    units: str = "mm",
+) -> tuple[str, ModelParameters, dict[str, Any]]:
+    text, unit_factor, explicit_units, unit_spans = _normalize_units(prompt, units)
     if not text:
         raise ValueError("prompt must contain a shape description")
 
@@ -210,12 +273,12 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
 
     unit_numbers = [
         float(value)
-        for value in re.findall(r"(?<![a-z])(?<!\d)(\d+(?:\.\d+)?)\s*(?:mm|毫米)\b", text)
+        for value in re.findall(r"(?<![a-z])(?<!\d)(\d+(?:\.\d+)?)\s*mm\b", text)
     ]
     treatment_numbers = [
         float(value)
         for value in re.findall(
-            r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)",
+            r"(\d+(?:\.\d+)?)\s*mm\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)",
             text,
             flags=re.IGNORECASE,
         )
@@ -223,7 +286,7 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     treatment_numbers.extend(
         float(value)
         for value in re.findall(
-            r"(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)[^\d]{0,12}(\d+(?:\.\d+)?)\s*(?:mm|毫米)?",
+            r"(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)[^\d]{0,12}(\d+(?:\.\d+)?)\s*mm?",
             text,
             flags=re.IGNORECASE,
         )
@@ -232,28 +295,31 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     for value in treatment_numbers:
         if value in generic_numbers:
             generic_numbers.remove(value)
+
     footprint = _number_after(text, [
         r"(?:footprint|占地|底面)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:footprint|占地|底面)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:footprint|占地|底面)",
     ])
     width = _number_after(text, [
         r"(?:width|wide|宽)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wide|width|宽)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:wide|width|宽)",
     ])
     depth = _number_after(text, [
         r"(?:depth|deep|length|长|深)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:deep|depth|长|深)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:deep|depth|长|深)",
     ])
     height = _number_after(text, [
         r"(?:height|tall|高)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:tall|height|高)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:tall|height|高)",
     ])
 
     if footprint is not None:
         width = width or footprint
         depth = depth or footprint
+    width_found = width is not None or bool(generic_numbers)
     width = width or (generic_numbers[0] if generic_numbers else 120.0)
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
+    depth_found = depth is not None or square_base or len(generic_numbers) > 1
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) > 1 else width * 0.67))
     default_height = (
         18.0 if kind == "tray"
@@ -263,28 +329,45 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
         else 40.0 if kind == "lamp"
         else 24.0
     )
-    generic_height = next(
-        (value for value in generic_numbers[2:] ),
-        None,
-    )
+    generic_height = next((value for value in generic_numbers[2:]), None)
+    height_found = height is not None or generic_height is not None
     height = height or (generic_height if generic_height is not None else default_height)
 
-    compartments = _word_number(text)
-    if compartments is None:
-        compartments = 3 if kind == "organizer" else 1
-    compartments = int(max(1, min(12, compartments)))
+    compartments_value = _word_number(text)
+    compartments_found = compartments_value is not None
+    compartments = int(max(1, min(12, compartments_value if compartments_value is not None else (3 if kind == "organizer" else 1))))
 
-    chamfer = _number_after(text, [
+    chamfer_value = _number_after(text, [
         r"(?:chamfer|radius|倒角|圆角|圆弧|半径)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-        r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
-    ]) or 2.0
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
+    ])
+    chamfer_found = chamfer_value is not None
+    chamfer = chamfer_value if chamfer_value is not None else 2.0
 
-    wall = _number_after(text, [
+    wall_value = _number_after(text, [
         r"(?:wall|壁厚)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-    ]) or (3.0 if kind in ("tray", "organizer") else 2.0)
-    bottom = _number_after(text, [
+    ])
+    wall_found = wall_value is not None
+    wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer") else 2.0)
+    bottom_value = _number_after(text, [
         r"(?:bottom|floor|底厚)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
-    ]) or wall
+    ])
+    bottom_found = bottom_value is not None
+    bottom = bottom_value if bottom_value is not None else wall
+
+    field_found = {
+        "width": width_found,
+        "depth": depth_found,
+        "height": height_found,
+        "compartments": compartments_found,
+        "chamfer": chamfer_found,
+        "wall": wall_found,
+        "bottom": bottom_found,
+    }
+    if not explicit_units and unit_factor != 1.0:
+        for field in ("width", "depth", "height", "chamfer", "wall", "bottom"):
+            if field_found[field]:
+                locals()[field] *= unit_factor
 
     width = _bounded(width, 10.0, 1000.0)
     depth = _bounded(depth, 10.0, 1000.0)
@@ -292,6 +375,18 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     wall = _bounded(wall, 1.2, min(20.0, width / 3, depth / 3))
     bottom = _bounded(bottom, 1.2, min(height - 1.0, 20.0))
     chamfer = _bounded(chamfer, 0.0, min(width, depth, height) / 4)
+
+    assumptions: list[str] = []
+    if explicit_units:
+        unit_confidence = "explicit"
+        if len({span["unit"] for span in unit_spans}) > 1:
+            assumptions.append("Mixed input units were normalized to millimetres.")
+    else:
+        unit_confidence = "assumed"
+        assumptions.append(f"No explicit dimension unit was found; interpreted values as {units}.")
+    if any(field_found[field] for field in ("width", "depth", "height")) and len(generic_numbers) not in (0, 3):
+        assumptions.append("Dimension order or missing dimensions may require confirmation.")
+        unit_confidence = "low"
 
     params = ModelParameters(
         kind=kind,
@@ -308,6 +403,33 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
         tolerance=float(PROCESS_PROFILES[process]["tolerance"]),
         clearance=float(PROCESS_PROFILES[process]["clearance"]),
     )
+    field_sources = {
+        "width": "parser" if width_found else "default",
+        "depth": "parser" if depth_found else "default",
+        "height": "parser" if height_found else "default",
+        "compartments": "parser" if compartments_found else "default",
+        "chamfer": "parser" if chamfer_found else "default",
+        "wall": "parser" if wall_found else "default",
+        "bottom": "parser" if bottom_found else ("derived" if wall_found else "default"),
+        "drainage_holes": "inferred" if kind == "plant" else "default",
+        "cable_channel": "inferred" if kind == "lamp" else "default",
+    }
+    provenance = _parameter_provenance(
+        field_sources,
+        {
+            "requested": units,
+            "canonical": "mm",
+            "confidence": unit_confidence,
+            "explicit_spans": unit_spans,
+            "factor": unit_factor,
+        },
+    )
+    provenance["assumptions"] = assumptions
+    return title, params, provenance
+
+
+def parse_prompt(prompt: str, process: str = "fdm", units: str = "mm") -> tuple[str, ModelParameters]:
+    title, params, _ = parse_prompt_detailed(prompt, process, units)
     return title, params
 
 
