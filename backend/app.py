@@ -894,14 +894,21 @@ def _run_job(job_id: str, request: GenerateRequest) -> None:
     try:
         with GENERATION_SEMAPHORE:
             result = generate_model(request)
+        cancelled_model_id: str | None = None
         with JOB_LOCK:
             job = JOBS.get(job_id)
             if not job:
                 return
             if job["status"] == "cancelled":
-                return
-            job["status"] = "succeeded"
-            job["result"] = result.model_dump()
+                cancelled_model_id = result.model_id
+            else:
+                job["status"] = "succeeded"
+                job["result"] = result.model_dump()
+        if cancelled_model_id:
+            # A cancellation can arrive while CadQuery is already running. The
+            # worker cannot interrupt OCCT safely, but it must remove the
+            # completed artifact instead of leaking it after the user cancels.
+            shutil.rmtree(ARTIFACT_ROOT / cancelled_model_id, ignore_errors=True)
     except HTTPException as exc:
         with JOB_LOCK:
             if job_id in JOBS and JOBS[job_id]["status"] != "cancelled":
