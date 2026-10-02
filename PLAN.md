@@ -111,3 +111,24 @@ Track interpretation confirmation rate, valid-B-Rep rate, median generation time
 ## 第四轮后续校验
 
 Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命周期清理、取消旧加载、隐藏时停止渲染、SVG 概念预览提示、LLM provider 兼容回退和取消任务产物清理。上线前仍需用真实生成的 organizer/plant/lamp GLB 样例核对 Z-up 到 Y-up 的三视图方向，并在带 WebGL 的浏览器完成连续生成压力验证。
+
+## Advanced CAD pipeline upgrade（Semantic CAD IR v0.1）
+
+参考更先进 CAD 链路，本轮开始把当前参数 JSON 升级为可追踪的 Semantic CAD IR：
+
+- design：模型族、用户意图、模式、LLM provenance、assumptions。
+- parameters：数值、单位、来源和 hard/derived/soft 约束。
+- datums：基础 XY/YZ/XZ 参考。
+- features：基础实体、壳体、隔板、切除、孔阵列和边缘处理的 Feature DAG 初稿。
+- constraints：尺寸范围与工艺壁厚规则。
+- builder：固定为 CadQuery/OCCT。
+
+每个 revision 的 manifest 现在保存 design_ir，并可通过 GET /v1/models/{id}/ir 读取。该 IR 暂时是可审计的规划层，不改变现有稳定几何构建路径。
+
+后续升级顺序：
+
+1. 为 IR 建立版本化 JSON Schema/Pydantic 校验和迁移器。
+2. 将 feature planner 从模型族模板扩展为可组合 Feature DAG。
+3. 引入几何/装配/制造约束求解器，返回冲突解释。
+4. 用面级实测与多视图视觉检查驱动 repair loop。
+5. 将长任务迁移到可中断的进程级 worker，并保留每次 IR/几何/检查的 provenance。
