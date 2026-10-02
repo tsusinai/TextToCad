@@ -444,7 +444,7 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
             "Ignored unsupported feature keys: " + ", ".join(unknown_features[:4])
         )
 
-    def boolean(name: str, fallback: bool)
+    def boolean(name: str, fallback: bool):
         value = candidate.get(name, features.get(name, fallback))
         if isinstance(value, bool):
             return value
