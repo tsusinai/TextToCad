@@ -87,7 +87,7 @@ Astra 专项审查后已执行：
 Astra 对 README、前端 3D/LLM 交互、CadQuery/OCCT 后端、Docker 和 DeepSeek 配置做了只读全局审查，本轮已执行：
 
 - `/v1/*` 支持通过 `BACKEND_API_KEY` 开启 `X-API-Key` 鉴权；`/health` 保持可用于探针。
-- 异步任务增加 `MAX_PENDING_JOBS` 队列上限，满载返回 429，并在健康信息中公开并发/队列配置。
+- 异步任务增加 `MAX_PENDING_JOBS` 队列上限，满载返回 429；生成 mutation 增加按客户端地址的时间窗口限流，并在健康信息中公开并发/队列/限流配置。
 - LLM key 读取会去除空白；结构化响应加入 schema version 检查，非法特征组合会归一化并记录 assumptions。
 - 制造性分析明确标记为 nominal，并增加 `review_required`；warning 不再被误解为面级制造认证。
 - 前端统一携带可选 API key，并使用带鉴权的二进制下载，受保护后端仍能加载 GLB 和导出文件。
