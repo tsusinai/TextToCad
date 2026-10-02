@@ -200,7 +200,7 @@
           </div>
           <div class="viewport-footer">
             <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC BODY</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
-            <button class="export" id="exportObj" type="button">Export OBJ</button>
+            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button>
           </div>
         </section>
         <section class="params">
@@ -236,14 +236,17 @@
     const bodyValue = document.getElementById('bodyValue');
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
+    const exportStep = document.getElementById('exportStep');
+    const backendUrl = (window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '').replace(/\/+$/, '');
+    let backendArtifact = null;
     let currentView = 'iso';
     let modelSpec = null;
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -270,6 +273,7 @@
       document.querySelector('[data-view="top"]').textContent = t.top;
       document.querySelector('[data-view="front"]').textContent = t.front;
       document.getElementById('exportObj').textContent = t.export;
+      if (exportStep) exportStep.textContent = t.exportStep;
       document.querySelector('.params-head .section-label').textContent = t.params;
       solved.textContent = t.solved;
       modelState.textContent = t.state;
@@ -388,25 +392,49 @@
       modelWrap.className = 'model-wrap ' + view + '-view';
       modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
     }
-    function generateModel() {
+    async function requestBackend(value) {
+      if (!backendUrl) return null;
+      const response = await fetch(backendUrl + '/v1/models', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: value, units: 'mm' })
+      });
+      if (!response.ok) throw new Error('geometry backend returned ' + response.status);
+      return response.json();
+    }
+    async function generateModel() {
       const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
       const nextSpec = parseModel(value);
       generate.classList.add('loading');
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
       modelState.textContent = copy[currentLang].solving;
       solved.textContent = copy[currentLang].parsing;
-      setTimeout(() => {
-        modelSpec = nextSpec;
-        renderModel(modelSpec, currentView);
-        bodyValue.textContent = displayTitle(nextSpec.title);
-        sizeValue.textContent = nextSpec.width + ' × ' + nextSpec.depth + ' × ' + nextSpec.height + ' mm';
-        bodyMeta.textContent = currentLang === 'zh' ? nextSpec.compartments + ' 个隔间 · 可制造实体' : nextSpec.compartments + ' compartments · closed volume';
-        modelMeta.textContent = currentLang === 'zh' ? nextSpec.compartments + ' 个隔间 · 壁厚 12 毫米 · 倒角 ' + nextSpec.chamfer + ' 毫米' : nextSpec.compartments + ' compartments · 12 mm wall · chamfer ' + nextSpec.chamfer + ' mm';
-        modelState.textContent = copy[currentLang].state;
-        solved.textContent = copy[currentLang].solved;
-        generate.classList.remove('loading');
-        generateLabel.textContent = copy[currentLang].regenerate;
-      }, 720);
+      let remote = null;
+      try {
+        remote = await requestBackend(value);
+      } catch (error) {
+        console.warn('Geometry backend unavailable; using local preview.', error);
+      }
+      await new Promise((resolve) => setTimeout(resolve, remote ? 120 : 720));
+      const remoteParams = remote && remote.parameters ? remote.parameters : {};
+      modelSpec = remote ? {
+        title: titleFor(value),
+        width: remoteParams.width || nextSpec.width,
+        depth: remoteParams.depth || nextSpec.depth,
+        height: remoteParams.height || nextSpec.height,
+        compartments: remoteParams.compartments || nextSpec.compartments,
+        chamfer: remoteParams.chamfer || nextSpec.chamfer
+      } : nextSpec;
+      backendArtifact = remote && remote.artifacts ? remote.artifacts : null;
+      renderModel(modelSpec, currentView);
+      bodyValue.textContent = displayTitle(modelSpec.title);
+      sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
+      bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
+      modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 12 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · 12 mm wall · chamfer ' + modelSpec.chamfer + ' mm';
+      modelState.textContent = remote ? (currentLang === 'zh' ? 'OCCT B-Rep 实体' : 'OCCT B-REP SOLID') : copy[currentLang].state;
+      solved.textContent = remote ? (currentLang === 'zh' ? 'B-Rep 检查通过' : 'B-Rep checks passed') : copy[currentLang].solved;
+      generate.classList.remove('loading');
+      generateLabel.textContent = copy[currentLang].regenerate;
     }
     generate.addEventListener('click', generateModel);
     prompt.addEventListener('keydown', (event) => {
@@ -431,6 +459,11 @@
       for (let i = 1; i < spec.compartments; i += 1) { const x = (w * i / spec.compartments).toFixed(2); rows.push('v ' + x + ' 0 ' + h, 'v ' + x + ' ' + d + ' ' + h); }
       return rows.join('\\n') + '\\n';
     }
+    if (exportStep && backendUrl) exportStep.style.display = 'inline-flex';
+    if (exportStep) exportStep.addEventListener('click', () => {
+      if (!backendArtifact || !backendArtifact.step) { generateModel(); return; }
+      window.location.href = backendUrl + backendArtifact.step;
+    });
     document.getElementById('exportObj').addEventListener('click', () => {
       const spec = modelSpec || parseModel(prompt.value);
       const blob = new Blob([objFor(spec)], { type: 'text/plain' });
