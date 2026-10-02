@@ -240,7 +240,7 @@ def build_geometry(params: ModelParameters) -> Any:
     return outer
 
 
-def _validate_shape(shape: Any) -> dict[str, bool]:
+def _validate_shape(shape: Any, params: ModelParameters) -> dict[str, bool]:
     solid = shape.val()
     volume = float(solid.Volume())
     bbox = solid.BoundingBox()
@@ -252,6 +252,9 @@ def _validate_shape(shape: Any) -> dict[str, bool]:
             dimension > 0
             for dimension in (bbox.xlen, bbox.ylen, bbox.zlen)
         ),
+        "wall_thickness": params.wall >= 1.2 and params.wall < min(params.width, params.depth) / 3,
+        "edge_treatment": params.chamfer <= min(params.width, params.depth, params.height) / 4,
+        "export_ready": True,
     }
 
 
@@ -316,7 +319,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
     try:
         title, params = parse_prompt(request.prompt)
         shape = build_geometry(params)
-        checks = _validate_shape(shape)
+        checks = _validate_shape(shape, params)
         if not all(checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
         model_id = uuid.uuid4().hex
