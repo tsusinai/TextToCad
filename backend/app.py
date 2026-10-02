@@ -6,6 +6,7 @@ import re
 import uuid
 from pathlib import Path
 from typing import Any, Literal
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,13 @@ except ImportError as exc:  # pragma: no cover - container configuration issue
     cq = None
     exporters = None
     CADQUERY_ERROR = str(exc)
+
+try:
+    import trimesh
+    TRIMESH_ERROR = ""
+except ImportError as exc:  # pragma: no cover - optional preview dependency
+    trimesh = None
+    TRIMESH_ERROR = str(exc)
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -95,6 +103,8 @@ class GenerateResponse(BaseModel):
     artifacts: dict[str, str]
     process: str
     profile: dict[str, Any]
+    analysis: dict[str, Any]
+    step_schema: str
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -234,6 +244,72 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     return title, params
 
 
+def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
+    profile = PROCESS_PROFILES[params.process]
+    issues: list[dict[str, Any]] = []
+    wall_ok = params.wall >= profile["min_wall"] and params.wall < min(params.width, params.depth) / 3
+    edge_ok = (params.chamfer == 0 or params.chamfer >= profile["min_radius"]) and params.chamfer <= min(params.width, params.depth, params.height) / 4
+    clearance_ok = params.wall >= profile["clearance"]
+    draft_ok = profile["draft_angle"] == 0.0
+    overhang_ok = profile["max_overhang"] >= 45.0
+
+    def add_issue(code: str, severity: str, message: str, message_zh: str, value: float | None = None, limit: float | None = None) -> None:
+        issue: dict[str, Any] = {
+            "code": code,
+            "severity": severity,
+            "message": message,
+            "message_zh": message_zh,
+        }
+        if value is not None:
+            issue["value"] = round(value, 3)
+        if limit is not None:
+            issue["limit"] = round(limit, 3)
+        issues.append(issue)
+
+    if not wall_ok:
+        add_issue("wall_thickness", "error", "Wall thickness is below the selected process minimum.", "壁厚低于当前工艺的最小值。", params.wall, profile["min_wall"])
+    if not edge_ok:
+        add_issue("edge_treatment", "warning", "Edge radius/chamfer is outside the process range.", "圆角或倒角超出当前工艺范围。", params.chamfer, profile["min_radius"])
+    if not clearance_ok:
+        add_issue("clearance", "warning", "Clearance is below the selected process recommendation.", "间隙低于当前工艺建议值。", params.wall, profile["clearance"])
+    if not overhang_ok:
+        add_issue("overhang", "warning", "The selected process needs support review for this overhang.", "当前工艺需要复核悬空和支撑。", profile["max_overhang"], 45.0)
+    if not draft_ok:
+        add_issue("draft_angle", "warning", "Injection molding requires an explicit draft feature.", "注塑需要明确的拔模特征。", profile["draft_angle"], 1.0)
+
+    wall_map = [
+        {
+            "region": "outer wall",
+            "region_zh": "外壁",
+            "nominal_mm": round(params.wall, 3),
+            "minimum_mm": round(params.wall, 3),
+            "status": "pass" if wall_ok else "fail",
+        },
+        {
+            "region": "bottom",
+            "region_zh": "底板",
+            "nominal_mm": round(params.bottom, 3),
+            "minimum_mm": round(params.bottom, 3),
+            "status": "pass" if params.bottom >= profile["min_wall"] else "fail",
+        },
+    ]
+    if params.compartments > 1:
+        wall_map.append({
+            "region": "dividers",
+            "region_zh": "隔板",
+            "nominal_mm": round(params.wall, 3),
+            "minimum_mm": round(params.wall, 3),
+            "status": "pass" if wall_ok else "fail",
+        })
+    return {
+        "process": params.process,
+        "profile": profile,
+        "wall_map": wall_map,
+        "issues": issues,
+        "manufacturing_ready": not any(issue["severity"] == "error" for issue in issues),
+    }
+
+
 def _rounded_edges(workplane: Any, radius: float) -> Any:
     if radius <= 0:
         return workplane
@@ -288,10 +364,11 @@ def build_geometry(params: ModelParameters) -> Any:
     return outer
 
 
-def _validate_shape(shape: Any, params: ModelParameters) -> dict[str, bool]:
+def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any]) -> dict[str, bool]:
     solid = shape.val()
     volume = float(solid.Volume())
     bbox = solid.BoundingBox()
+    issue_codes = {issue["code"] for issue in analysis["issues"]}
     return {
         "valid_brep": bool(solid.isValid()),
         "single_solid": len(shape.solids().vals()) == 1,
@@ -300,41 +377,114 @@ def _validate_shape(shape: Any, params: ModelParameters) -> dict[str, bool]:
             dimension > 0
             for dimension in (bbox.xlen, bbox.ylen, bbox.zlen)
         ),
-        "wall_thickness": params.wall >= PROCESS_PROFILES[params.process]["min_wall"] and params.wall < min(params.width, params.depth) / 3,
-        "edge_treatment": (params.chamfer == 0 or params.chamfer >= PROCESS_PROFILES[params.process]["min_radius"]) and params.chamfer <= min(params.width, params.depth, params.height) / 4,
-        "overhang": PROCESS_PROFILES[params.process]["max_overhang"] >= 45.0,
-        "draft_angle": PROCESS_PROFILES[params.process]["draft_angle"] == 0.0,
-        "clearance": params.wall >= PROCESS_PROFILES[params.process]["clearance"],
+        "wall_thickness": "wall_thickness" not in issue_codes,
+        "edge_treatment": "edge_treatment" not in issue_codes,
+        "overhang": "overhang" not in issue_codes,
+        "draft_angle": "draft_angle" not in issue_codes,
+        "clearance": "clearance" not in issue_codes,
         "export_ready": True,
     }
 
 
-def _write_artifacts(model_id: str, shape: Any, title: str, params: ModelParameters, checks: dict[str, bool]) -> dict[str, str]:
+def _export_step_ap242(shape: Any, step_path: Path) -> str:
+    try:
+        from OCP.Interface import Interface_Static_SetCVal
+        from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
+
+        Interface_Static_SetCVal("write.step.schema", "AP242DIS")
+        writer = STEPControl_Writer()
+        writer.Transfer(shape.val().wrapped, STEPControl_AsIs)
+        writer.Write(str(step_path))
+        if not step_path.exists() or step_path.stat().st_size == 0:
+            raise RuntimeError("AP242 writer returned an empty file")
+        return "AP242DIS"
+    except Exception:
+        exporters.export(shape, str(step_path))
+        return "CADQUERY_DEFAULT"
+
+
+def _write_3mf(mesh: Any, three_mf_path: Path) -> None:
+    vertices = mesh.vertices
+    faces = mesh.faces
+    vertex_xml = "".join(
+        f'<vertex x="{float(vertex[0]):.6f}" y="{float(vertex[1]):.6f}" z="{float(vertex[2]):.6f}"/>'
+        for vertex in vertices
+    )
+    triangle_xml = "".join(
+        f'<triangle v1="{int(face[0])}" v2="{int(face[1])}" v3="{int(face[2])}"/>'
+        for face in faces
+    )
+    model_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources><object id="1" type="model"><mesh><vertices>{vertex_xml}</vertices><triangles>{triangle_xml}</triangles></mesh></object></resources>
+  <build><item objectid="1"/></build>
+</model>'''
+    content_types = '''<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Override PartName="/3D/3dmodel.model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>'''
+    relationships = '''<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>'''
+    with ZipFile(three_mf_path, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", relationships)
+        archive.writestr("3D/3dmodel.model", model_xml)
+
+
+def _write_artifacts(
+    model_id: str,
+    shape: Any,
+    title: str,
+    params: ModelParameters,
+    checks: dict[str, bool],
+    analysis: dict[str, Any],
+) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
     model_dir.mkdir(parents=True, exist_ok=False)
     step_path = model_dir / "model.step"
     stl_path = model_dir / "model.stl"
-    manifest_path = model_dir / "manifest.json"
+    analysis_path = model_dir / "analysis.json"
 
-    exporters.export(shape, str(step_path))
+    step_schema = _export_step_ap242(shape, step_path)
     exporters.export(shape, str(stl_path))
+    preview_files: dict[str, Path] = {}
+    if trimesh is not None:
+        try:
+            mesh = trimesh.load_mesh(str(stl_path), file_type="stl", force="mesh")
+            if isinstance(mesh, trimesh.Scene):
+                mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
+            glb_path = model_dir / "model.glb"
+            three_mf_path = model_dir / "model.3mf"
+            mesh.export(str(glb_path), file_type="glb")
+            _write_3mf(mesh, three_mf_path)
+            preview_files = {"glb": glb_path, "3mf": three_mf_path}
+        except Exception:
+            preview_files = {}
+    analysis_path.write_text(json.dumps(analysis, indent=2), encoding="utf-8")
     manifest = {
         "model_id": model_id,
         "title": title,
         "parameters": params.model_dump(),
-        "checks": checks,
         "process": params.process,
         "process_profile": PROCESS_PROFILES[params.process],
+        "checks": checks,
+        "analysis": analysis,
+        "step_schema": step_schema,
         "units": "mm",
-        "generator": "TextToCad geometry backend 0.2.0",
-        "formats": ["step", "stl"],
+        "generator": "TextToCad geometry backend 0.3.0",
+        "formats": ["step", "stl"] + sorted(preview_files),
     }
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    return {
+    artifacts = {
         "step": f"/v1/models/{model_id}/download?format=step",
         "stl": f"/v1/models/{model_id}/download?format=stl",
-        "manifest": f"/v1/models/{model_id}/manifest",
+        "analysis": f"/v1/models/{model_id}/analysis",
     }
+    for format_name in preview_files:
+        artifacts[format_name] = f"/v1/models/{model_id}/download?format={format_name}"
+    return artifacts, step_schema
 
 
 app = FastAPI(
@@ -366,6 +516,8 @@ def health() -> dict[str, Any]:
         "engine": "CadQuery/OCCT",
         "cadquery_available": cq is not None,
         "cadquery_error": CADQUERY_ERROR or None,
+        "trimesh_available": trimesh is not None,
+        "trimesh_error": TRIMESH_ERROR or None,
         "process_profiles": list(PROCESS_PROFILES),
     }
 
@@ -380,12 +532,13 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
     try:
         title, params = parse_prompt(request.prompt, request.process)
         shape = build_geometry(params)
-        checks = _validate_shape(shape, params)
+        analysis = analyze_manufacturability(params)
+        checks = _validate_shape(shape, params, analysis)
         hard_checks = {key: checks[key] for key in ("valid_brep", "single_solid", "positive_volume", "bounded")}
         if not all(hard_checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
         model_id = uuid.uuid4().hex
-        artifacts = _write_artifacts(model_id, shape, title, params, checks)
+        artifacts, step_schema = _write_artifacts(model_id, shape, title, params, checks, analysis)
         return GenerateResponse(
             model_id=model_id,
             title=title,
@@ -394,6 +547,8 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             artifacts=artifacts,
             process=params.process,
             profile=PROCESS_PROFILES[params.process],
+            analysis=analysis,
+            step_schema=step_schema,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -401,6 +556,16 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"geometry generation failed: {exc}") from exc
+
+
+@app.get("/v1/models/{model_id}/analysis")
+def get_analysis(model_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
+        raise HTTPException(status_code=400, detail="invalid model id")
+    analysis_path = ARTIFACT_ROOT / model_id / "analysis.json"
+    if not analysis_path.exists():
+        raise HTTPException(status_code=404, detail="analysis not found")
+    return json.loads(analysis_path.read_text(encoding="utf-8"))
 
 
 @app.get("/v1/models/{model_id}/manifest")
@@ -416,17 +581,18 @@ def get_manifest(model_id: str) -> dict[str, Any]:
 @app.get("/v1/models/{model_id}/download")
 def download_model(
     model_id: str,
-    format: Literal["step", "stl"] = Query(default="step"),
+    format: Literal["step", "stl", "3mf", "glb"] = Query(default="step"),
 ) -> FileResponse:
     if not re.fullmatch(r"[0-9a-f]{32}", model_id):
         raise HTTPException(status_code=400, detail="invalid model id")
-    suffix = ".step" if format == "step" else ".stl"
-    file_path = ARTIFACT_ROOT / model_id / f"model{suffix}"
+    suffixes = {"step": ".step", "stl": ".stl", "3mf": ".3mf", "glb": ".glb"}
+    file_path = ARTIFACT_ROOT / model_id / f"model{suffixes[format]}"
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="model artifact not found")
-    media_type = (
-        "application/step"
-        if format == "step"
-        else "application/vnd.ms-pki.stl"
-    )
+    media_type = {
+        "step": "application/step",
+        "stl": "application/vnd.ms-pki.stl",
+        "3mf": "application/vnd.ms-package.3dmanufacturing-3mf",
+        "glb": "model/gltf-binary",
+    }[format]
     return FileResponse(file_path, media_type=media_type, filename=file_path.name)
