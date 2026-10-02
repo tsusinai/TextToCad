@@ -411,15 +411,16 @@ def build_geometry(params: ModelParameters) -> Any:
         outer_round = cq.Workplane("XY").circle(radius).extrude(h)
         inner = cq.Workplane("XY").circle(inner_radius).extrude(inner_height).translate((0, 0, bottom))
         shape = outer_round.cut(inner)
-        if params.kind == "plant":
+        if params.kind == "plant" and params.drainage_holes > 0:
             hole_radius = max(0.8, min(3.0, wall * 0.45))
             hole_offset = radius * 0.35
-            for x, y in ((-hole_offset, 0), (hole_offset, 0), (0, hole_offset)):
+            hole_positions = ((-hole_offset, 0), (hole_offset, 0), (0, hole_offset), (0, -hole_offset))
+            for x, y in hole_positions[:min(params.drainage_holes, len(hole_positions))]:
                 drainage_hole = cq.Workplane("XY").circle(hole_radius).extrude(bottom + 2.0).translate((x, y, -1.0))
                 shape = shape.cut(drainage_hole)
         return shape
 
-    if params.kind == "lamp":
+    if params.kind == "lamp" and params.cable_channel:
         # The cable channel is recessed from the underside so the lamp base
         # keeps a clean top surface while matching the prompt intent.
         channel_w = max(6.0, min(w * 0.4, w - 2 * wall))
