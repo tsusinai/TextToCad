@@ -1323,8 +1323,20 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             return cached
     model_id: str | None = None
     try:
-        title, params, llm_used, assumptions = interpret_prompt(request.prompt, request.process, request.mode)
-        design_ir = build_design_ir(request.prompt, params, request.mode, llm_used, assumptions)
+        title, params, llm_used, assumptions, provenance = interpret_prompt(
+            request.prompt,
+            request.process,
+            request.mode,
+            request.units,
+        )
+        design_ir = build_design_ir(
+            request.prompt,
+            params,
+            request.mode,
+            llm_used,
+            assumptions,
+            provenance,
+        )
         shape = build_geometry(params)
         analysis = analyze_manufacturability(params)
         checks = _validate_shape(shape, params, analysis)
@@ -1341,6 +1353,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             analysis,
             {"mode": request.mode, "llm_used": llm_used, "assumptions": assumptions},
             design_ir,
+            provenance,
         )
         response = GenerateResponse(
             model_id=model_id,
@@ -1355,6 +1368,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             mode=request.mode,
             llm_used=llm_used,
             assumptions=assumptions,
+            provenance=provenance,
             design_ir=design_ir,
         )
         with CACHE_LOCK:
