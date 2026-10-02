@@ -1024,6 +1024,17 @@ def cancel_job(job_id: str) -> dict[str, Any]:
         return {"job_id": job_id, "status": job["status"]}
 
 
+@app.get("/v1/models/{model_id}/ir")
+def get_design_ir(model_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
+        raise HTTPException(status_code=400, detail="invalid model id")
+    ir_path = ARTIFACT_ROOT / model_id / "manifest.json"
+    if not ir_path.exists():
+        raise HTTPException(status_code=404, detail="model not found")
+    manifest = json.loads(ir_path.read_text(encoding="utf-8"))
+    return manifest.get("design_ir", {})
+
+
 @app.get("/v1/models/{model_id}/analysis")
 def get_analysis(model_id: str) -> dict[str, Any]:
     if not re.fullmatch(r"[0-9a-f]{32}", model_id):
