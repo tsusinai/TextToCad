@@ -505,7 +505,7 @@ def build_design_ir(
     elif params.kind == "clip":
         feature_nodes.append({"id": "cable_relief", "type": "cut", "operation": "cut_relief", "source": "base_solid", "status": "planned"})
     if params.kind == "plant" and params.drainage_holes:
-        feature_nodes.append({"id": "drainage_holes", "type": "pattern", "operation": "cut_cylinders", "count": params.drainage_holes, "source": "shell_cavity", "status": "planned"})
+        feature_nodes.append({"id": "drainage_holes", "type": "pattern", "operation": "cut_cylinders", "count": params.drainage_holes, "source": "rotational_cavity", "status": "planned"})
     if params.kind == "lamp" and params.cable_channel:
         feature_nodes.append({"id": "cable_channel", "type": "cut", "operation": "cut_recess", "source": "base_solid", "status": "planned"})
     if params.chamfer > 0:
