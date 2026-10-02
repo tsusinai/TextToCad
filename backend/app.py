@@ -144,7 +144,11 @@ JOB_LOCK = Lock()
 JOBS: dict[str, dict[str, Any]] = {}
 MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
 MAX_PENDING_JOBS = max(MAX_CONCURRENT_JOBS, int(os.getenv("MAX_PENDING_JOBS", "8")))
+RATE_LIMIT_WINDOW_SECONDS = max(10, int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")))
+MAX_MUTATIONS_PER_WINDOW = max(1, int(os.getenv("MAX_MUTATIONS_PER_WINDOW", "30")))
 GENERATION_SEMAPHORE = BoundedSemaphore(MAX_CONCURRENT_JOBS)
+RATE_LIMIT_LOCK = Lock()
+REQUEST_BUCKETS: dict[str, list[float]] = {}
 
 
 def _cache_key(request: GenerateRequest) -> str:
@@ -904,7 +908,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def require_backend_key(request: Request, call_next: Any) -> Any:
-    """Require a shared key for API routes when the service is exposed publicly."""
+    """Apply optional shared-key auth and a bounded per-client mutation rate."""
     if BACKEND_API_KEY and request.url.path.startswith("/v1/") and request.method != "OPTIONS":
         supplied = request.headers.get("x-api-key", "").strip()
         if not supplied or not secrets.compare_digest(supplied, BACKEND_API_KEY):
@@ -913,6 +917,23 @@ async def require_backend_key(request: Request, call_next: Any) -> Any:
                 status_code=401,
                 headers={"WWW-Authenticate": "ApiKey"},
             )
+    if request.method == "POST" and request.url.path in {"/v1/models", "/v1/jobs"}:
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        with RATE_LIMIT_LOCK:
+            bucket = [
+                timestamp for timestamp in REQUEST_BUCKETS.get(client_ip, [])
+                if now - timestamp < RATE_LIMIT_WINDOW_SECONDS
+            ]
+            if len(bucket) >= MAX_MUTATIONS_PER_WINDOW:
+                REQUEST_BUCKETS[client_ip] = bucket
+                return JSONResponse(
+                    {"detail": "generation rate limit exceeded; retry later"},
+                    status_code=429,
+                    headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)},
+                )
+            bucket.append(now)
+            REQUEST_BUCKETS[client_ip] = bucket
     return await call_next(request)
 
 
@@ -931,6 +952,10 @@ def health() -> dict[str, Any]:
         "backend_auth_required": bool(BACKEND_API_KEY),
         "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
         "max_pending_jobs": MAX_PENDING_JOBS,
+        "rate_limit": {
+            "window_seconds": RATE_LIMIT_WINDOW_SECONDS,
+            "max_mutations": MAX_MUTATIONS_PER_WINDOW,
+        },
         "process_profiles": list(PROCESS_PROFILES),
     }
 
