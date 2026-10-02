@@ -434,7 +434,7 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
-    const threeState = { active: false, ready: false, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, loadSeq: 0 };
+    const threeState = { active: false, ready: false, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, resize: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
@@ -693,6 +693,8 @@
     function hideThreePreview() {
       threeState.loadSeq += 1;
       threeState.active = false;
+      if (threeState.scene && threeState.model) threeState.scene.remove(threeState.model);
+      threeState.model = null;
       if (threeViewport) { threeViewport.classList.remove('active'); threeViewport.setAttribute('aria-hidden', 'true'); }
       if (modelWrap) modelWrap.style.display = '';
     }
@@ -739,16 +741,22 @@
           threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
           threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
           threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          threeState.renderer.domElement.setAttribute('aria-label', 'Interactive generated 3D model');
           if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
           threeViewport.appendChild(threeState.renderer.domElement);
           threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
           threeState.controls.enableDamping = true;
           threeState.controls.dampingFactor = .08;
+          threeState.controls.screenSpacePanning = true;
+          threeState.controls.minDistance = .05;
+          threeState.controls.maxDistance = 100000;
           threeState.scene.add(new THREE.HemisphereLight(0xeaf4d4, 0x252724, 1.8));
           const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 5, 4); threeState.scene.add(key);
           const resize = () => { const width = threeViewport.clientWidth || 1; const height = threeViewport.clientHeight || 1; threeState.camera.aspect = width / height; threeState.camera.updateProjectionMatrix(); threeState.renderer.setSize(width, height, false); };
+          threeState.resize = resize;
           threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
           if (threeState.resizeObserver) threeState.resizeObserver.observe(threeViewport); else window.addEventListener('resize', resize);
+          resize();
           const animate = () => { if (threeState.renderer && threeState.scene && threeState.camera) { threeState.controls.update(); threeState.renderer.render(threeState.scene, threeState.camera); } requestAnimationFrame(animate); };
           animate();
         }
@@ -757,13 +765,21 @@
           if (sequence !== threeState.loadSeq) return;
           if (threeState.model) threeState.scene.remove(threeState.model);
           threeState.model = gltf.scene;
+          // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
+          // imported root so top/front views and orbit controls match the SVG preview.
+          threeState.model.rotation.x = -Math.PI / 2;
+          threeState.model.updateMatrixWorld(true);
           threeState.scene.add(threeState.model);
           threeState.active = true;
           threeViewport.classList.add('active');
           threeViewport.setAttribute('aria-hidden', 'false');
           modelWrap.style.display = 'none';
-          fitThreeModel();
-          setThreeView(currentView);
+          requestAnimationFrame(() => {
+            if (sequence !== threeState.loadSeq || !threeState.model) return;
+            if (threeState.resize) threeState.resize();
+            fitThreeModel();
+            setThreeView(currentView);
+          });
         }, undefined, (error) => { console.warn('GLB preview unavailable; retaining SVG fallback.', error); hideThreePreview(); });
       } catch (error) {
         console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
@@ -1190,6 +1206,7 @@
       if (cancelGeneration) cancelGeneration.hidden = false;
       setGenerationError('');
       backendArtifact = null;
+      hideThreePreview();
       updateExportButtons();
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
       try {
@@ -1204,6 +1221,7 @@
         modelState.textContent = copy[currentLang].solving;
         solved.textContent = copy[currentLang].parsing;
         updateInterpretation(nextSpec, 'draft');
+        renderModel(nextSpec, currentView);
         let remote = null;
         let backendError = null;
         try {
