@@ -48,3 +48,22 @@ The phased roadmap and Phase 1 acceptance criteria are in [PLAN.md](PLAN.md).
 
 
 The current backend includes manufacturing profiles, nominal wall-map analysis, localized issue reporting, reproducible export manifests, async job status, and editable parameter regeneration from the UI.
+
+## LLM advanced mode
+
+The default **Standard** mode uses the deterministic parser and does not require an API. **Advanced · LLM** mode sends the user's natural-language intent plus a deterministic baseline to an OpenAI-compatible chat-completions endpoint. The model is asked for a small JSON parameter object; the backend clamps every dimension, validates feature flags, builds the solid with CadQuery/OCCT, and runs the existing B-Rep checks before returning any artifact.
+
+Configure the provider only on the backend:
+
+    LLM_API_KEY=...
+    LLM_API_URL=https://api.openai.com/v1/chat/completions
+    LLM_MODEL=gpt-4o-mini
+    LLM_TIMEOUT_SECONDS=20
+    LLM_MAX_RESPONSE_BYTES=65536
+
+The browser never receives the key. If the key is missing, the provider times out, or the response is invalid, Advanced mode falls back to the deterministic baseline and returns the reason in "assumptions"; it never executes model-produced CAD code. Set "mode" to "advanced" in either POST /v1/models or POST /v1/jobs to opt in:
+
+    {"prompt":"一个带排水孔的极简花盆，直径 90 毫米，高 82 毫米","units":"mm","process":"fdm","mode":"advanced"}
+
+The response and manifest.json record "mode", "llm_used", and bounded assumptions so a revision can be audited and reproduced. The generated geometry still comes exclusively from the supported parametric builders.
+
