@@ -7,7 +7,7 @@ Natural-language to CAD workspace with a front-design interface and a CadQuery g
 - Natural-language prompt parsing with English and Chinese dimensions.
 - Browser preview with generated isometric, top, and front projections.
 - Optional backend connection for validated OCCT B-Rep geometry.
-- STEP and STL artifact generation from the backend; local OBJ fallback in the static demo.
+- STEP and STL artifact generation from the backend, with optional 3MF/GLB previews; local OBJ fallback in the static demo.
 - Responsive static front end with no build step.
 
 ## Geometry backend
@@ -45,3 +45,6 @@ https://tsusinai.github.io/TextToCad/
 ## Product plan
 
 The phased roadmap and Phase 1 acceptance criteria are in [PLAN.md](PLAN.md).
+
+
+The current backend includes manufacturing profiles, wall-map analysis, localized issue reporting, and reproducible export manifests.
