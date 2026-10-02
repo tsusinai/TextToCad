@@ -1604,6 +1604,8 @@
     renderRevisions();
     updateExportButtons();
     applyCamera();
+    // Start with a real parameterized 3D preview even before the first backend response.
+    loadLocalThreePreview(modelSpec);
   </script>
 </body>
 </html>
