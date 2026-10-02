@@ -1107,7 +1107,7 @@
     }
     async function requestBackend(value, process, signal) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: 'mm', process: process || selectedProcess };
+      const payload = { prompt: value, units: 'mm', process: process || selectedProcess, mode: selectedMode };
       const jobResponse = await fetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1213,12 +1213,14 @@
         sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
         bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
         modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
-        modelState.textContent = remote ? copy[currentLang].backendState : copy[currentLang].state;
-        updateInterpretation(modelSpec, remote ? 'backend' : 'local');
+        modelState.textContent = remote ? (remote.llm_used ? copy[currentLang].advancedState : copy[currentLang].backendState) : copy[currentLang].state;
+        updateInterpretation(modelSpec, remote ? (remote.llm_used ? 'advanced' : 'backend') : 'local');
+        if (remote && remote.assumptions && remote.assumptions.length) interpretationDetails.textContent += ' · ' + copy[currentLang].llmAssumptions + ': ' + remote.assumptions.join(currentLang === 'zh' ? '、' : ', ');
         updateProcessHint(remote && remote.profile);
         updateChecks(modelSpec, remote && remote.checks);
         updateExportButtons();
         if (backendError && backendUrl) setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+        if (selectedMode === 'advanced' && !backendUrl) setGenerationError(copy[currentLang].advancedRequiresBackend);
         saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
       } catch (error) {
         if (error.name === 'AbortError') {
@@ -1254,6 +1256,14 @@
       setGenerationError(copy[currentLang].cancelled);
     });
     bindViewportControls();
+    if (generationMode) generationMode.addEventListener('change', () => {
+      selectedMode = generationMode.value === 'advanced' ? 'advanced' : 'standard';
+      try { localStorage.setItem(modeStorageKey, selectedMode); } catch (error) {}
+      if (modeHint) modeHint.textContent = selectedMode === 'advanced' ? copy[currentLang].advancedModeHint : copy[currentLang].standardModeHint;
+      backendArtifact = null;
+      updateExportButtons();
+      if (modelSpec) generateModel();
+    });
     processSelect.addEventListener('change', () => {
       selectedProcess = processSelect.value;
       try { localStorage.setItem(processStorageKey, selectedProcess); } catch (error) {}
