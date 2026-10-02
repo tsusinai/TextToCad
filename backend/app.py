@@ -91,6 +91,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=MAX_PROMPT_LENGTH)
     units: Literal["mm"] = "mm"
     process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
+    mode: Literal["standard", "advanced"] = "standard"
 
 
 class ModelParameters(BaseModel):
@@ -102,6 +103,8 @@ class ModelParameters(BaseModel):
     chamfer: float
     wall: float
     bottom: float
+    drainage_holes: int = 0
+    cable_channel: bool = False
     process: str = "fdm"
     tolerance: float = 0.2
     clearance: float = 0.3
@@ -117,6 +120,9 @@ class GenerateResponse(BaseModel):
     profile: dict[str, Any]
     analysis: dict[str, Any]
     step_schema: str
+    mode: str = "standard"
+    llm_used: bool = False
+    assumptions: list[str] = []
 
 
 CACHE_LOCK = Lock()
