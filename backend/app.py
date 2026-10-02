@@ -395,6 +395,8 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
         raw = _llm_json(prompt, process, baseline)
     except RuntimeError as exc:
         return baseline_title, baseline, False, [str(exc)]
+    if raw.get("schema_version", "0.1") not in {"0.1"}:
+        return baseline_title, baseline, False, ["LLM returned an unsupported CAD schema version"]
     candidate = raw.get("parameters", raw) if isinstance(raw, dict) else raw
     if not isinstance(candidate, dict):
         return baseline_title, baseline, False, ["LLM returned no CAD parameters"]
