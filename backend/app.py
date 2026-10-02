@@ -6,6 +6,8 @@ import os
 import re
 import shutil
 import time
+import urllib.error
+import urllib.request
 import uuid
 from threading import BoundedSemaphore, Lock, Thread
 from pathlib import Path
@@ -39,6 +41,10 @@ ARTIFACT_ROOT = Path(os.getenv("ARTIFACT_ROOT", APP_DIR / "artifacts"))
 ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 MAX_PROMPT_LENGTH = 4000
 ARTIFACT_TTL_SECONDS = int(os.getenv("ARTIFACT_TTL_SECONDS", "86400"))
+LLM_API_URL = os.getenv("LLM_API_URL", "https://api.openai.com/v1/chat/completions")
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
 EXPORT_LOCK = Lock()
 
 PROCESS_PROFILES: dict[str, dict[str, Any]] = {
