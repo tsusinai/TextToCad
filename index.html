@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f7f7f5" />
+  <title>Text to CAD · FORM</title>
+  <style>
+    :root {
+      --paper: #f7f7f5;
+      --panel: #efefe9;
+      --ink: #1d1e1a;
+      --muted: #85867f;
+      --line: #e2e3dc;
+      --graphite: #252724;
+      --lime: #ddf79b;
+      --soft-lime: #eaf4d4;
+      --card: #f2f3ee;
+      --green: #5d8155;
+      --shadow: 0 24px 70px rgba(29,30,26,.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #dfe2db; color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { padding: 22px; }
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .app-shell { max-width: 1440px; margin: 0 auto; background: var(--paper); border: 1px solid var(--line); border-radius: 28px; box-shadow: var(--shadow); overflow: hidden; min-height: calc(100vh - 44px); }
+    .topbar { height: 78px; padding: 0 32px; display: flex; align-items: center; gap: 26px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 13px; min-width: 208px; }
+    .brand-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; background: var(--ink); color: var(--lime); font-weight: 700; font-size: 18px; }
+    .brand-name { font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+    .nav { display: flex; gap: 26px; align-items: center; font-size: 13px; }
+    .nav button { border: 0; background: transparent; color: #94968f; padding: 8px 0; }
+    .nav button.active { color: var(--ink); font-weight: 700; }
+    .top-actions { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+    .pro-pill, .unit-pill, .view-pill, .state-pill { border: 0; border-radius: 999px; padding: 8px 14px; font-size: 11px; letter-spacing: .04em; font-weight: 700; }
+    .pro-pill { background: var(--lime); color: var(--ink); }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #d7dad0; font-size: 11px; font-weight: 700; }
+    .workspace { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 28px; padding: 30px 32px 32px; }
+    .prompt-panel { background: var(--panel); border-radius: 22px; padding: 24px; min-height: 840px; display: flex; flex-direction: column; }
+    .eyebrow, .section-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    h1, h2, p { margin: 0; }
+    .prompt-panel h1 { margin-top: 13px; font-size: 28px; line-height: 1.05; letter-spacing: -.04em; }
+    .helper { margin-top: 11px; color: #73756e; font-size: 13px; }
+    .prompt-editor { margin-top: 24px; background: #fbfbf8; border: 1px solid #d9dad2; border-radius: 16px; padding: 16px; }
+    .prompt-editor textarea { width: 100%; min-height: 106px; border: 0; outline: 0; resize: none; background: transparent; color: var(--ink); font-size: 15px; line-height: 1.35; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+    .chip { padding: 7px 11px; border-radius: 999px; border: 0; background: var(--soft-lime); color: #59714a; font-size: 12px; font-weight: 700; }
+    .chip.neutral { background: #ecece7; color: #70736b; }
+    .generate { width: 100%; height: 52px; margin-top: 24px; border: 0; border-radius: 14px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; font-size: 14px; font-weight: 700; transition: transform .2s ease, background .2s ease; }
+    .generate:hover { transform: translateY(-2px); background: #30332c; }
+    .generate.loading { background: #506847; }
+    .shortcut { color: #afb4a8; font-size: 12px; }
+    .starter { margin-top: 34px; }
+    .starter-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .starter-buttons button { border: 1px solid #dbdcd5; background: #fafaf7; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700; color: #363832; }
+    .starter-buttons button:hover { border-color: #99ad86; background: var(--soft-lime); }
+    .recent { margin-top: auto; padding-top: 24px; border-top: 1px solid #d9dad2; }
+    .recent-list { display: grid; gap: 19px; margin-top: 17px; }
+    .recent-item { border: 0; background: none; padding: 0; text-align: left; display: grid; gap: 4px; }
+    .recent-item strong { font-size: 14px; }
+    .recent-item span { color: #8a8c84; font-size: 12px; }
+    .content { min-width: 0; display: grid; grid-template-rows: minmax(520px, 1fr) auto; gap: 20px; }
+    .viewport { min-height: 620px; position: relative; overflow: hidden; background: var(--graphite); border-radius: 22px; color: white; padding: 22px 26px; }
+    .viewport::after { content: ""; position: absolute; inset: 78px 80px 106px; background-image: linear-gradient(rgba(188,211,168,.12) 1px, transparent 1px), linear-gradient(120deg, transparent 49.7%, rgba(188,211,168,.12) 50%, transparent 50.3%), linear-gradient(60deg, transparent 49.7%, rgba(188,211,168,.1) 50%, transparent 50.3%); background-size: 100% 38px, 70px 100%, 70px 100%; opacity: .55; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 86%, transparent); }
+    .viewport-header, .viewport-footer { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
+    .viewport-header { padding-bottom: 18px; border-bottom: 1px solid #3b3f38; }
+    .viewport-label { color: #abb3a5; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    .view-controls { display: flex; gap: 8px; }
+    .view-pill { background: #30342f; color: #c5d4b7; border: 1px solid transparent; }
+    .view-pill.active { color: var(--lime); border-color: #50604d; }
+    .model-stage { position: relative; z-index: 1; display: grid; place-items: center; height: calc(100% - 87px); min-height: 450px; }
+    .model-wrap { width: min(520px, 68%); transform: translateY(-7px); transition: transform .6s ease; }
+    .model-wrap.top-view { transform: translateY(-7px) rotateX(58deg) rotateZ(0deg) scale(.82); }
+    .model-wrap.front-view { transform: translateY(4px) rotateY(17deg) scale(.92); }
+    .model-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)); }
+    .model-svg .solid { transition: fill .3s ease; }
+    .model-svg .accent { stroke: var(--lime); }
+    .viewport-footer { position: absolute; bottom: 22px; left: 26px; right: 26px; }
+    .state-pill { background: var(--lime); color: #243122; }
+    .viewport-meta { color: #a3aaa0; font-size: 12px; }
+    .export { border: 1px solid #4b5249; background: #30342f; color: #d8dfd3; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700; }
+    .export:hover { border-color: var(--lime); color: var(--lime); }
+    .params { border: 1px solid var(--line); border-radius: 22px; background: #fff; padding: 22px 24px 24px; }
+    .params-head { display: flex; align-items: center; justify-content: space-between; }
+    .solved { color: var(--green); font-size: 12px; font-weight: 700; }
+    .param-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
+    .param-card { min-height: 120px; padding: 18px; border-radius: 16px; background: var(--card); }
+    .param-card .label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; }
+    .param-card strong { display: block; margin-top: 13px; font-size: 16px; }
+    .param-card small { display: block; margin-top: 10px; color: #7a7c74; font-size: 12px; }
+    @media (max-width: 1050px) {
+      body { padding: 0; }
+      .app-shell { border-radius: 0; min-height: 100vh; }
+      .workspace { grid-template-columns: 300px minmax(0,1fr); padding: 22px; gap: 18px; }
+      .prompt-panel { padding: 20px; }
+      .topbar { padding: 0 22px; }
+      .brand { min-width: 180px; }
+      .model-wrap { width: min(500px, 82%); }
+    }
+    @media (max-width: 760px) {
+      .topbar { height: auto; min-height: 76px; flex-wrap: wrap; padding: 17px 20px; gap: 14px; }
+      .brand { min-width: 0; }
+      .nav { order: 3; width: 100%; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 12px; }
+      .top-actions { margin-left: auto; }
+      .workspace { grid-template-columns: 1fr; padding: 20px; }
+      .prompt-panel { min-height: auto; }
+      .recent { margin-top: 28px; }
+      .content { grid-template-rows: auto auto; }
+      .viewport { min-height: 520px; }
+      .model-stage { min-height: 360px; }
+      .param-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">F</div><div class="brand-name">FORM / AI CAD</div></div>
+      <nav class="nav" aria-label="Primary navigation">
+        <button class="active" type="button">Workspace</button>
+        <button type="button">Templates</button>
+        <button type="button">History</button>
+      </nav>
+      <div class="top-actions"><span class="pro-pill">PRO</span><span class="avatar">TS</span></div>
+    </header>
+    <section class="workspace">
+      <aside class="prompt-panel">
+        <div class="eyebrow">TEXT-TO-CAD</div>
+        <h1>Describe your part.</h1>
+        <p class="helper">Start with shape, size, and intent.</p>
+        <div class="prompt-editor">
+          <textarea id="prompt" aria-label="Describe your part">A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.</textarea>
+          <div class="chip-row"><span class="chip">rounded edges</span><span class="chip neutral">120 × 80 mm</span></div>
+        </div>
+        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate model</span><span class="shortcut">⌘ ↵</span></button>
+        <div class="starter">
+          <div class="section-label">OR TRY A STARTER</div>
+          <div class="starter-buttons">
+            <button type="button" data-prompt="A shallow storage tray with a 160 mm footprint and 12 mm rounded corners.">Storage tray</button>
+            <button type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.">Cable clip</button>
+            <button type="button" data-prompt="A minimal plant pot, 90 mm diameter and 82 mm tall, with drainage holes.">Plant pot</button>
+            <button type="button" data-prompt="A small lamp base, 110 mm wide, with a hidden cable channel.">Lamp base</button>
+          </div>
+        </div>
+        <div class="recent">
+          <div class="section-label">RECENT PROMPTS</div>
+          <div class="recent-list">
+            <button class="recent-item" type="button" data-prompt="A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge."><strong>Desk organizer</strong><span>3 bodies · edited 2m ago</span></button>
+            <button class="recent-item" type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening."><strong>Cable management clip</strong><span>1 body · edited yesterday</span></button>
+            <button class="recent-item" type="button" data-prompt="A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall."><strong>Minimal pen cup</strong><span>2 bodies · edited Sep 28</span></button>
+          </div>
+        </div>
+      </aside>
+      <div class="content">
+        <section class="viewport" aria-label="3D model preview">
+          <div class="viewport-header">
+            <span class="viewport-label">LIVE PREVIEW</span>
+            <div class="view-controls">
+              <button class="view-pill active" type="button" data-view="iso">ISOMETRIC</button>
+              <button class="view-pill" type="button" data-view="top">TOP</button>
+              <button class="view-pill" type="button" data-view="front">FRONT</button>
+              <span class="unit-pill" style="background:#30342f;color:#a3aaa0;">MM</span>
+            </div>
+          </div>
+          <div class="model-stage">
+            <div class="model-wrap" id="modelWrap">
+              <svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Isometric parametric desk organizer">
+                <g stroke="#243323" stroke-width="3" stroke-linejoin="round">
+                  <path class="solid" d="M104 146L266 70L420 151L259 231Z" fill="#ddf79b"/>
+                  <path class="solid" d="M104 146L104 287L259 367L259 231Z" fill="#9fca82"/>
+                  <path class="solid" d="M259 231L420 151L420 288L259 367Z" fill="#6e9e68"/>
+                  <path d="M146 150L266 96L379 153L258 207Z" fill="#f7fbef"/>
+                  <path d="M146 150L146 230L258 291L258 207Z" fill="#b8d99a"/>
+                  <path d="M258 207L379 153L379 232L258 291Z" fill="#86b876"/>
+                  <ellipse cx="269" cy="145" rx="47" ry="20" fill="#6e9e68"/>
+                  <ellipse cx="269" cy="145" rx="31" ry="12" fill="#252724" class="accent"/>
+                  <path d="M181 183L231 207L231 251L181 225Z" fill="#252724" opacity=".92"/>
+                  <path d="M297 174L347 149L347 195L297 220Z" fill="#252724" opacity=".92"/>
+                  <path d="M199 117L266 86L333 119" fill="none" stroke="#fff" opacity=".7"/>
+                  <path d="M120 260L259 332L400 259" fill="none" stroke="#ddf79b" opacity=".7"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+          <div class="viewport-footer">
+            <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC BODY</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
+            <button class="export" id="exportObj" type="button">Export OBJ</button>
+          </div>
+        </section>
+        <section class="params">
+          <div class="params-head"><span class="section-label">MODEL PARAMETERS</span><span class="solved" id="solved">All constraints solved</span></div>
+          <div class="param-grid">
+            <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">3 watertight solids</small></article>
+            <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
+            <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · warm white</strong><small>Print-ready surface</small></article>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <script>
+    const prompt = document.getElementById('prompt');
+    const generate = document.getElementById('generate');
+    const generateLabel = document.getElementById('generateLabel');
+    const modelState = document.getElementById('modelState');
+    const modelMeta = document.getElementById('modelMeta');
+    const solved = document.getElementById('solved');
+    const bodyValue = document.getElementById('bodyValue');
+    const sizeValue = document.getElementById('sizeValue');
+    const modelWrap = document.getElementById('modelWrap');
+
+    function titleFor(text) {
+      const value = text.toLowerCase();
+      if (value.includes('cable') || value.includes('clip')) return 'Cable clip';
+      if (value.includes('plant') || value.includes('pot')) return 'Plant pot';
+      if (value.includes('lamp')) return 'Lamp base';
+      if (value.includes('pen')) return 'Pen cup';
+      if (value.includes('tray')) return 'Storage tray';
+      return 'Desk organizer';
+    }
+    function dimensionsFor(text) {
+      const values = (text.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+      const width = values[0] || 120;
+      const depth = values[1] || 80;
+      const height = values[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
+      return { width, depth, height };
+    }
+    function generateModel() {
+      const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
+      const dimensions = dimensionsFor(value);
+      generate.classList.add('loading');
+      generateLabel.textContent = 'Generating geometry…';
+      modelState.textContent = 'SOLVING CONSTRAINTS';
+      solved.textContent = 'Parsing natural language';
+      setTimeout(() => {
+        const title = titleFor(value);
+        bodyValue.textContent = title;
+        sizeValue.textContent = dimensions.width + ' × ' + dimensions.depth + ' × ' + dimensions.height + ' mm';
+        modelMeta.textContent = (title === 'Cable clip' ? '1 solid · 6 mm cable · snap fit' : '3 solids · 12 mm wall · chamfer 4 mm');
+        modelState.textContent = 'PARAMETRIC BODY';
+        solved.textContent = 'All constraints solved';
+        generate.classList.remove('loading');
+        generateLabel.textContent = 'Regenerate model';
+      }, 720);
+    }
+    generate.addEventListener('click', generateModel);
+    prompt.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') generateModel();
+    });
+    document.querySelectorAll('[data-prompt]').forEach((button) => {
+      button.addEventListener('click', () => { prompt.value = button.dataset.prompt; prompt.focus(); });
+    });
+    document.querySelectorAll('[data-view]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('[data-view]').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        modelWrap.className = 'model-wrap ' + (button.dataset.view === 'iso' ? '' : button.dataset.view + '-view');
+      });
+    });
+    document.getElementById('exportObj').addEventListener('click', () => {
+      const { width, depth, height } = dimensionsFor(prompt.value);
+      const obj = '# FORM AI CAD export\n# Parametric block\n' +
+        'o ' + titleFor(prompt.value).replace(/\s+/g, '_') + '\n' +
+        'v 0 0 0\nv ' + width + ' 0 0\nv ' + width + ' ' + depth + ' 0\nv 0 ' + depth + ' 0\n' +
+        'v 0 0 ' + height + '\nv ' + width + ' 0 ' + height + '\nv ' + width + ' ' + depth + ' ' + height + '\nv 0 ' + depth + ' ' + height + '\n' +
+        'f 1 2 3 4\nf 5 8 7 6\nf 1 5 6 2\nf 2 6 7 3\nf 3 7 8 4\nf 5 1 4 8\n';
+      const blob = new Blob([obj], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = 'form-cad-model.obj'; link.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
