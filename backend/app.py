@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -110,6 +111,15 @@ class GenerateResponse(BaseModel):
     profile: dict[str, Any]
     analysis: dict[str, Any]
     step_schema: str
+
+
+CACHE_LOCK = Lock()
+MODEL_CACHE: dict[str, GenerateResponse] = {}
+
+
+def _cache_key(request: GenerateRequest) -> str:
+    normalized = " ".join(request.prompt.strip().lower().split())
+    return hashlib.sha256(f"{request.process}\0{request.units}\0{normalized}".encode("utf-8")).hexdigest()
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -584,6 +594,11 @@ def get_process_profiles() -> dict[str, dict[str, Any]]:
 @app.post("/v1/models", response_model=GenerateResponse)
 def generate_model(request: GenerateRequest) -> GenerateResponse:
     cleanup_artifacts()
+    cache_key = _cache_key(request)
+    with CACHE_LOCK:
+        cached = MODEL_CACHE.get(cache_key)
+        if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
+            return cached
     model_id: str | None = None
     try:
         title, params = parse_prompt(request.prompt, request.process)
@@ -595,7 +610,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             raise ValueError(f"geometry validation failed: {checks}")
         model_id = uuid.uuid4().hex
         artifacts, step_schema = _write_artifacts(model_id, shape, title, params, checks, analysis)
-        return GenerateResponse(
+        response = GenerateResponse(
             model_id=model_id,
             title=title,
             parameters=params,
@@ -606,6 +621,9 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             analysis=analysis,
             step_schema=step_schema,
         )
+        with CACHE_LOCK:
+            MODEL_CACHE[cache_key] = response
+        return response
     except RuntimeError as exc:
         if model_id:
             shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
