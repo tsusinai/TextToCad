@@ -101,7 +101,7 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=MAX_PROMPT_LENGTH)
-    units: Literal["mm"] = "mm"
+    units: Literal["mm", "cm", "m", "in"] = "mm"
     process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
     mode: Literal["standard", "advanced"] = "standard"
 
@@ -135,6 +135,7 @@ class GenerateResponse(BaseModel):
     mode: str = "standard"
     llm_used: bool = False
     assumptions: list[str] = Field(default_factory=list)
+    provenance: dict[str, Any] = Field(default_factory=dict)
     design_ir: dict[str, Any] = Field(default_factory=dict)
 
 
