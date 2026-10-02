@@ -293,6 +293,99 @@ def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameter
     return title, params
 
 
+def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str, Any]:
+    if not LLM_API_KEY:
+        raise RuntimeError("advanced mode requires LLM_API_KEY or OPENAI_API_KEY")
+    schema = {
+        "kind": "tray|organizer|clip|plant|lamp|pen|block",
+        "width": "number in mm", "depth": "number in mm", "height": "number in mm",
+        "compartments": "integer 1-12", "wall": "number in mm", "bottom": "number in mm",
+        "chamfer": "number in mm", "drainage_holes": "integer 0-4", "cable_channel": "boolean",
+        "assumptions": ["short user-facing assumption"],
+    }
+    system = (
+        "You are a CAD design intent parser. Convert the user request into only valid JSON. "
+        "Do not output code or explanations. Keep dimensions in millimetres. "
+        "Choose the closest supported kind and make conservative manufacturing assumptions. "
+        f"Supported JSON shape: {json.dumps(schema)}. "
+        f"The deterministic baseline is {json.dumps(baseline.model_dump())}."
+    )
+    payload = {
+        "model": LLM_MODEL,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+    }
+    request = urllib.request.Request(
+        LLM_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"LLM provider returned HTTP {exc.code}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError("LLM provider timed out or was unreachable") from exc
+    try:
+        content = body["choices"][0]["message"]["content"]
+        if isinstance(content, list):
+            content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        content = str(content).strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content, flags=re.IGNORECASE | re.DOTALL).strip()
+        parsed = json.loads(content)
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("LLM provider returned invalid CAD JSON") from exc
+    if not isinstance(parsed, dict):
+        raise RuntimeError("LLM provider returned a non-object CAD spec")
+    return parsed
+
+
+def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelParameters, bool, list[str]]:
+    baseline_title, baseline = parse_prompt(prompt, process)
+    if mode != "advanced":
+        return baseline_title, baseline, False, []
+    try:
+        raw = _llm_json(prompt, process, baseline)
+    except RuntimeError as exc:
+        return baseline_title, baseline, False, [str(exc)]
+    candidate = raw.get("parameters", raw) if isinstance(raw, dict) else raw
+    if not isinstance(candidate, dict):
+        return baseline_title, baseline, False, ["LLM returned no CAD parameters"]
+    aliases = {"plant_pot": "plant", "plant pot": "plant", "lamp_base": "lamp", "lamp base": "lamp", "pen_cup": "pen", "pen cup": "pen", "cable_clip": "clip", "cable clip": "clip"}
+    kind = aliases.get(str(candidate.get("kind", baseline.kind)).strip().lower(), str(candidate.get("kind", baseline.kind)).strip().lower())
+    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "block"}:
+        kind = baseline.kind
+    def number(name: str, fallback: float, minimum: float, maximum: float) -> float:
+        try:
+            value = float(candidate.get(name, fallback))
+        except (TypeError, ValueError):
+            value = fallback
+        return _bounded(value, minimum, maximum)
+    width = number("width", baseline.width, 10.0, 1000.0)
+    depth = number("depth", baseline.depth, 10.0, 1000.0)
+    height = number("height", baseline.height, 5.0, 1000.0)
+    wall = number("wall", baseline.wall, 1.2, min(20.0, width / 3, depth / 3))
+    bottom = number("bottom", baseline.bottom, 1.2, min(height - 1.0, 20.0))
+    chamfer = number("chamfer", baseline.chamfer, 0.0, min(width, depth, height) / 4)
+    try:
+        compartments = int(max(1, min(12, int(candidate.get("compartments", baseline.compartments)))))
+    except (TypeError, ValueError):
+        compartments = baseline.compartments
+    features = candidate.get("features", {}) if isinstance(candidate.get("features", {}), dict) else {}
+    try:
+        drainage_holes = int(max(0, min(4, int(candidate.get("drainage_holes", features.get("drainage_holes", baseline.drainage_holes))))))
+    except (TypeError, ValueError):
+        drainage_holes = baseline.drainage_holes
+    cable_channel = bool(candidate.get("cable_channel", features.get("cable_channel", baseline.cable_channel)))
+    params = baseline.model_copy(update={"kind": kind, "width": width, "depth": depth, "height": height, "compartments": compartments, "chamfer": chamfer, "wall": wall, "bottom": bottom, "drainage_holes": drainage_holes, "cable_channel": cable_channel})
+    titles = {"tray": "Parametric storage tray", "organizer": "Parametric desk organizer", "clip": "Parametric cable clip", "plant": "Parametric plant pot", "lamp": "Parametric lamp base", "pen": "Parametric pen cup", "block": "Parametric solid"}
+    assumptions = [str(item)[:180] for item in raw.get("assumptions", []) if str(item).strip()][:6] if isinstance(raw.get("assumptions", []), list) else []
+    return titles[kind], params, True, assumptions
+
 def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
     profile = PROCESS_PROFILES[params.process]
     issues: list[dict[str, Any]] = []
