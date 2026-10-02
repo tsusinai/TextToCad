@@ -753,7 +753,7 @@
         : title.includes('lamp') || title.includes('灯') ? 'lamp base'
         : title.includes('pen') || title.includes('笔') ? 'pen cup'
         : 'desk organizer';
-      return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, and ' + spec.chamfer + ' mm chamfer.';
+      return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, ' + (spec.bottom || spec.wall || 3) + ' mm bottom, and ' + spec.chamfer + ' mm chamfer.';
     }
     function diffSpec(previous, next) {
       if (!previous) return [];
