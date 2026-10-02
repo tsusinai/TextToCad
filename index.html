@@ -248,7 +248,7 @@
               <button class="view-pill active" type="button" data-view="iso" aria-pressed="true">ISOMETRIC</button>
               <button class="view-pill" type="button" data-view="top" aria-pressed="false">TOP</button>
               <button class="view-pill" type="button" data-view="front" aria-pressed="false">FRONT</button>
-              <span class="unit-pill" style="background:#30342f;color:#a3aaa0;">MM</span><button class="view-pill" id="fitView" type="button">FIT</button>
+              <span class="unit-pill" style="background:#30342f;color:#a3aaa0;">MM</span><button class="view-pill" id="fitView" type="button" aria-label="Fit view">FIT</button>
             </div>
           </div>
           <div class="model-stage" id="modelStage" tabindex="0" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
@@ -649,6 +649,18 @@
       }, { passive: false });
       modelStage.addEventListener('dblclick', resetCamera);
       modelStage.addEventListener('contextmenu', (event) => event.preventDefault());
+      modelStage.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && generationController) {
+          generationController.abort();
+          setGenerationError(copy[currentLang].cancelled);
+          return;
+        }
+        if (event.key.toLowerCase() === 'r' || event.key === '0') { event.preventDefault(); resetCamera(); return; }
+        if (event.key === '+' || event.key === '=') { event.preventDefault(); camera.zoom = clamp(camera.zoom * 1.1, 0.55, 2.8); applyCamera(); return; }
+        if (event.key === '-') { event.preventDefault(); camera.zoom = clamp(camera.zoom * 0.9, 0.55, 2.8); applyCamera(); return; }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); camera.rotateY = clamp(camera.rotateY + (event.key === 'ArrowLeft' ? -8 : 8), -180, 180); applyCamera(); return; }
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); camera.rotateX = clamp(camera.rotateX + (event.key === 'ArrowUp' ? 8 : -8), -75, 75); applyCamera(); }
+      });
       if (fitView) fitView.addEventListener('click', resetCamera);
     }
     function updateProcessHint(profileOverride) {
@@ -967,8 +979,10 @@
           remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal);
         } catch (error) {
           if (error.name === 'AbortError') {
-            if (timedOut) setGenerationError(copy[currentLang].timeoutError);
-            else setGenerationError(copy[currentLang].cancelled);
+            if (sequence === generationSeq) {
+              if (timedOut) setGenerationError(copy[currentLang].timeoutError);
+              else setGenerationError(copy[currentLang].cancelled);
+            }
             return;
           }
           backendError = error;
@@ -1011,8 +1025,10 @@
         saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
       } catch (error) {
         if (error.name === 'AbortError') {
-          if (timedOut) setGenerationError(copy[currentLang].timeoutError);
-          else setGenerationError(copy[currentLang].cancelled);
+          if (sequence === generationSeq) {
+            if (timedOut) setGenerationError(copy[currentLang].timeoutError);
+            else setGenerationError(copy[currentLang].cancelled);
+          }
           return;
         }
         console.error('Model generation failed.', error);
@@ -1060,7 +1076,10 @@
     });
     document.querySelectorAll('[data-view]').forEach((button) => {
       button.addEventListener('click', () => {
-        document.querySelectorAll('[data-view]').forEach((item) => item.classList.remove('active'));
+        document.querySelectorAll('[data-view]').forEach((item) => {
+          item.classList.remove('active');
+          item.setAttribute('aria-pressed', String(item === button));
+        });
         button.classList.add('active');
         currentView = button.dataset.view;
         resetCamera();
