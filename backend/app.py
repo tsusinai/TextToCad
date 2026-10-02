@@ -102,7 +102,7 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
     treatment_numbers = [
         float(value)
         for value in re.findall(
-            r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|wall|壁厚|bottom|floor|底厚)",
+            r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)",
             text,
             flags=re.IGNORECASE,
         )
@@ -110,7 +110,7 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
     treatment_numbers.extend(
         float(value)
         for value in re.findall(
-            r"(?:chamfer|radius|倒角|圆角|圆弧|wall|壁厚|bottom|floor|底厚)[^\d]{0,12}(\d+(?:\.\d+)?)\s*(?:mm|毫米)?",
+            r"(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)[^\d]{0,12}(\d+(?:\.\d+)?)\s*(?:mm|毫米)?",
             text,
             flags=re.IGNORECASE,
         )
@@ -155,7 +155,7 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
     compartments = int(max(1, min(12, compartments)))
 
     chamfer = _number_after(text, [
-        r"(?:chamfer|radius|倒角|圆角|圆弧)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(?:chamfer|radius|倒角|圆角|圆弧|半径)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|radius|倒角|圆角)",
     ]) or 2.0
 
