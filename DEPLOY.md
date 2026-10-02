@@ -42,7 +42,11 @@ Set `CORS_ORIGINS` to the deployed Pages origin and pass the API URL to the UI w
 
     curl http://localhost:8787/health
 
-返回 cadquery_available=true 后，将前端打开为：
+返回 cadquery_available=true 后，在仓库根目录启动静态前端：
+
+    python3 -m http.server 5173
+
+然后打开：
 
     http://localhost:5173/?backend=http://localhost:8787
 
