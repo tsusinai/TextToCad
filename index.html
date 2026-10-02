@@ -436,7 +436,7 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
-    const threeState = { active: false, ready: false, source: '', THREE: null, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, resize: null, animationFrame: null, requestController: null, loadSeq: 0 };
+    const threeState = { active: false, ready: false, source: '', THREE: null, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
@@ -897,40 +897,50 @@
       return root;
     }
 
-    async function loadThreePreview(url) {
+    async function loadLocalThreePreview(spec) {
+      if (!spec || !threeViewport) { hideThreePreview(); return; }
+      const sequence = ++threeState.loadSeq;
+      if (threeState.requestController) {
+        threeState.requestController.abort();
+        threeState.requestController = null;
+      }
+      try {
+        const THREE = await ensureThreeRenderer();
+        if (sequence !== threeState.loadSeq) return;
+        if (threeState.model) {
+          threeState.scene.remove(threeState.model);
+          disposeThreeObject(threeState.model);
+        }
+        threeState.model = buildLocalThreeModel(THREE, spec);
+        threeState.scene.add(threeState.model);
+        threeState.active = true;
+        threeState.source = 'local';
+        threeViewport.classList.add('active');
+        threeViewport.setAttribute('aria-hidden', 'false');
+        modelWrap.style.display = 'none';
+        updatePreviewHint();
+        requestAnimationFrame(() => {
+          if (sequence !== threeState.loadSeq || !threeState.model) return;
+          if (threeState.resize) threeState.resize();
+          fitThreeModel();
+          setThreeView(currentView);
+          startThreeRenderLoop();
+        });
+      } catch (error) {
+        if (sequence === threeState.loadSeq) {
+          console.warn('Local Three.js preview unavailable; retaining SVG fallback.', error);
+          hideThreePreview();
+        }
+      }
+    }
+
+    async function loadThreePreview(url, fallbackSpec = null) {
       if (!url || !threeViewport) { hideThreePreview(); return; }
       const sequence = ++threeState.loadSeq;
       try {
-        const THREE = await import('three');
-        const [{ GLTFLoader }, { OrbitControls }] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('three/addons/controls/OrbitControls.js')]);
+        const THREE = await ensureThreeRenderer();
+        const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
         if (sequence !== threeState.loadSeq) return;
-        threeState.THREE = THREE;
-        if (!threeState.renderer) {
-          threeState.scene = new THREE.Scene();
-          threeState.scene.background = new THREE.Color(0x252724);
-          threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
-          threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-          threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-          threeState.renderer.domElement.setAttribute('aria-label', 'Interactive generated 3D model');
-          if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
-          threeViewport.appendChild(threeState.renderer.domElement);
-          threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
-          threeState.controls.enableDamping = true;
-          threeState.controls.dampingFactor = .08;
-          threeState.controls.screenSpacePanning = true;
-          threeState.controls.minDistance = .05;
-          threeState.controls.maxDistance = 100000;
-          threeState.scene.add(new THREE.HemisphereLight(0xeaf4d4, 0x252724, 1.8));
-          const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 5, 4); threeState.scene.add(key);
-          const resize = () => { const width = threeViewport.clientWidth || 1; const height = threeViewport.clientHeight || 1; threeState.camera.aspect = width / height; threeState.camera.updateProjectionMatrix(); threeState.renderer.setSize(width, height, false); };
-          threeState.resize = resize;
-          threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
-          if (threeState.resizeObserver) threeState.resizeObserver.observe(threeViewport); else window.addEventListener('resize', resize);
-          resize();
-          // Rendering starts only while a GLB is visible; hidden previews do not
-          // keep a permanent animation loop or consume GPU time.
-
-        }
         const loader = new GLTFLoader();
         if (threeState.requestController) threeState.requestController.abort();
         const requestController = new AbortController();
@@ -971,7 +981,10 @@
       } catch (error) {
         if (error && error.name === 'AbortError') return;
         console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
-        if (sequence === threeState.loadSeq) hideThreePreview();
+        if (sequence === threeState.loadSeq) {
+          if (fallbackSpec) loadLocalThreePreview(fallbackSpec);
+          else hideThreePreview();
+        }
       }
     }
     function renderModel(spec, view) {
