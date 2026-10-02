@@ -821,9 +821,10 @@
       });
       issueList.innerHTML = '';
       const issues = data.issues || [];
-      issueBadge.classList.toggle('warn', issues.length > 0);
-      issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : 'READY';
-      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : copy[currentLang].noIssues;
+      const nominalOnly = !data.face_samples && !data.measured_wall_map;
+      issueBadge.classList.toggle('warn', issues.length > 0 || nominalOnly);
+      issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : (nominalOnly ? copy[currentLang].unknown : (currentLang === 'zh' ? '已验证' : 'VERIFIED'));
+      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : (nominalOnly ? copy[currentLang].estimateSummary : copy[currentLang].noIssues);
       if (!issues.length) {
         const empty = document.createElement('div');
         empty.className = 'issue-empty';
