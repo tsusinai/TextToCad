@@ -1,1 +1,43 @@
-# TextToCad\n\nNatural-language to CAD workspace with a front-design interface.\n\n## What is included\n\n- Prompt-to-geometry interaction with starter prompts and recent prompt history.\n- Isometric, top and front preview modes.\n- Parametric model metadata with dimensions and material preset.\n- OBJ export for a generated bounding solid.\n- Responsive static front end with no build step.\n\n## High-quality CAD path\n\nThe current browser demo is a product prototype. A production-grade generator should keep the same UI and replace the demo parser with a backend pipeline:\n\n1. Extract a structured feature plan from the prompt (units, dimensions, topology, constraints, materials).\n2. Validate the plan with a schema and resolve missing dimensions conversationally.\n3. Build the solid with a B-Rep kernel such as OpenCascade, CadQuery, or build123d.\n4. Run geometric validity checks, wall-thickness checks, and manufacturability checks.\n5. Return a versioned STEP/IGES/GLB result plus a preview mesh and feature tree.\n6. Stream progress and validation issues back to the workspace.\n\nThe UI is intentionally ready for that API: generateModel() is the integration point for a /api/generate request, and Export OBJ can be replaced with STEP/IGES downloads once the backend is connected.\n\n## Local preview\n\nOpen index.html directly or serve the repository with any static server.\n\n## Live version\n\nGitHub Pages is published from the gh-pages branch:\nhttps://tsusinai.github.io/TextToCad/\n
+# TextToCad
+
+Natural-language to CAD workspace with a front-design interface and a CadQuery geometry backend.
+
+## What is included
+
+- Natural-language prompt parsing with English and Chinese dimensions.
+- Browser preview with generated isometric, top, and front projections.
+- Optional backend connection for validated OCCT B-Rep geometry.
+- STEP and STL artifact generation from the backend; local OBJ fallback in the static demo.
+- Responsive static front end with no build step.
+
+## Geometry backend
+
+The production path lives in backend:
+
+1. POST /v1/models parses a prompt into bounded millimetre parameters.
+2. CadQuery/OCCT builds a tray, organizer, cable clip, or solid.
+3. B-Rep validity, single-solid, volume, and bounding-box checks run before export.
+4. Validated STEP and STL artifacts are written to persistent storage and exposed by download URLs.
+
+Run it locally:
+
+    cd backend
+    python -m venv .venv
+    . .venv/bin/activate
+    pip install -r requirements.txt
+    uvicorn app:app --reload --port 8787
+
+To connect the static UI, open the page with a backend query parameter:
+
+    https://tsusinai.github.io/TextToCad/?backend=http://localhost:8787
+
+A deployed frontend can instead define window.FORM_CAD_BACKEND_URL before the inline application script. Configure CORS_ORIGINS and a persistent ARTIFACT_ROOT for production.
+
+## Local preview
+
+Open index.html directly or serve the repository with any static server. Without a backend URL, the browser keeps a deterministic preview and OBJ export so the interface remains usable.
+
+## Live version
+
+GitHub Pages is published from the gh-pages branch:
+https://tsusinai.github.io/TextToCad/
