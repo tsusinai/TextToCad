@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import secrets
 import shutil
 import time
 import urllib.error
@@ -16,9 +17,9 @@ from pathlib import Path
 from typing import Any, Literal
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 try:
@@ -44,8 +45,10 @@ ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 MAX_PROMPT_LENGTH = 4000
 ARTIFACT_TTL_SECONDS = int(os.getenv("ARTIFACT_TTL_SECONDS", "86400"))
 LLM_API_URL = os.getenv("LLM_API_URL", "https://api.openai.com/v1/chat/completions").strip()
-LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+LLM_API_KEY = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip() or None
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+# Optional shared-secret protection for public deployments. Keep empty for local-only use.
+BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
 try:
     LLM_TIMEOUT_SECONDS = max(1.0, min(60.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))))
 except ValueError:
@@ -140,6 +143,7 @@ MODEL_CACHE: dict[str, GenerateResponse] = {}
 JOB_LOCK = Lock()
 JOBS: dict[str, dict[str, Any]] = {}
 MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
+MAX_PENDING_JOBS = max(MAX_CONCURRENT_JOBS, int(os.getenv("MAX_PENDING_JOBS", "8")))
 GENERATION_SEMAPHORE = BoundedSemaphore(MAX_CONCURRENT_JOBS)
 
 
@@ -310,6 +314,7 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
     if provider.scheme not in {"http", "https"} or not provider.netloc:
         raise RuntimeError("LLM_API_URL must be an absolute HTTP(S) URL")
     schema = {
+        "schema_version": "0.1",
         "kind": "tray|organizer|clip|plant|lamp|pen|block",
         "width": "number in mm", "depth": "number in mm", "height": "number in mm",
         "compartments": "integer 1-12", "wall": "number in mm", "bottom": "number in mm",
@@ -430,9 +435,16 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
         compartments = int(max(1, min(12, compartments_value)))
     except (TypeError, ValueError, OverflowError):
         compartments = baseline.compartments
-    features = candidate.get("features", {}) if isinstance(candidate.get("features", {}), dict) else {}
+    raw_features = candidate.get("features", {})
+    features = raw_features if isinstance(raw_features, dict) else {}
+    normalization_assumptions: list[str] = []
+    unknown_features = sorted(set(features) - {"drainage_holes", "cable_channel"})
+    if unknown_features:
+        normalization_assumptions.append(
+            "Ignored unsupported feature keys: " + ", ".join(unknown_features[:4])
+        )
 
-    def boolean(name: str, fallback: bool) -> bool:
+    def boolean(name: str, fallback: bool)
         value = candidate.get(name, features.get(name, fallback))
         if isinstance(value, bool):
             return value
@@ -455,6 +467,15 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
     except (TypeError, ValueError, OverflowError):
         drainage_holes = baseline.drainage_holes
     cable_channel = boolean("cable_channel", baseline.cable_channel)
+    if kind not in {"tray", "organizer"} and compartments != 1:
+        normalization_assumptions.append("Compartment count was normalized to 1 for this model family.")
+        compartments = 1
+    if kind != "plant" and drainage_holes:
+        normalization_assumptions.append("Drainage holes were ignored because only plant pots support them.")
+        drainage_holes = 0
+    if kind != "lamp" and cable_channel:
+        normalization_assumptions.append("Cable channel was ignored because only lamp bases support it.")
+        cable_channel = False
     params = baseline.model_copy(update={
         "kind": kind,
         "width": width,
@@ -481,8 +502,9 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
         str(item).strip()[:180]
         for item in raw_assumptions
         if str(item).strip()
-    ][:6] if isinstance(raw_assumptions, list) else []
-    return titles[kind], params, True, assumptions
+    ] if isinstance(raw_assumptions, list) else []
+    assumptions.extend(normalization_assumptions)
+    return titles[kind], params, True, assumptions[:6]
 
 def build_design_ir(
     prompt: str,
@@ -605,12 +627,16 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
             "minimum_mm": round(params.wall, 3),
             "status": "pass" if wall_ok else "fail",
         })
+    has_errors = any(issue["severity"] == "error" for issue in issues)
+    has_warnings = any(issue["severity"] == "warning" for issue in issues)
     return {
         "process": params.process,
         "profile": profile,
         "wall_map": wall_map,
         "issues": issues,
-        "manufacturing_ready": not any(issue["severity"] == "error" for issue in issues),
+        "nominal": True,
+        "review_required": has_errors or has_warnings,
+        "manufacturing_ready": not has_errors,
     }
 
 
@@ -874,6 +900,20 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def require_backend_key(request: Request, call_next: Any) -> Any:
+    """Require a shared key for API routes when the service is exposed publicly."""
+    if BACKEND_API_KEY and request.url.path.startswith("/v1/") and request.method != "OPTIONS":
+        supplied = request.headers.get("x-api-key", "").strip()
+        if not supplied or not secrets.compare_digest(supplied, BACKEND_API_KEY):
+            return JSONResponse(
+                {"detail": "backend API key required"},
+                status_code=401,
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+    return await call_next(request)
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
@@ -886,6 +926,9 @@ def health() -> dict[str, Any]:
         "advanced_mode_available": bool(LLM_API_KEY),
         "llm_provider": urllib.parse.urlparse(LLM_API_URL).netloc or None,
         "llm_model": LLM_MODEL,
+        "backend_auth_required": bool(BACKEND_API_KEY),
+        "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
+        "max_pending_jobs": MAX_PENDING_JOBS,
         "process_profiles": list(PROCESS_PROFILES),
     }
 
@@ -996,6 +1039,16 @@ def _run_job(job_id: str, request: GenerateRequest) -> None:
 def create_job(request: GenerateRequest) -> dict[str, Any]:
     job_id = uuid.uuid4().hex
     with JOB_LOCK:
+        active_jobs = sum(
+            1 for job in JOBS.values()
+            if job.get("status") in {"queued", "running"}
+        )
+        if active_jobs >= MAX_PENDING_JOBS:
+            raise HTTPException(
+                status_code=429,
+                detail="job queue is full; retry after existing jobs finish",
+                headers={"Retry-After": "5"},
+            )
         JOBS[job_id] = {"job_id": job_id, "status": "queued", "created_at": time.time()}
     Thread(target=_run_job, args=(job_id, request), daemon=True).start()
     return {"job_id": job_id, "status": "queued"}
