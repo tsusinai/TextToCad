@@ -131,7 +131,7 @@ class GenerateResponse(BaseModel):
     step_schema: str
     mode: str = "standard"
     llm_used: bool = False
-    assumptions: list[str] = []
+    assumptions: list[str] = Field(default_factory=list)
 
 
 CACHE_LOCK = Lock()
