@@ -708,6 +708,7 @@ def build_design_ir(
     mode: str,
     llm_used: bool,
     assumptions: list[str],
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a small semantic CAD IR that is independent of the CadQuery builder."""
     feature_nodes: list[dict[str, Any]] = [
@@ -716,7 +717,7 @@ def build_design_ir(
     if params.kind in {"tray", "organizer"}:
         feature_nodes.extend([
             {"id": "shell_cavity", "type": "shell", "operation": "cut_inner_volume", "source": "base_solid", "status": "planned"},
-            {"id": "dividers", "type": "divider", "operation": "union", "source": "shell_cavity", "count": params.compartments, "status": "planned"},
+            {"id": "dividers", "type": "divider", "operation": "union", "source": "shell_cavity", "requested_count": params.compartments, "count": max(0, params.compartments - 1), "status": "planned"},
         ])
     elif params.kind in {"plant", "pen"}:
         feature_nodes.append({"id": "rotational_cavity", "type": "shell", "operation": "cut_inner_cylinder", "source": "base_solid", "status": "planned"})
@@ -727,7 +728,7 @@ def build_design_ir(
     if params.kind == "lamp" and params.cable_channel:
         feature_nodes.append({"id": "cable_channel", "type": "cut", "operation": "cut_recess", "source": "base_solid", "status": "planned"})
     if params.chamfer > 0:
-        feature_nodes.append({"id": "edge_treatment", "type": "edge", "operation": "chamfer", "source": "base_solid", "value_mm": params.chamfer, "status": "planned"})
+        feature_nodes.append({"id": "edge_treatment", "type": "edge", "operation": "chamfer", "source": "base_solid", "selection": "vertical_edges", "value_mm": params.chamfer, "fallback": "fillet_or_original", "status": "planned"})
     constraints = [
         {"id": "width_bounds", "type": "range", "parameter": "width", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
         {"id": "depth_bounds", "type": "range", "parameter": "depth", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
@@ -763,6 +764,7 @@ def build_design_ir(
         "features": feature_nodes,
         "constraints": constraints,
         "builder": "CadQuery/OCCT",
+        "provenance": provenance or {},
     }
 
 
@@ -886,6 +888,7 @@ def build_geometry(params: ModelParameters) -> Any:
         inner_radius = max(1.0, radius - wall)
         inner_height = max(1.0, h - bottom)
         outer_round = cq.Workplane("XY").circle(radius).extrude(h)
+        outer_round = _rounded_edges(outer_round, params.chamfer)
         inner = cq.Workplane("XY").circle(inner_radius).extrude(inner_height).translate((0, 0, bottom))
         shape = outer_round.cut(inner)
         if params.kind == "plant" and params.drainage_holes > 0:
