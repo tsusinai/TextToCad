@@ -932,7 +932,7 @@
       const separator = currentLang === 'zh' ? '、' : ', ';
       interpretationSummary.textContent = displayTitle(spec.title) + ' · ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm';
       interpretationDetails.textContent = spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments') + ' · ' + (currentLang === 'zh' ? '倒角 ' : 'chamfer ') + spec.chamfer + ' mm' + (assumptions.length ? ' · ' + t.assumptions + ': ' + assumptions.join(separator) : '');
-      interpretationStatus.textContent = source === 'backend' ? t.backendState : (source === 'draft' ? t.interpretationReady : t.localState);
+      interpretationStatus.textContent = source === 'advanced' ? t.advancedState : (source === 'backend' ? t.backendState : (source === 'draft' ? t.interpretationReady : t.localState));
       document.querySelector('.chip.neutral').textContent = spec.width + ' × ' + spec.depth + ' mm';
       renderFeatureTree(spec);
     }
