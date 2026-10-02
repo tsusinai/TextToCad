@@ -523,25 +523,32 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
     return parsed
 
 
-def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelParameters, bool, list[str]]:
-    baseline_title, baseline = parse_prompt(prompt, process)
+def interpret_prompt(
+    prompt: str,
+    process: str,
+    mode: str,
+    units: str = "mm",
+) -> tuple[str, ModelParameters, bool, list[str], dict[str, Any]]:
+    baseline_title, baseline, provenance = parse_prompt_detailed(prompt, process, units)
+    baseline_assumptions = list(provenance.get("assumptions", []))
     if mode != "advanced":
-        return baseline_title, baseline, False, []
+        return baseline_title, baseline, False, baseline_assumptions, provenance
     try:
         raw = _llm_json(prompt, process, baseline)
     except RuntimeError as exc:
-        return baseline_title, baseline, False, [str(exc)]
+        return baseline_title, baseline, False, (baseline_assumptions + [str(exc)])[:6], provenance
     if raw.get("schema_version", "0.1") not in {"0.1"}:
-        return baseline_title, baseline, False, ["LLM returned an unsupported CAD schema version"]
+        return baseline_title, baseline, False, (baseline_assumptions + ["LLM returned an unsupported CAD schema version"])[:6], provenance
     candidate = raw.get("parameters", raw) if isinstance(raw, dict) else raw
     if not isinstance(candidate, dict):
-        return baseline_title, baseline, False, ["LLM returned no CAD parameters"]
+        return baseline_title, baseline, False, (baseline_assumptions + ["LLM returned no CAD parameters"])[:6], provenance
     supported_fields = {
         "kind", "width", "depth", "height", "compartments", "wall", "bottom",
         "chamfer", "drainage_holes", "cable_channel", "features",
     }
     if not supported_fields.intersection(candidate):
-        return baseline_title, baseline, False, ["LLM returned no supported CAD parameters"]
+        return baseline_title, baseline, False, (baseline_assumptions + ["LLM returned no supported CAD parameters"])[:6], provenance
+
     aliases = {
         "plant_pot": "plant", "plant pot": "plant",
         "lamp_base": "lamp", "lamp base": "lamp",
@@ -550,17 +557,31 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
     }
     raw_kind = str(candidate.get("kind", baseline.kind)).strip().lower()
     kind = aliases.get(raw_kind, raw_kind)
+    kind_was_provided = "kind" in candidate
+    normalization_assumptions: list[str] = []
     if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "block"}:
         kind = baseline.kind
+        if kind_was_provided:
+            normalization_assumptions.append("Unsupported model family was replaced with the deterministic baseline.")
 
+    llm_status: dict[str, str] = {}
     def number(name: str, fallback: float, minimum: float, maximum: float) -> float:
+        if name not in candidate:
+            llm_status[name] = "fallback"
+            return fallback
         try:
-            value = float(candidate.get(name, fallback))
+            value = float(candidate.get(name))
         except (TypeError, ValueError, OverflowError):
-            value = fallback
+            llm_status[name] = "invalid_fallback"
+            return fallback
         if not math.isfinite(value):
-            value = fallback
-        return _bounded(value, minimum, maximum)
+            llm_status[name] = "invalid_fallback"
+            return fallback
+        bounded = _bounded(value, minimum, maximum)
+        llm_status[name] = "clamped" if bounded != round(value, 2) else "provided"
+        if bounded != round(value, 2):
+            normalization_assumptions.append(f"{name} was clamped to the supported range.")
+        return bounded
 
     width = number("width", baseline.width, 10.0, 1000.0)
     depth = number("depth", baseline.depth, 10.0, 1000.0)
@@ -568,32 +589,41 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
     wall = number("wall", baseline.wall, 1.2, min(20.0, width / 3, depth / 3))
     bottom = number("bottom", baseline.bottom, 1.2, min(height - 1.0, 20.0))
     chamfer = number("chamfer", baseline.chamfer, 0.0, min(width, depth, height) / 4)
+
     try:
         compartments_value = int(float(candidate.get("compartments", baseline.compartments)))
         compartments = int(max(1, min(12, compartments_value)))
+        llm_status["compartments"] = "provided" if compartments == compartments_value else "clamped"
+        if compartments != compartments_value:
+            normalization_assumptions.append("compartments was clamped to 1-12.")
     except (TypeError, ValueError, OverflowError):
         compartments = baseline.compartments
+        llm_status["compartments"] = "invalid_fallback"
+
     raw_features = candidate.get("features", {})
     features = raw_features if isinstance(raw_features, dict) else {}
-    normalization_assumptions: list[str] = []
     unknown_features = sorted(set(features) - {"drainage_holes", "cable_channel"})
     if unknown_features:
-        normalization_assumptions.append(
-            "Ignored unsupported feature keys: " + ", ".join(unknown_features[:4])
-        )
+        normalization_assumptions.append("Ignored unsupported feature keys: " + ", ".join(unknown_features[:4]))
 
-    def boolean(name: str, fallback: bool):
+    def boolean(name: str, fallback: bool) -> bool:
+        provided = name in candidate or name in features
         value = candidate.get(name, features.get(name, fallback))
         if isinstance(value, bool):
+            llm_status[name] = "provided" if provided else "fallback"
             return value
         if isinstance(value, (int, float)) and value in (0, 1):
+            llm_status[name] = "provided"
             return bool(value)
         if isinstance(value, str):
             normalized = value.strip().lower()
             if normalized in {"true", "yes", "on", "1"}:
+                llm_status[name] = "provided"
                 return True
             if normalized in {"false", "no", "off", "0"}:
+                llm_status[name] = "provided"
                 return False
+        llm_status[name] = "invalid_fallback" if provided else "fallback"
         return fallback
 
     try:
@@ -602,9 +632,12 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
             features.get("drainage_holes", baseline.drainage_holes),
         )))
         drainage_holes = int(max(0, min(4, drainage_value)))
+        llm_status["drainage_holes"] = "provided" if drainage_holes == drainage_value else "clamped"
     except (TypeError, ValueError, OverflowError):
         drainage_holes = baseline.drainage_holes
+        llm_status["drainage_holes"] = "invalid_fallback"
     cable_channel = boolean("cable_channel", baseline.cable_channel)
+
     if kind not in {"tray", "organizer"} and compartments != 1:
         normalization_assumptions.append("Compartment count was normalized to 1 for this model family.")
         compartments = 1
@@ -612,8 +645,9 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
         normalization_assumptions.append("Drainage holes were ignored because only plant pots support them.")
         drainage_holes = 0
     if kind != "lamp" and cable_channel:
-        normalization_assumptions.append("Cable channel was ignored because only lamp bases support it.")
+        normalization_assumptions.append("Cable channel was ignored because only lamp bases support them.")
         cable_channel = False
+
     params = baseline.model_copy(update={
         "kind": kind,
         "width": width,
@@ -636,13 +670,37 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
         "block": "Parametric solid",
     }
     raw_assumptions = raw.get("assumptions", []) if isinstance(raw, dict) else []
-    assumptions = [
+    llm_assumptions = [
         str(item).strip()[:180]
         for item in raw_assumptions
         if str(item).strip()
     ] if isinstance(raw_assumptions, list) else []
-    assumptions.extend(normalization_assumptions)
-    return titles[kind], params, True, assumptions[:6]
+    assumptions = (baseline_assumptions + llm_assumptions + normalization_assumptions)[:6]
+
+    field_names = (
+        "kind", "width", "depth", "height", "compartments", "chamfer",
+        "wall", "bottom", "drainage_holes", "cable_channel",
+    )
+    fields = provenance.setdefault("fields", {})
+    for field in field_names:
+        provided = field == "kind" and kind_was_provided or field in candidate
+        if field in {"drainage_holes", "cable_channel"}:
+            provided = provided or field in features
+        if provided:
+            fields[field] = {
+                "source": "llm",
+                "status": llm_status.get(field, "provided"),
+            }
+        else:
+            prior = fields.get(field, {"source": "default", "status": "fallback"})
+            fields[field] = {
+                "source": prior.get("source", "default"),
+                "status": "fallback",
+            }
+    provenance["llm_schema_version"] = raw.get("schema_version", "0.1")
+    provenance["assumptions"] = assumptions
+    return titles[kind], params, True, assumptions, provenance
+
 
 def build_design_ir(
     prompt: str,
