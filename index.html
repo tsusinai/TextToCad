@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f7f7f5" />
   <title>Text to CAD · FORM</title>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"}}
+  </script>
   <style>
     :root {
       --paper: #f7f7f5;
@@ -129,6 +132,9 @@
     .view-pill.active { color: var(--lime); border-color: #50604d; }
     .model-stage { position: relative; z-index: 1; display: grid; place-items: center; height: calc(100% - 87px); min-height: 450px; touch-action: none; cursor: grab; user-select: none; }
     .model-stage.dragging { cursor: grabbing; }
+    .three-viewport { position: absolute; inset: 0; display: none; z-index: 2; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 50% 35%, #3a4039, #252724 70%); }
+    .three-viewport.active { display: block; }
+    .three-viewport canvas { width: 100%; height: 100%; display: block; }
     .model-wrap { width: min(520px, 68%); transform: translate(0, -7px) scale(1) rotateX(0deg) rotateY(0deg); transform-origin: center; will-change: transform; transition: opacity .25s ease; }
     .interaction-hint { position: absolute; left: 18px; bottom: 15px; color: #82907d; font-size: 10px; letter-spacing: .02em; pointer-events: none; }
     .model-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)); }
@@ -146,7 +152,15 @@
       .model-stage { min-height: 390px; }
     }
     .params { border: 1px solid var(--line); border-radius: 22px; background: #fff; padding: 22px 24px 24px; }
-    .params-head { display: flex; align-items: center; justify-content: space-between; }
+    .params-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .params-tools { display: flex; align-items: center; gap: 10px; }
+    .edit-parameters, .parameter-actions button { border: 1px solid #d5d8ce; border-radius: 999px; background: #fff; color: #66705f; padding: 7px 11px; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+    .edit-parameters:hover, .parameter-actions button:hover { border-color: #96ae7b; color: #4d6b42; }
+    .parameter-editor { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid #dfe3d8; border-radius: 14px; background: #f8f9f4; }
+    .parameter-editor label { color: #767c70; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+    .parameter-editor input { display: block; width: 100%; margin-top: 6px; border: 1px solid #d5d8ce; border-radius: 8px; padding: 8px; background: #fff; color: var(--ink); }
+    .parameter-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+    @media (max-width: 760px) { .parameter-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .solved { color: var(--green); font-size: 12px; font-weight: 700; }
     .param-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
     .param-card { min-height: 120px; padding: 18px; border-radius: 16px; background: var(--card); }
@@ -252,6 +266,7 @@
             </div>
           </div>
           <div class="model-stage" id="modelStage" tabindex="0" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
+            <div class="three-viewport" id="threeViewport" aria-hidden="true"></div>
             <div class="interaction-hint" id="interactionHint">Drag to orbit · wheel to zoom · double-click to reset</div>
             <div class="model-wrap" id="modelWrap">
               <svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Isometric parametric desk organizer">
@@ -278,7 +293,16 @@
           </div>
         </section>
         <section class="params">
-          <div class="params-head"><span class="section-label">MODEL PARAMETERS</span><span class="solved" id="solved">All constraints solved</span></div>
+          <div class="params-head"><span class="section-label">MODEL PARAMETERS</span><div class="params-tools"><span class="solved" id="solved">All constraints solved</span><button class="edit-parameters" id="editParameters" type="button">EDIT</button></div></div>
+          <div class="parameter-editor" id="parameterEditor" hidden>
+            <label><span id="paramWidthLabel">WIDTH</span><input id="paramWidth" type="number" min="10" max="1000" step="0.1"></label>
+            <label><span id="paramDepthLabel">DEPTH</span><input id="paramDepth" type="number" min="10" max="1000" step="0.1"></label>
+            <label><span id="paramHeightLabel">HEIGHT</span><input id="paramHeight" type="number" min="5" max="1000" step="0.1"></label>
+            <label><span id="paramWallLabel">WALL</span><input id="paramWall" type="number" min="1.2" max="20" step="0.1"></label>
+            <label><span id="paramChamferLabel">CHAMFER</span><input id="paramChamfer" type="number" min="0" max="250" step="0.1"></label>
+            <label><span id="paramBottomLabel">BOTTOM</span><input id="paramBottom" type="number" min="1.2" max="20" step="0.1"></label>
+            <div class="parameter-actions"><button id="resetParameters" type="button">RESET</button><button id="applyParameters" type="button">APPLY</button></div>
+          </div>
           <div class="param-grid">
             <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">3 watertight solids</small></article>
             <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
@@ -329,10 +353,23 @@
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
     const modelStage = document.getElementById('modelStage');
+    const threeViewport = document.getElementById('threeViewport');
     const fitView = document.getElementById('fitView');
     const interactionHint = document.getElementById('interactionHint');
     const generationError = document.getElementById('generationError');
     const cancelGeneration = document.getElementById('cancelGeneration');
+    const editParameters = document.getElementById('editParameters');
+    const parameterEditor = document.getElementById('parameterEditor');
+    const parameterFields = {
+      width: document.getElementById('paramWidth'),
+      depth: document.getElementById('paramDepth'),
+      height: document.getElementById('paramHeight'),
+      wall: document.getElementById('paramWall'),
+      chamfer: document.getElementById('paramChamfer'),
+      bottom: document.getElementById('paramBottom')
+    };
+    const applyParameters = document.getElementById('applyParameters');
+    const resetParameters = document.getElementById('resetParameters');
     const exportStep = document.getElementById('exportStep');
     const export3mf = document.getElementById('export3mf');
     const exportGlb = document.getElementById('exportGlb');
@@ -379,12 +416,13 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
+    const threeState = { active: false, ready: false, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', analysisLabel: 'NOMINAL WALL ESTIMATE', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', analysisLabel: '名义壁厚估算', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', analysisLabel: 'NOMINAL WALL ESTIMATE', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', analysisLabel: '名义壁厚估算', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -416,6 +454,15 @@
       if (exportGlb) exportGlb.textContent = t.exportGlb;
       if (fitView) fitView.textContent = t.fit;
       if (cancelGeneration) cancelGeneration.textContent = t.cancel;
+      if (document.getElementById('paramWidthLabel')) document.getElementById('paramWidthLabel').textContent = currentLang === 'zh' ? '宽度' : 'WIDTH';
+      if (document.getElementById('paramDepthLabel')) document.getElementById('paramDepthLabel').textContent = currentLang === 'zh' ? '深度' : 'DEPTH';
+      if (document.getElementById('paramHeightLabel')) document.getElementById('paramHeightLabel').textContent = currentLang === 'zh' ? '高度' : 'HEIGHT';
+      if (document.getElementById('paramWallLabel')) document.getElementById('paramWallLabel').textContent = currentLang === 'zh' ? '壁厚' : 'WALL';
+      if (document.getElementById('paramChamferLabel')) document.getElementById('paramChamferLabel').textContent = currentLang === 'zh' ? '倒角' : 'CHAMFER';
+      if (document.getElementById('paramBottomLabel')) document.getElementById('paramBottomLabel').textContent = currentLang === 'zh' ? '底厚' : 'BOTTOM';
+      if (editParameters) editParameters.textContent = t.editParameters;
+      if (applyParameters) applyParameters.textContent = t.applyParameters;
+      if (resetParameters) resetParameters.textContent = t.resetParameters;
       if (interactionHint) interactionHint.textContent = t.interactionHint;
       analysisLabel.textContent = t.analysisLabel;
       interpretationLabel.textContent = t.interpretation;
@@ -592,6 +639,86 @@
       for (let i = 1; i < spec.compartments; i += 1) lines.push('<line x1="' + (x + i*w/spec.compartments).toFixed(1) + '" y1="' + (y + 16).toFixed(1) + '" x2="' + (x + i*w/spec.compartments).toFixed(1) + '" y2="' + (y + h - 16).toFixed(1) + '" stroke="#243323" stroke-width="3"/>');
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated front view CAD model"><rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(18, spec.chamfer * 2) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><rect x="' + (x+14).toFixed(1) + '" y="' + (y+14).toFixed(1) + '" width="' + (w-28).toFixed(1) + '" height="' + (h-28).toFixed(1) + '" rx="10" fill="#b8d99a" opacity=".65"/>' + lines.join('') + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
     }
+    function hideThreePreview() {
+      threeState.loadSeq += 1;
+      threeState.active = false;
+      if (threeViewport) { threeViewport.classList.remove('active'); threeViewport.setAttribute('aria-hidden', 'true'); }
+      if (modelWrap) modelWrap.style.display = '';
+    }
+    function fitThreeModel() {
+      if (!threeState.model || !threeState.camera || !threeState.controls) return;
+      const THREE = threeState.THREE;
+      const box = new THREE.Box3().setFromObject(threeState.model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      threeState.model.position.sub(center);
+      const maxDim = Math.max(size.x, size.y, size.z, 1);
+      const distance = maxDim * 1.8;
+      threeState.camera.near = Math.max(maxDim / 1000, 0.01);
+      threeState.camera.far = Math.max(maxDim * 20, 1000);
+      threeState.camera.position.set(distance, distance * .8, distance);
+      threeState.controls.target.set(0, 0, 0);
+      threeState.controls.update();
+      threeState.camera.updateProjectionMatrix();
+    }
+    function setThreeView(view) {
+      if (!threeState.active || !threeState.camera || !threeState.controls || !threeState.model) return;
+      const THREE = threeState.THREE;
+      const box = new THREE.Box3().setFromObject(threeState.model);
+      const size = box.getSize(new THREE.Vector3());
+      const distance = Math.max(size.x, size.y, size.z, 1) * 1.8;
+      if (view === 'top') threeState.camera.position.set(0, distance, .01);
+      else if (view === 'front') threeState.camera.position.set(0, distance * .12, distance);
+      else threeState.camera.position.set(distance, distance * .8, distance);
+      threeState.controls.target.set(0, 0, 0);
+      threeState.controls.update();
+    }
+    function resetThreeCamera() { fitThreeModel(); setThreeView(currentView); }
+    async function loadThreePreview(url) {
+      if (!url || !threeViewport) { hideThreePreview(); return; }
+      const sequence = ++threeState.loadSeq;
+      try {
+        const THREE = await import('three');
+        const [{ GLTFLoader }, { OrbitControls }] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('three/addons/controls/OrbitControls.js')]);
+        if (sequence !== threeState.loadSeq) return;
+        threeState.THREE = THREE;
+        if (!threeState.renderer) {
+          threeState.scene = new THREE.Scene();
+          threeState.scene.background = new THREE.Color(0x252724);
+          threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
+          threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+          threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
+          threeViewport.appendChild(threeState.renderer.domElement);
+          threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
+          threeState.controls.enableDamping = true;
+          threeState.controls.dampingFactor = .08;
+          threeState.scene.add(new THREE.HemisphereLight(0xeaf4d4, 0x252724, 1.8));
+          const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 5, 4); threeState.scene.add(key);
+          const resize = () => { const width = threeViewport.clientWidth || 1; const height = threeViewport.clientHeight || 1; threeState.camera.aspect = width / height; threeState.camera.updateProjectionMatrix(); threeState.renderer.setSize(width, height, false); };
+          threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
+          if (threeState.resizeObserver) threeState.resizeObserver.observe(threeViewport); else window.addEventListener('resize', resize);
+          const animate = () => { if (threeState.renderer && threeState.scene && threeState.camera) { threeState.controls.update(); threeState.renderer.render(threeState.scene, threeState.camera); } requestAnimationFrame(animate); };
+          animate();
+        }
+        const loader = new GLTFLoader();
+        loader.load(url, (gltf) => {
+          if (sequence !== threeState.loadSeq) return;
+          if (threeState.model) threeState.scene.remove(threeState.model);
+          threeState.model = gltf.scene;
+          threeState.scene.add(threeState.model);
+          threeState.active = true;
+          threeViewport.classList.add('active');
+          threeViewport.setAttribute('aria-hidden', 'false');
+          modelWrap.style.display = 'none';
+          fitThreeModel();
+          setThreeView(currentView);
+        }, undefined, (error) => { console.warn('GLB preview unavailable; retaining SVG fallback.', error); hideThreePreview(); });
+      } catch (error) {
+        console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
+        if (sequence === threeState.loadSeq) hideThreePreview();
+      }
+    }
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
@@ -612,16 +739,19 @@
       camera.panX = 0;
       camera.panY = 0;
       applyCamera();
+      if (threeState.active) resetThreeCamera();
     }
     function bindViewportControls() {
       if (!modelStage) return;
       modelStage.addEventListener('pointerdown', (event) => {
+        if (threeState.active) return;
         if (event.button !== 0 && event.pointerType !== 'touch') return;
         pointerState = { id: event.pointerId, x: event.clientX, y: event.clientY, pan: event.shiftKey || event.button === 1 };
         modelStage.setPointerCapture(event.pointerId);
         modelStage.classList.add('dragging');
       });
       modelStage.addEventListener('pointermove', (event) => {
+        if (threeState.active) return;
         if (!pointerState || pointerState.id !== event.pointerId) return;
         const dx = event.clientX - pointerState.x;
         const dy = event.clientY - pointerState.y;
@@ -645,6 +775,7 @@
       modelStage.addEventListener('pointerup', release);
       modelStage.addEventListener('pointercancel', release);
       modelStage.addEventListener('wheel', (event) => {
+        if (threeState.active) return;
         event.preventDefault();
         camera.zoom = clamp(camera.zoom * (event.deltaY < 0 ? 1.1 : 0.9), 0.55, 2.8);
         applyCamera();
@@ -715,7 +846,7 @@
         : title.includes('lamp') || title.includes('灯') ? 'lamp base'
         : title.includes('pen') || title.includes('笔') ? 'pen cup'
         : 'desk organizer';
-      return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, and ' + spec.chamfer + ' mm chamfer.';
+      return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, ' + (spec.bottom || spec.wall || 3) + ' mm bottom, and ' + spec.chamfer + ' mm chamfer.';
     }
     function diffSpec(previous, next) {
       if (!previous) return [];
@@ -919,6 +1050,22 @@
       renderRevisions();
     }
     clearRevisions.addEventListener('click', () => { revisions = []; persistRevisions(); renderRevisions(); });
+    function syncParameterEditor(spec) {
+      if (!spec) return;
+      Object.entries(parameterFields).forEach(([key, field]) => { if (field) field.value = Number(spec[key] ?? 0).toFixed(1); });
+    }
+    function applyParameterEditor() {
+      const base = Object.assign({}, modelSpec || parseModel(prompt.value));
+      const values = {};
+      for (const [key, field] of Object.entries(parameterFields)) values[key] = Number(field && field.value);
+      const valid = Number.isFinite(values.width) && values.width >= 10 && values.width <= 1000 && Number.isFinite(values.depth) && values.depth >= 10 && values.depth <= 1000 && Number.isFinite(values.height) && values.height >= 5 && values.height <= 1000 && Number.isFinite(values.wall) && values.wall >= 1.2 && values.wall <= Math.min(values.width, values.depth) / 3 && Number.isFinite(values.chamfer) && values.chamfer >= 0 && values.chamfer <= Math.min(values.width, values.depth, values.height) / 4 && Number.isFinite(values.bottom) && values.bottom >= 1.2 && values.bottom < values.height;
+      if (!valid) { setGenerationError(currentLang === 'zh' ? '参数范围无效，请检查尺寸和壁厚。' : 'Parameter range is invalid. Check dimensions and wall thickness.'); return; }
+      const next = Object.assign(base, values);
+      prompt.value = canonicalPrompt(next);
+      parameterEditor.hidden = true;
+      updateInterpretation(next, 'draft');
+      generateModel();
+    }
     function setGenerationError(message) {
       if (!generationError) return;
       generationError.textContent = message || '';
@@ -936,14 +1083,36 @@
     }
     async function requestBackend(value, process, signal) {
       if (!backendUrl) return null;
-      const response = await fetch(backendUrl + '/v1/models', {
+      const payload = { prompt: value, units: 'mm', process: process || selectedProcess };
+      const jobResponse = await fetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: value, units: 'mm', process: process || selectedProcess }),
+        body: JSON.stringify(payload),
         signal
       });
-      if (!response.ok) throw new Error('geometry backend returned ' + response.status);
-      return response.json();
+      if (jobResponse.status === 404) {
+        const response = await fetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
+        if (!response.ok) throw new Error('geometry backend returned ' + response.status);
+        return response.json();
+      }
+      if (!jobResponse.ok) throw new Error('geometry job endpoint returned ' + jobResponse.status);
+      const job = await jobResponse.json();
+      const jobId = job.job_id;
+      const cancelRemoteJob = () => { fetch(backendUrl + '/v1/jobs/' + jobId, { method: 'DELETE', keepalive: true }).catch(() => {}); };
+      if (signal) signal.addEventListener('abort', cancelRemoteJob, { once: true });
+      try {
+        while (true) {
+          const statusResponse = await fetch(backendUrl + '/v1/jobs/' + jobId, { signal });
+          if (!statusResponse.ok) throw new Error('geometry job status returned ' + statusResponse.status);
+          const status = await statusResponse.json();
+          if (status.status === 'succeeded') return status.result;
+          if (status.status === 'cancelled') throw Object.assign(new Error('job cancelled'), { name: 'AbortError' });
+          if (status.status === 'failed') throw new Error((status.error && status.error.detail) || 'geometry job failed');
+          await waitWithSignal(350, signal);
+        }
+      } finally {
+        if (signal) signal.removeEventListener('abort', cancelRemoteJob);
+      }
     }
     function waitWithSignal(ms, signal) {
       return new Promise((resolve, reject) => {
@@ -1011,6 +1180,8 @@
           clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(backendUrl + backendArtifact.glb);
+        else hideThreePreview();
         modelState.textContent = remote ? copy[currentLang].exporting : copy[currentLang].state;
         solved.textContent = remote ? copy[currentLang].exporting : copy[currentLang].solved;
         renderModel(modelSpec, currentView);
@@ -1050,6 +1221,9 @@
       }
     }
     generate.addEventListener('click', generateModel);
+    if (editParameters) editParameters.addEventListener('click', () => { const spec = modelSpec || parseModel(prompt.value); syncParameterEditor(spec); parameterEditor.hidden = !parameterEditor.hidden; });
+    if (applyParameters) applyParameters.addEventListener('click', applyParameterEditor);
+    if (resetParameters) resetParameters.addEventListener('click', () => syncParameterEditor(modelSpec || parseModel(prompt.value)));
     if (cancelGeneration) cancelGeneration.addEventListener('click', () => {
       if (!generationController) return;
       generationController.abort();
@@ -1086,6 +1260,7 @@
         currentView = button.dataset.view;
         resetCamera();
         renderModel(modelSpec || parseModel(prompt.value), currentView);
+        setThreeView(currentView);
       });
     });
     function objFor(spec) {
