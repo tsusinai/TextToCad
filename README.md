@@ -65,7 +65,7 @@ The browser never receives the key. If the key is missing, the provider times ou
 
     {"prompt":"一个带排水孔的极简花盆，直径 90 毫米，高 82 毫米","units":"mm","process":"fdm","mode":"advanced"}
 
-The response and manifest.json record "mode", "llm_used", and bounded assumptions so a revision can be audited and reproduced. The generated geometry still comes exclusively from the supported parametric builders.
+The response and manifest.json record "mode", "llm_used", and bounded assumptions so a revision can be audited and reproduced. The generated geometry still comes exclusively from the supported parametric builders. Each revision also stores a Semantic CAD IR in its manifest and exposes it at GET /v1/models/{id}/ir, making intent, parameter provenance, feature planning, and constraints auditable.
 
 ## Why this architecture is used
 
