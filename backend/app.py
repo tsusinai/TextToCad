@@ -6,6 +6,7 @@ import re
 import shutil
 import time
 import uuid
+from threading import Lock
 from pathlib import Path
 from typing import Any, Literal
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -37,6 +38,7 @@ ARTIFACT_ROOT = Path(os.getenv("ARTIFACT_ROOT", APP_DIR / "artifacts"))
 ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 MAX_PROMPT_LENGTH = 4000
 ARTIFACT_TTL_SECONDS = int(os.getenv("ARTIFACT_TTL_SECONDS", "86400"))
+EXPORT_LOCK = Lock()
 
 PROCESS_PROFILES: dict[str, dict[str, Any]] = {
     "fdm": {
@@ -478,7 +480,8 @@ def _write_artifacts(
     stl_path = model_dir / "model.stl"
     analysis_path = model_dir / "analysis.json"
 
-    step_schema = _export_step_ap242(shape, step_path)
+    with EXPORT_LOCK:
+        step_schema = _export_step_ap242(shape, step_path)
     exporters.export(shape, str(stl_path))
     preview_files: dict[str, Path] = {}
     if trimesh is not None:
