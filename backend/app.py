@@ -581,6 +581,7 @@ def get_process_profiles() -> dict[str, dict[str, Any]]:
 @app.post("/v1/models", response_model=GenerateResponse)
 def generate_model(request: GenerateRequest) -> GenerateResponse:
     cleanup_artifacts()
+    model_id: str | None = None
     try:
         title, params = parse_prompt(request.prompt, request.process)
         shape = build_geometry(params)
@@ -603,10 +604,16 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             step_schema=step_schema,
         )
     except RuntimeError as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"geometry generation failed: {exc}") from exc
 
 
