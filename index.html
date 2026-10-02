@@ -102,6 +102,8 @@
     .generate { width: 100%; height: 52px; margin-top: 24px; border: 0; border-radius: 14px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; font-size: 14px; font-weight: 700; transition: transform .2s ease, background .2s ease; }
     .generate:hover { transform: translateY(-2px); background: #30332c; }
     .generate.loading { background: #506847; }
+    .cancel-generation { width: 100%; margin-top: 8px; border: 1px solid #c9cbc1; border-radius: 10px; padding: 8px 12px; background: transparent; color: #73756e; font-size: 11px; font-weight: 700; }
+    .cancel-generation:hover { border-color: #9b5d45; color: #9b5d45; }
     .generation-error { min-height: 18px; margin-top: 9px; color: #9b5d45; font-size: 11px; line-height: 1.4; }
     .shortcut { color: #afb4a8; font-size: 12px; }
     .starter { margin-top: 34px; }
@@ -117,6 +119,9 @@
     .viewport { min-height: 620px; position: relative; overflow: hidden; background: var(--graphite); border-radius: 22px; color: white; padding: 22px 26px; }
     .viewport::after { content: ""; position: absolute; inset: 78px 80px 106px; background-image: linear-gradient(rgba(188,211,168,.12) 1px, transparent 1px), linear-gradient(120deg, transparent 49.7%, rgba(188,211,168,.12) 50%, transparent 50.3%), linear-gradient(60deg, transparent 49.7%, rgba(188,211,168,.1) 50%, transparent 50.3%); background-size: 100% 38px, 70px 100%, 70px 100%; opacity: .55; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 86%, transparent); }
     .viewport-header, .viewport-footer { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
+    .viewport-footer { flex-wrap: wrap; gap: 10px; }
+    .viewport-footer > div:first-child { min-width: 0; flex: 1 1 260px; }
+    .view-pill:focus-visible, .export:focus-visible, .generate:focus-visible, .cancel-generation:focus-visible, .model-stage:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .viewport-header { padding-bottom: 18px; border-bottom: 1px solid #3b3f38; }
     .viewport-label { color: #abb3a5; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
     .view-controls { display: flex; gap: 8px; }
@@ -134,6 +139,12 @@
     .viewport-meta { color: #a3aaa0; font-size: 12px; }
     .export { border: 1px solid #4b5249; background: #30342f; color: #d8dfd3; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700; }
     .export:hover { border-color: var(--lime); color: var(--lime); }
+    @media (max-width: 760px) {
+      .viewport-footer { left: 16px; right: 16px; bottom: 14px; align-items: flex-end; }
+      .viewport-footer > div:first-child { flex-basis: 100%; }
+      .export { padding: 8px 10px; }
+      .model-stage { min-height: 390px; }
+    }
     .params { border: 1px solid var(--line); border-radius: 22px; background: #fff; padding: 22px 24px 24px; }
     .params-head { display: flex; align-items: center; justify-content: space-between; }
     .solved { color: var(--green); font-size: 12px; font-weight: 700; }
@@ -207,7 +218,8 @@
           <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · defaults will be shown here</small>
         </div>
         <button class="generate" id="generate" type="button"><span id="generateLabel">Generate model</span><span class="shortcut">⌘ ↵</span></button>
-        <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
+        <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
+        <div class="generation-error id="generationError" role="status" aria-live="polite"></div>
         <div class="starter">
           <div class="section-label">OR TRY A STARTER</div>
           <div class="starter-buttons">
@@ -233,13 +245,13 @@
           <div class="viewport-header">
             <span class="viewport-label">LIVE PREVIEW</span><span class="issue-badge" id="issueBadge">READY</span>
             <div class="view-controls">
-              <button class="view-pill active" type="button" data-view="iso">ISOMETRIC</button>
-              <button class="view-pill" type="button" data-view="top">TOP</button>
-              <button class="view-pill" type="button" data-view="front">FRONT</button>
-              <span class="unit-pill" style="background:#30342f;color:#a3aaa0;">MM</span><button class="view-pill" id="fitView" type="button">FIT</button>
+              <button class="view-pill active" type="button" data-view="iso" aria-pressed="true">ISOMETRIC</button>
+              <button class="view-pill" type="button" data-view="top" aria-pressed="false">TOP</button>
+              <button class="view-pill" type="button" data-view="front" aria-pressed="false">FRONT</button>
+              <span class="unit-pill" style="background:#30342f;color:#a3aaa0;">MM</span><button class="view-pill" id="fitView" type="button" aria-label="Fit view">FIT</button>
             </div>
           </div>
-          <div class="model-stage" id="modelStage" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
+          <div class="model-stage" id="modelStage" tabindex="0" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
             <div class="interaction-hint" id="interactionHint">Drag to orbit · wheel to zoom · double-click to reset</div>
             <div class="model-wrap" id="modelWrap">
               <svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Isometric parametric desk organizer">
@@ -320,6 +332,7 @@
     const fitView = document.getElementById('fitView');
     const interactionHint = document.getElementById('interactionHint');
     const generationError = document.getElementById('generationError');
+    const cancelGeneration = document.getElementById('cancelGeneration');
     const exportStep = document.getElementById('exportStep');
     const export3mf = document.getElementById('export3mf');
     const exportGlb = document.getElementById('exportGlb');
@@ -370,8 +383,8 @@
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', analysisLabel: 'WALL THICKNESS MAP', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', analysisLabel: '壁厚采样图', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', analysisLabel: 'NOMINAL WALL ESTIMATE', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', localState: 'LOCAL PREVIEW', failed: 'Generation failed', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', analysisLabel: '名义壁厚估算', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', localState: '本地预览', failed: '生成失败', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -402,6 +415,7 @@
       if (export3mf) export3mf.textContent = t.export3mf;
       if (exportGlb) exportGlb.textContent = t.exportGlb;
       if (fitView) fitView.textContent = t.fit;
+      if (cancelGeneration) cancelGeneration.textContent = t.cancel;
       if (interactionHint) interactionHint.textContent = t.interactionHint;
       analysisLabel.textContent = t.analysisLabel;
       interpretationLabel.textContent = t.interpretation;
@@ -464,6 +478,16 @@
       if (value.includes('desk') || value.includes('桌面') || value.includes('收纳盒') || value.includes('收纳')) return 'Desk organizer';
       return 'Desk organizer';
     }
+    function kindForTitle(title) {
+      const value = String(title || '').toLowerCase();
+      if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'plant';
+      if (value.includes('pen') || value.includes('笔')) return 'pen';
+      if (value.includes('lamp') || value.includes('灯')) return 'lamp';
+      if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('夹')) return 'clip';
+      if (value.includes('tray') || value.includes('托盘')) return 'tray';
+      if (value.includes('organizer') || value.includes('desk') || value.includes('收纳')) return 'organizer';
+      return 'block';
+    }
     function displayTitle(title) {
       const normalized = String(title || '').replace(/^Parametric\s+/i, '');
       if (currentLang !== 'zh') return normalized;
@@ -502,9 +526,35 @@
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚)/) || normalized.match(/(?:wall|壁厚)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       const profile = processProfiles[selectedProcess];
-      return { title: titleFor(text), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
+      return { title: titleFor(text), kind: kindForTitle(titleFor(text)), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
+    function renderRotationalIso(spec) {
+      const diameter = clamp(Math.max(spec.width, spec.depth) / 90, .75, 1.55) * 170;
+      const rx = diameter / 2;
+      const ry = rx * .31;
+      const top = 105;
+      const bottom = clamp(spec.height / 82, .75, 1.65) * 190 + top;
+      const cx = 260;
+      const holes = spec.kind === 'plant' ? [cx - 42, cx, cx + 42].map((x) => '<ellipse cx="' + x + '" cy="' + (top + 7) + '" rx="8" ry="4" fill="#252724" class="accent"/>').join('') : '';
+      const body = 'M ' + (cx - rx) + ' ' + top + ' C ' + (cx - rx) + ' ' + (top - ry) + ' ' + (cx + rx) + ' ' + (top - ry) + ' ' + (cx + rx) + ' ' + top + ' L ' + (cx + rx) + ' ' + bottom + ' C ' + (cx + rx) + ' ' + (bottom + ry) + ' ' + (cx - rx) + ' ' + (bottom + ry) + ' ' + (cx - rx) + ' ' + bottom + ' Z';
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rotational CAD model"><ellipse cx="260" cy="350" rx="150" ry="18" fill="#0d0f0d" opacity=".42"/><path d="' + body + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><ellipse cx="260" cy="' + top + '" rx="' + rx + '" ry="' + ry + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><ellipse cx="260" cy="' + (top + 4) + '" rx="' + Math.max(18, rx - 18) + '" ry="' + Math.max(8, ry - 8) + '" fill="#252724" stroke="#ddf79b" stroke-width="3"/>' + holes + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">' + (spec.kind === 'plant' ? 'PLANT POT' : 'PEN CUP') + ' / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
+    function renderRotationalTop(spec) {
+      const diameter = clamp(Math.max(spec.width, spec.depth) / 90, .75, 1.55) * 220;
+      const rx = diameter / 2;
+      const ry = rx * .31;
+      const holes = spec.kind === 'plant' ? [220, 260, 300].map((x) => '<circle cx="' + x + '" cy="205" r="8" fill="#252724" class="accent"/>').join('') : '';
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated top view CAD model"><ellipse cx="260" cy="205" rx="' + rx + '" ry="' + Math.max(42, ry * 1.45) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><ellipse cx="260" cy="205" rx="' + Math.max(18, rx - 22) + '" ry="' + Math.max(20, ry * 1.1) + '" fill="#252724" stroke="#b8d99a" stroke-width="3"/>' + holes + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + spec.width + ' mm diameter</text></svg>';
+    }
+    function renderRotationalFront(spec) {
+      const w = clamp(Math.max(spec.width, spec.depth) / 90, .75, 1.55) * 210;
+      const h = clamp(spec.height / 82, .7, 1.7) * 190;
+      const x = (520 - w) / 2;
+      const y = (350 - h) / 2;
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated front view CAD model"><path d="M ' + x + ' ' + (y + 18) + ' Q ' + (x + w / 2) + ' ' + y + ' ' + (x + w) + ' ' + (y + 18) + ' L ' + (x + w) + ' ' + (y + h - 18) + ' Q ' + (x + w / 2) + ' ' + (y + h) + ' ' + x + ' ' + (y + h - 18) + ' Z" fill="#9fca82" stroke="#243323" stroke-width="4"/><path d="M ' + (x + 16) + ' ' + (y + 30) + ' Q ' + (x + w / 2) + ' ' + (y + 16) + ' ' + (x + w - 16) + ' ' + (y + 30) + '" fill="none" stroke="#b8d99a" stroke-width="8"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
+
     function renderIso(spec) {
       const w = clamp(spec.width / 120, .7, 1.6) * 240;
       const d = clamp(spec.depth / 80, .7, 1.6) * 170;
@@ -545,7 +595,10 @@
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
-      modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
+      const rotational = spec.kind === 'plant' || spec.kind === 'pen';
+      modelWrap.innerHTML = rotational ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec))) : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
+      const svg = modelWrap.querySelector('svg');
+      if (svg) svg.setAttribute('aria-label', currentLang === 'zh' ? ('生成的' + (view === 'top' ? '顶视' : (view === 'front' ? '前视' : '等距')) + ' CAD 模型') : ('Generated ' + view + ' CAD model'));
       applyCamera();
     }
     function applyCamera() {
@@ -598,6 +651,18 @@
       }, { passive: false });
       modelStage.addEventListener('dblclick', resetCamera);
       modelStage.addEventListener('contextmenu', (event) => event.preventDefault());
+      modelStage.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && generationController) {
+          generationController.abort();
+          setGenerationError(copy[currentLang].cancelled);
+          return;
+        }
+        if (event.key.toLowerCase() === 'r' || event.key === '0') { event.preventDefault(); resetCamera(); return; }
+        if (event.key === '+' || event.key === '=') { event.preventDefault(); camera.zoom = clamp(camera.zoom * 1.1, 0.55, 2.8); applyCamera(); return; }
+        if (event.key === '-') { event.preventDefault(); camera.zoom = clamp(camera.zoom * 0.9, 0.55, 2.8); applyCamera(); return; }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); camera.rotateY = clamp(camera.rotateY + (event.key === 'ArrowLeft' ? -8 : 8), -180, 180); applyCamera(); return; }
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); camera.rotateX = clamp(camera.rotateX + (event.key === 'ArrowUp' ? 8 : -8), -75, 75); applyCamera(); }
+      });
       if (fitView) fitView.addEventListener('click', resetCamera);
     }
     function updateProcessHint(profileOverride) {
@@ -712,15 +777,15 @@
       const separator = currentLang === 'zh' ? '、' : ', ';
       interpretationSummary.textContent = displayTitle(spec.title) + ' · ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm';
       interpretationDetails.textContent = spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments') + ' · ' + (currentLang === 'zh' ? '倒角 ' : 'chamfer ') + spec.chamfer + ' mm' + (assumptions.length ? ' · ' + t.assumptions + ': ' + assumptions.join(separator) : '');
-      interpretationStatus.textContent = source === 'backend' ? 'OCCT B-Rep' : (source === 'draft' ? t.interpretationReady : (currentLang === 'zh' ? '本地预览' : 'LOCAL PREVIEW'));
+      interpretationStatus.textContent = source === 'backend' ? t.backendState : (source === 'draft' ? t.interpretationReady : t.localState);
       document.querySelector('.chip.neutral').textContent = spec.width + ' × ' + spec.depth + ' mm';
       renderFeatureTree(spec);
     }
     function setCheckState(element, state) {
       if (!element) return;
       element.classList.remove('warn', 'fail');
-      element.textContent = state === true ? '✓' : (state === 'warn' ? '!' : '×');
-      if (state === 'warn') element.classList.add('warn');
+      element.textContent = state === true ? '✓' : (state === 'unknown' ? '?' : (state === 'warn' ? '!' : '×'));
+      if (state === 'warn' || state === 'unknown') element.classList.add('warn');
       if (state === false) element.classList.add('fail');
     }
     function localAnalysis(spec) {
@@ -770,9 +835,10 @@
       });
       issueList.innerHTML = '';
       const issues = data.issues || [];
-      issueBadge.classList.toggle('warn', issues.length > 0);
-      issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : 'READY';
-      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : copy[currentLang].noIssues;
+      const nominalOnly = !data.face_samples && !data.measured_wall_map;
+      issueBadge.classList.toggle('warn', issues.length > 0 || nominalOnly);
+      issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : (nominalOnly ? copy[currentLang].unknown : (currentLang === 'zh' ? '已验证' : 'VERIFIED'));
+      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : (nominalOnly ? copy[currentLang].estimateSummary : copy[currentLang].noIssues);
       if (!issues.length) {
         const empty = document.createElement('div');
         empty.className = 'issue-empty';
@@ -790,27 +856,30 @@
     function updateChecks(spec, remoteChecks) {
       if (!spec) return;
       const profile = (backendArtifact && backendArtifact.profile) || processProfiles[selectedProcess];
+      const analysis = backendArtifact && backendArtifact.analysis;
+      const measured = Boolean(analysis && (analysis.face_samples || analysis.measured_wall_map));
       const checks = remoteChecks ? {
         wall: remoteChecks.wall_thickness,
         radius: remoteChecks.edge_treatment,
-        draft: remoteChecks.overhang && remoteChecks.draft_angle && remoteChecks.clearance,
+        draft: measured ? (remoteChecks.overhang && remoteChecks.draft_angle && remoteChecks.clearance) : 'unknown',
         export: remoteChecks.export_ready
       } : {
         wall: (spec.wall || 3) >= profile.minWall,
         radius: (spec.chamfer === 0 || spec.chamfer >= profile.minRadius) && spec.chamfer <= Math.min(spec.width, spec.depth, spec.height) / 4,
-        draft: profile.draftAngle === 0 && profile.maxOverhang >= 45 && (spec.wall || 3) >= profile.clearance,
-        export: true
+        draft: 'unknown',
+        export: false
       };
       const values = Object.values(checks);
       const passed = values.filter((value) => value === true).length;
-      Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : 'warn'));
-      document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项检查' : 'checks');
-      solved.textContent = passed === 4 ? (currentLang === 'zh' ? '全部检查通过' : 'All checks passed') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
-      document.getElementById('planWallMeta').textContent = checks.wall ? (currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes') : (currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
-      document.getElementById('planRadiusMeta').textContent = checks.radius ? (currentLang === 'zh' ? '边缘半径符合工艺' : 'process radius passes') : (currentLang === 'zh' ? '倒角半径需要复核' : 'review process radius');
-      document.getElementById('planDraftMeta').textContent = checks.draft ? (currentLang === 'zh' ? '悬空、拔模和间隙通过' : 'overhang, draft and clearance pass') : (currentLang === 'zh' ? '悬空、拔模或间隙需复核' : 'review overhang, draft or clearance');
+      Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : (checks[key] === 'unknown' ? 'unknown' : 'warn')));
+      document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项已验证' : 'verified');
+      solved.textContent = passed === 4 ? (currentLang === 'zh' ? '检查已验证' : 'Checks verified') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
+      const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
+      document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
+      document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
+      document.getElementById('planDraftMeta').textContent = statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
       document.getElementById('planExportMeta').textContent = checks.export ? (remoteChecks ? profile.label + ' · STEP · STL' : 'OBJ preview · backend offline') : (currentLang === 'zh' ? '导出未就绪' : 'export not ready');
-      updateAnalysis((backendArtifact && backendArtifact.analysis) || localAnalysis(spec));
+      updateAnalysis(analysis || localAnalysis(spec));
       Object.entries(checkEls).forEach(([key, element]) => {
         const item = element && element.parentElement && element.parentElement.parentElement;
         if (item) { item.classList.remove('warn', 'fail'); if (checks[key] !== true) item.classList.add('warn'); }
@@ -876,11 +945,23 @@
       if (!response.ok) throw new Error('geometry backend returned ' + response.status);
       return response.json();
     }
+    function waitWithSignal(ms, signal) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        if (!signal) return;
+        if (signal.aborted) { clearTimeout(timer); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); return; }
+        signal.addEventListener('abort', () => { clearTimeout(timer); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
+      });
+    }
     async function generateModel() {
       if (generationController) generationController.abort();
       const sequence = ++generationSeq;
       generationController = new AbortController();
+      const timeoutId = setTimeout(() => { generationController.abort(); }, 30000);
+      let timedOut = false;
+      const timeoutWatcher = setTimeout(() => { timedOut = true; }, 29950);
       generate.classList.add('loading');
+      if (cancelGeneration) cancelGeneration.hidden = false;
       setGenerationError('');
       backendArtifact = null;
       updateExportButtons();
@@ -899,16 +980,25 @@
         try {
           remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal);
         } catch (error) {
-          if (error.name === 'AbortError') return;
+          if (error.name === 'AbortError') {
+            if (sequence === generationSeq) {
+              if (timedOut) setGenerationError(copy[currentLang].timeoutError);
+              else setGenerationError(copy[currentLang].cancelled);
+            }
+            return;
+          }
           backendError = error;
           console.warn('Geometry backend unavailable; using local preview.', error);
         }
         if (sequence !== generationSeq) return;
-        await new Promise((resolve) => setTimeout(resolve, remote ? 120 : 720));
+        modelState.textContent = copy[currentLang].building;
+        solved.textContent = copy[currentLang].building;
+        await waitWithSignal(remote ? 120 : 720, generationController.signal);
         if (sequence !== generationSeq) return;
         const remoteParams = remote && remote.parameters ? remote.parameters : {};
         modelSpec = remote ? {
           title: remote.title || titleFor(value),
+          kind: remoteParams.kind || kindForTitle(remote.title || nextSpec.title),
           width: remoteParams.width ?? nextSpec.width,
           depth: remoteParams.depth ?? nextSpec.depth,
           height: remoteParams.height ?? nextSpec.height,
@@ -921,12 +1011,14 @@
           clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        modelState.textContent = remote ? copy[currentLang].exporting : copy[currentLang].state;
+        solved.textContent = remote ? copy[currentLang].exporting : copy[currentLang].solved;
         renderModel(modelSpec, currentView);
         bodyValue.textContent = displayTitle(modelSpec.title);
         sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
         bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
         modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
-        modelState.textContent = remote ? (currentLang === 'zh' ? 'OCCT B-Rep 实体' : 'OCCT B-REP SOLID') : copy[currentLang].state;
+        modelState.textContent = remote ? copy[currentLang].backendState : copy[currentLang].state;
         updateInterpretation(modelSpec, remote ? 'backend' : 'local');
         updateProcessHint(remote && remote.profile);
         updateChecks(modelSpec, remote && remote.checks);
@@ -934,21 +1026,35 @@
         if (backendError && backendUrl) setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
         saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
       } catch (error) {
-        if (error.name === 'AbortError') return;
+        if (error.name === 'AbortError') {
+          if (sequence === generationSeq) {
+            if (timedOut) setGenerationError(copy[currentLang].timeoutError);
+            else setGenerationError(copy[currentLang].cancelled);
+          }
+          return;
+        }
         console.error('Model generation failed.', error);
         if (sequence === generationSeq) {
           setGenerationError(currentLang === 'zh' ? '生成失败，请检查描述后重试。' : 'Generation failed. Check the description and retry.');
-          modelState.textContent = currentLang === 'zh' ? '生成失败' : 'Generation failed';
+          modelState.textContent = copy[currentLang].failed;
         }
       } finally {
+        clearTimeout(timeoutId);
+        clearTimeout(timeoutWatcher);
         if (sequence === generationSeq) {
           generate.classList.remove('loading');
+          if (cancelGeneration) cancelGeneration.hidden = true;
           generateLabel.textContent = copy[currentLang].regenerate;
           generationController = null;
         }
       }
     }
     generate.addEventListener('click', generateModel);
+    if (cancelGeneration) cancelGeneration.addEventListener('click', () => {
+      if (!generationController) return;
+      generationController.abort();
+      setGenerationError(copy[currentLang].cancelled);
+    });
     bindViewportControls();
     processSelect.addEventListener('change', () => {
       selectedProcess = processSelect.value;
@@ -972,7 +1078,10 @@
     });
     document.querySelectorAll('[data-view]').forEach((button) => {
       button.addEventListener('click', () => {
-        document.querySelectorAll('[data-view]').forEach((item) => item.classList.remove('active'));
+        document.querySelectorAll('[data-view]').forEach((item) => {
+          item.classList.remove('active');
+          item.setAttribute('aria-pressed', String(item === button));
+        });
         button.classList.add('active');
         currentView = button.dataset.view;
         resetCamera();
