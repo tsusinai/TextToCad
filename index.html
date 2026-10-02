@@ -257,6 +257,12 @@
       generateLabel.textContent = generate.classList.contains('loading') ? (currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…') : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
       document.querySelector('.starter .section-label').textContent = t.starter;
       document.querySelector('.recent .section-label').textContent = t.recent;
+      const starterLabels = currentLang === 'zh' ? ['收纳托盘', '线缆夹', '花盆', '灯座'] : ['Storage tray', 'Cable clip', 'Plant pot', 'Lamp base'];
+      document.querySelectorAll('.starter-buttons button').forEach((item, index) => { item.textContent = starterLabels[index]; });
+      const recentLabels = currentLang === 'zh' ? ['桌面收纳盒', '线缆管理夹', '极简笔筒'] : ['Desk organizer', 'Cable management clip', 'Minimal pen cup'];
+      document.querySelectorAll('.recent-item strong').forEach((item, index) => { item.textContent = recentLabels[index]; });
+      const recentMeta = currentLang === 'zh' ? ['3 个实体 · 2 分钟前编辑', '1 个实体 · 昨天编辑', '2 个实体 · 9 月 28 日编辑'] : ['3 bodies · edited 2m ago', '1 body · edited yesterday', '2 bodies · edited Sep 28'];
+      document.querySelectorAll('.recent-item span').forEach((item, index) => { item.textContent = recentMeta[index]; });
       document.querySelector('.viewport-label').textContent = t.live;
       document.querySelector('[data-view="iso"]').textContent = t.iso;
       document.querySelector('[data-view="top"]').textContent = t.top;
@@ -269,6 +275,7 @@
       document.querySelector('.chip').textContent = t.rounded;
       document.querySelector('.chip.neutral').textContent = t.dimension;
       document.getElementById('bodyMeta').textContent = t.bodyMeta;
+      bodyValue.textContent = displayTitle(titleFor(prompt.value));
       document.querySelector('.param-card:nth-child(2) small').textContent = t.bounding;
       prompt.setAttribute('aria-label', t.promptLabel);
       document.querySelector('.viewport').setAttribute('aria-label', t.viewportAria);
@@ -302,8 +309,13 @@
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'Plant pot';
       if (value.includes('lamp') || value.includes('灯')) return 'Lamp base';
       if (value.includes('pen') || value.includes('笔')) return 'Pen cup';
-      if (value.includes('tray') || value.includes('托盘') || value.includes('收纳')) return 'Storage tray';
+      if (value.includes('tray') || value.includes('托盘')) return 'Storage tray';
+      if (value.includes('desk') || value.includes('桌面') || value.includes('收纳盒') || value.includes('收纳')) return 'Desk organizer';
       return 'Desk organizer';
+    }
+    function displayTitle(title) {
+      if (currentLang !== 'zh') return title;
+      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘' })[title] || title;
     }
     function dimensionsFor(text) {
       const values = (text.match(/\d+(?:\.\d+)?/g) || []).map(Number);
@@ -321,7 +333,7 @@
       solved.textContent = copy[currentLang].parsing;
       setTimeout(() => {
         const title = titleFor(value);
-        bodyValue.textContent = title;
+        bodyValue.textContent = displayTitle(title);
         sizeValue.textContent = dimensions.width + ' × ' + dimensions.depth + ' × ' + dimensions.height + ' mm';
         modelMeta.textContent = (title === 'Cable clip' ? copy[currentLang].cableMeta : copy[currentLang].defaultMeta);
         modelState.textContent = copy[currentLang].state;
