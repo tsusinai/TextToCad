@@ -74,3 +74,9 @@ Astra 专项审查后已执行：
 - 语言切换保留 LLM 来源和 assumptions；高级 revision 恢复时优先使用原始自然语言。
 
 尚需真实部署环境验证：不同 trimesh/Three.js 版本的坐标轴约定、WebGL 设备差异，以及运行中的 CadQuery 线程是否需要进程级 worker 隔离。
+
+## 真实 3D 预览与 Semantic CAD IR
+
+- 无后端 GLB 时，前端通过 Three.js 根据当前参数生成真实可旋转、缩放、顶视、前视的参数化预览；SVG 仅作为 WebGL/CDN 不可用的最后降级。
+- 后端新增 Semantic CAD IR v0.1，记录设计意图、参数来源、基准面、特征 DAG 初稿和约束，并写入 manifest。
+- 新增 GET /v1/models/{id}/ir，供审查、版本回溯和下一阶段约束求解使用。
