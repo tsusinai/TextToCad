@@ -1135,7 +1135,11 @@ def _write_artifacts(
             mesh = trimesh.load_mesh(str(stl_path), file_type="stl", force="mesh")
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
-            mesh_validation = {"status": "pass", **_mesh_validation(mesh)}
+            mesh_info = _mesh_validation(mesh)
+            mesh_validation = {
+                "status": "pass" if mesh_info["watertight"] else "warning",
+                **mesh_info,
+            }
             glb_path = model_dir / "model.glb"
             three_mf_path = model_dir / "model.3mf"
             mesh.export(str(glb_path), file_type="glb")
