@@ -639,6 +639,86 @@
       for (let i = 1; i < spec.compartments; i += 1) lines.push('<line x1="' + (x + i*w/spec.compartments).toFixed(1) + '" y1="' + (y + 16).toFixed(1) + '" x2="' + (x + i*w/spec.compartments).toFixed(1) + '" y2="' + (y + h - 16).toFixed(1) + '" stroke="#243323" stroke-width="3"/>');
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated front view CAD model"><rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(18, spec.chamfer * 2) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><rect x="' + (x+14).toFixed(1) + '" y="' + (y+14).toFixed(1) + '" width="' + (w-28).toFixed(1) + '" height="' + (h-28).toFixed(1) + '" rx="10" fill="#b8d99a" opacity=".65"/>' + lines.join('') + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
     }
+    function hideThreePreview() {
+      threeState.loadSeq += 1;
+      threeState.active = false;
+      if (threeViewport) { threeViewport.classList.remove('active'); threeViewport.setAttribute('aria-hidden', 'true'); }
+      if (modelWrap) modelWrap.style.display = '';
+    }
+    function fitThreeModel() {
+      if (!threeState.model || !threeState.camera || !threeState.controls) return;
+      const THREE = threeState.THREE;
+      const box = new THREE.Box3().setFromObject(threeState.model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      threeState.model.position.sub(center);
+      const maxDim = Math.max(size.x, size.y, size.z, 1);
+      const distance = maxDim * 1.8;
+      threeState.camera.near = Math.max(maxDim / 1000, 0.01);
+      threeState.camera.far = Math.max(maxDim * 20, 1000);
+      threeState.camera.position.set(distance, distance * .8, distance);
+      threeState.controls.target.set(0, 0, 0);
+      threeState.controls.update();
+      threeState.camera.updateProjectionMatrix();
+    }
+    function setThreeView(view) {
+      if (!threeState.active || !threeState.camera || !threeState.controls || !threeState.model) return;
+      const THREE = threeState.THREE;
+      const box = new THREE.Box3().setFromObject(threeState.model);
+      const size = box.getSize(new THREE.Vector3());
+      const distance = Math.max(size.x, size.y, size.z, 1) * 1.8;
+      if (view === 'top') threeState.camera.position.set(0, distance, .01);
+      else if (view === 'front') threeState.camera.position.set(0, distance * .12, distance);
+      else threeState.camera.position.set(distance, distance * .8, distance);
+      threeState.controls.target.set(0, 0, 0);
+      threeState.controls.update();
+    }
+    function resetThreeCamera() { fitThreeModel(); setThreeView(currentView); }
+    async function loadThreePreview(url) {
+      if (!url || !threeViewport) { hideThreePreview(); return; }
+      const sequence = ++threeState.loadSeq;
+      try {
+        const THREE = await import('three');
+        const [{ GLTFLoader }, { OrbitControls }] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('three/addons/controls/OrbitControls.js')]);
+        if (sequence !== threeState.loadSeq) return;
+        threeState.THREE = THREE;
+        if (!threeState.renderer) {
+          threeState.scene = new THREE.Scene();
+          threeState.scene.background = new THREE.Color(0x252724);
+          threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
+          threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+          threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
+          threeViewport.appendChild(threeState.renderer.domElement);
+          threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
+          threeState.controls.enableDamping = true;
+          threeState.controls.dampingFactor = .08;
+          threeState.scene.add(new THREE.HemisphereLight(0xeaf4d4, 0x252724, 1.8));
+          const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 5, 4); threeState.scene.add(key);
+          const resize = () => { const width = threeViewport.clientWidth || 1; const height = threeViewport.clientHeight || 1; threeState.camera.aspect = width / height; threeState.camera.updateProjectionMatrix(); threeState.renderer.setSize(width, height, false); };
+          threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
+          if (threeState.resizeObserver) threeState.resizeObserver.observe(threeViewport); else window.addEventListener('resize', resize);
+          const animate = () => { if (threeState.renderer && threeState.scene && threeState.camera) { threeState.controls.update(); threeState.renderer.render(threeState.scene, threeState.camera); } requestAnimationFrame(animate); };
+          animate();
+        }
+        const loader = new GLTFLoader();
+        loader.load(url, (gltf) => {
+          if (sequence !== threeState.loadSeq) return;
+          if (threeState.model) threeState.scene.remove(threeState.model);
+          threeState.model = gltf.scene;
+          threeState.scene.add(threeState.model);
+          threeState.active = true;
+          threeViewport.classList.add('active');
+          threeViewport.setAttribute('aria-hidden', 'false');
+          modelWrap.style.display = 'none';
+          fitThreeModel();
+          setThreeView(currentView);
+        }, undefined, (error) => { console.warn('GLB preview unavailable; retaining SVG fallback.', error); hideThreePreview(); });
+      } catch (error) {
+        console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
+        if (sequence === threeState.loadSeq) hideThreePreview();
+      }
+    }
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
