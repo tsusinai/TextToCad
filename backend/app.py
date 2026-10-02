@@ -738,7 +738,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             return cached
     model_id: str | None = None
     try:
-        title, params = parse_prompt(request.prompt, request.process)
+        title, params, llm_used, assumptions = interpret_prompt(request.prompt, request.process, request.mode)
         shape = build_geometry(params)
         analysis = analyze_manufacturability(params)
         checks = _validate_shape(shape, params, analysis)
@@ -746,7 +746,15 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
         if not all(hard_checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
         model_id = uuid.uuid4().hex
-        artifacts, step_schema = _write_artifacts(model_id, shape, title, params, checks, analysis)
+        artifacts, step_schema = _write_artifacts(
+            model_id,
+            shape,
+            title,
+            params,
+            checks,
+            analysis,
+            {"mode": request.mode, "llm_used": llm_used, "assumptions": assumptions},
+        )
         response = GenerateResponse(
             model_id=model_id,
             title=title,
@@ -757,6 +765,9 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             profile=PROCESS_PROFILES[params.process],
             analysis=analysis,
             step_schema=step_schema,
+            mode=request.mode,
+            llm_used=llm_used,
+            assumptions=assumptions,
         )
         with CACHE_LOCK:
             MODEL_CACHE[cache_key] = response
