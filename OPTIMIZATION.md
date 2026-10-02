@@ -9,11 +9,12 @@
 - 为生成请求加入序列号和 AbortController，旧响应不能覆盖新提示，失败时按钮和状态可以恢复。
 - 让前后端识别 plant pot、lamp base、pen cup 等同一模型族，避免 UI 预览与 B-Rep 类型不一致。
 - 根据实际后端 artifact 能力显示 STEP、3MF、GLB 导出按钮。
+- 加入超时产物 TTL、失败产物回收、规范化提示词缓存和 STEP 导出锁，降低重复建模、磁盘增长和并发 schema 配置风险。
 
 ## P1 — 下一轮建议
 
-- 将同步生成拆成受限 worker 的 job/status API，加入超时、取消、磁盘配额和 TTL 清理。
-- 用 canonical spec/hash 做 B-Rep 和预览缓存，目标是预览 P50 小于 1 秒、STEP P95 小于 10 秒。
+- 将同步生成拆成受限 worker 的 job/status API，加入超时、取消和磁盘配额；当前已先完成 TTL 与前端取消。
+- 将现有进程内 canonical spec/hash 缓存扩展为可观测的持久化缓存，目标是预览 P50 小于 1 秒、STEP P95 小于 10 秒。
 - 将壁厚采样升级为面级厚度分析，并把问题定位到视图中的具体面。
 - 将 clearance、overhang、draft 从参数代理升级为几何实测；未知结果显示 unknown，不显示通过。
 - 区分 chamfer 和 fillet，失败时返回 degraded 或可解释的 422。
