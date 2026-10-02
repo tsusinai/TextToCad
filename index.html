@@ -68,6 +68,15 @@
     .check.fail { background: #ffd9d1; color: #9a4434; }
     .plan-item.warn { background: #fffaf0; }
     .plan-item.fail { background: #fff2ef; }
+    .feature-card { margin-top: 16px; padding: 16px; border-radius: 16px; border: 1px solid #e3e5dc; background: #fbfcf8; }
+    .feature-head { display: flex; align-items: center; justify-content: space-between; }
+    .feature-mode { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+    .feature-tree { display: grid; gap: 7px; margin-top: 12px; }
+    .feature-node { display: grid; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: start; padding: 8px 9px; border-radius: 10px; background: #fff; }
+    .feature-node .node-dot { width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: #9fca82; }
+    .feature-node strong, .feature-node small { display: block; }
+    .feature-node strong { font-size: 11px; }
+    .feature-node small { margin-top: 3px; color: #7a7c74; font-size: 10px; line-height: 1.3; }
     .generate { width: 100%; height: 52px; margin-top: 24px; border: 0; border-radius: 14px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; font-size: 14px; font-weight: 700; transition: transform .2s ease, background .2s ease; }
     .generate:hover { transform: translateY(-2px); background: #30332c; }
     .generate.loading { background: #506847; }
@@ -236,6 +245,10 @@
             <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
             <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · warm white</strong><small>Print-ready surface</small></article>
           </div>
+          <div class="feature-card">
+            <div class="feature-head"><span class="section-label" id="featureLabel">FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC</span></div>
+            <div class="feature-tree" id="featureTree"></div>
+          </div>
           <div class="plan-card">
             <div class="plan-head">
               <div><div class="section-label" id="planEyebrow">MANUFACTURING PLAN</div><h2 id="planTitle">Ready for fabrication</h2><p class="plan-subtitle" id="planSubtitle">A quality gate for strong, printable, and export-ready geometry.</p></div>
@@ -277,6 +290,9 @@
       export: document.getElementById('checkExport')
     };
     const revisionStorageKey = 'formCadRevisions';
+    const featureLabel = document.getElementById('featureLabel');
+    const featureMode = document.getElementById('featureMode');
+    const featureTree = document.getElementById('featureTree');
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const backendUrl = (window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '').replace(/\/+$/, '');
     let backendArtifact = null;
@@ -286,8 +302,8 @@
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -318,6 +334,8 @@
       interpretationLabel.textContent = t.interpretation;
       revisionLabel.textContent = t.revision;
       clearRevisions.textContent = t.clear;
+      featureLabel.textContent = t.featureTree;
+      featureMode.textContent = t.featureMode;
       document.querySelector('.params-head .section-label').textContent = t.params;
       solved.textContent = t.solved;
       modelState.textContent = t.state;
@@ -397,10 +415,10 @@
       const countMatch = normalized.match(/(\d+)\s*(?:compartments?|隔间|格)/);
       const wordCount = normalized.includes('three') || normalized.includes('三个') ? 3 : (normalized.includes('two') || normalized.includes('两个') ? 2 : 0);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (titleFor(text) === 'Desk organizer' ? 3 : 1))), 1, 6);
-      const chamferMatch = normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
+      const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const chamfer = chamferMatch ? Number(chamferMatch[1]) : 4;
       const dimensions = dimensionsFor(text);
-      const wallMatch = normalized.match(/(?:wall|壁厚)[^\d]{0,8}(\d+(?:\.\d+)?)/) || normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚)/);
+      const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚)/) || normalized.match(/(?:wall|壁厚)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       return { title: titleFor(text), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall };
     }
@@ -447,6 +465,90 @@
       modelWrap.className = 'model-wrap ' + view + '-view';
       modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
     }
+    function isEditIntent(text) {
+      return /(?:increase|decrease|reduce|raise|lower|add|remove|delete|change|modify|set|make|adjust|增加|减少|加上|减去|添加|增加|移除|删除|修改|改为|设为|调整)/i.test(text);
+    }
+    function editNumber(text, terms, current) {
+      const normalized = text.toLowerCase();
+      const match = normalized.match(new RegExp('(?:' + terms + ')[^\\d-]{0,16}(-?\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)?', 'i')) || normalized.match(new RegExp('(-?\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)?[^a-z\\d]{0,8}(?:' + terms + ')', 'i'));
+      if (!match) return current;
+      const value = Number(match[1]);
+      if (/(?:to|=|改为|设为|调整为|变成)/i.test(normalized)) return value;
+      if (/(?:decrease|reduce|lower|subtract|减少|减去|减小)/i.test(normalized)) return current - Math.abs(value);
+      return current + Math.abs(value);
+    }
+    function editCount(text, current) {
+      const normalized = text.toLowerCase();
+      const match = normalized.match(/(?:compartments?|隔间|格)[^\\d]{0,12}(\\d+)/i) || normalized.match(/(\\d+)\\s*(?:compartments?|隔间|格)/i);
+      const word = /(?:one|一个|一)/i.test(normalized) ? 1 : (/two|两个|二/i.test(normalized) ? 2 : (/three|三个|三/i.test(normalized) ? 3 : null));
+      const value = match ? Number(match[1]) : word;
+      if (value === null) return current;
+      if (/(?:to|=|改为|设为|调整为|变成)/i.test(normalized)) return value;
+      if (/(?:remove|delete|decrease|reduce|减少|减去|移除|删除)/i.test(normalized)) return current - value;
+      return current + value;
+    }
+    function applyEdit(text, base) {
+      const next = Object.assign({}, base);
+      next.width = editNumber(text, 'width|wide|宽', base.width);
+      next.depth = editNumber(text, 'depth|deep|length|长|深', base.depth);
+      next.height = editNumber(text, 'height|tall|高', base.height);
+      next.chamfer = editNumber(text, 'chamfer|radius|倒角|圆角|圆弧|半径', base.chamfer);
+      next.wall = editNumber(text, 'wall|壁厚', base.wall || 3);
+      next.bottom = next.wall;
+      next.compartments = clamp(editCount(text, base.compartments), 1, 6);
+      return next;
+    }
+    function previewSpec(text) {
+      return modelSpec && isEditIntent(text) ? applyEdit(text, modelSpec) : parseModel(text);
+    }
+    function canonicalPrompt(spec) {
+      const type = spec.title === 'Storage tray' ? 'storage tray' : (spec.title === 'Cable clip' ? 'cable clip' : (spec.title === 'Plant pot' ? 'plant pot' : (spec.title === 'Lamp base' ? 'lamp base' : 'desk organizer')));
+      return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, and ' + spec.chamfer + ' mm chamfer.';
+    }
+    function diffSpec(previous, next) {
+      if (!previous) return [];
+      const fields = [
+        { key: 'width', unit: 'mm' }, { key: 'depth', unit: 'mm' }, { key: 'height', unit: 'mm' },
+        { key: 'wall', unit: 'mm' }, { key: 'chamfer', unit: 'mm' }, { key: 'compartments', unit: '' }
+      ];
+      return fields.filter((field) => Number(previous[field.key]) !== Number(next[field.key])).map((field) => ({
+        key: field.key,
+        delta: Number((Number(next[field.key]) - Number(previous[field.key])).toFixed(2)),
+        value: Number(next[field.key]),
+        unit: field.unit
+      }));
+    }
+    function formatDiff(diff) {
+      if (!diff || !diff.length) return copy[currentLang].diffNone;
+      const labels = currentLang === 'zh' ? { width: '宽', depth: '深', height: '高', wall: '壁厚', chamfer: '倒角', compartments: '隔间' } : { width: 'width', depth: 'depth', height: 'height', wall: 'wall', chamfer: 'chamfer', compartments: 'compartments' };
+      return diff.map((item) => labels[item.key] + ' ' + (item.delta > 0 ? '+' : '') + item.delta + (item.unit ? ' ' + item.unit : '')).join(currentLang === 'zh' ? '、' : ', ');
+    }
+    function renderFeatureTree(spec) {
+      if (!featureTree || !spec) return;
+      featureTree.innerHTML = '';
+      const features = [
+        [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
+        [copy[currentLang].shellFeature, (spec.wall || 3) + ' mm ' + (currentLang === 'zh' ? '壁厚' : 'wall')],
+        [copy[currentLang].dividerFeature, spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments')],
+        [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
+      ];
+      features.forEach((feature) => {
+        const node = document.createElement('div');
+        node.className = 'feature-node';
+        const dot = document.createElement('span');
+        dot.className = 'node-dot';
+        const body = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = feature[0];
+        const detail = document.createElement('small');
+        detail.textContent = feature[1];
+        body.appendChild(title);
+        body.appendChild(detail);
+        node.appendChild(dot);
+        node.appendChild(body);
+        featureTree.appendChild(node);
+      });
+    }
     function assumptionList(text) {
       const normalized = text.toLowerCase();
       const assumptions = [];
@@ -465,6 +567,7 @@
       interpretationDetails.textContent = spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments') + ' · ' + (currentLang === 'zh' ? '倒角 ' : 'chamfer ') + spec.chamfer + ' mm' + (assumptions.length ? ' · ' + t.assumptions + ': ' + assumptions.join(separator) : '');
       interpretationStatus.textContent = source === 'backend' ? 'OCCT B-Rep' : (source === 'draft' ? t.interpretationReady : (currentLang === 'zh' ? '本地预览' : 'LOCAL PREVIEW'));
       document.querySelector('.chip.neutral').textContent = spec.width + ' × ' + spec.depth + ' mm';
+      renderFeatureTree(spec);
     }
     function setCheckState(element, state) {
       if (!element) return;
@@ -520,16 +623,16 @@
         title.textContent = displayTitle(entry.spec && entry.spec.title ? entry.spec.title : titleFor(entry.prompt));
         const meta = document.createElement('span');
         const time = new Date(entry.createdAt).toLocaleString(currentLang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        meta.textContent = (entry.source === 'backend' ? copy[currentLang].revisionBackend : copy[currentLang].revisionLocal) + ' · ' + time;
+        meta.textContent = (entry.source === 'backend' ? copy[currentLang].revisionBackend : copy[currentLang].revisionLocal) + ' · ' + (entry.diff && entry.diff.length ? formatDiff(entry.diff) : copy[currentLang].diffInitial) + ' · ' + time;
         button.appendChild(title);
         button.appendChild(meta);
-        button.addEventListener('click', () => { prompt.value = entry.prompt; updateInterpretation(entry.spec, entry.source === 'backend' ? 'backend' : 'draft'); generateModel(); });
+        button.addEventListener('click', () => { prompt.value = entry.canonicalPrompt || entry.prompt; modelSpec = null; backendArtifact = null; updateInterpretation(parseModel(prompt.value), 'draft'); generateModel(); });
         revisionList.appendChild(button);
       });
     }
-    function saveRevision(value, spec, source) {
-      const entry = { id: Date.now(), prompt: value, spec, source, createdAt: new Date().toISOString() };
-      revisions = [entry].concat(revisions.filter((item) => item.prompt !== value)).slice(0, 6);
+    function saveRevision(value, spec, source, canonical, previous) {
+      const entry = { id: Date.now(), prompt: value, canonicalPrompt: canonical, spec, source, diff: diffSpec(previous, spec), createdAt: new Date().toISOString() };
+      revisions = [entry].concat(revisions.filter((item) => item.canonicalPrompt !== canonical)).slice(0, 6);
       persistRevisions();
       renderRevisions();
     }
@@ -547,7 +650,10 @@
     async function generateModel() {
       if (generate.classList.contains('loading')) return;
       const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
-      const nextSpec = parseModel(value);
+      const previousSpec = modelSpec ? Object.assign({}, modelSpec) : null;
+      const editing = Boolean(previousSpec && isEditIntent(value));
+      const nextSpec = editing ? applyEdit(value, previousSpec) : parseModel(value);
+      const backendPrompt = canonicalPrompt(nextSpec);
       generate.classList.add('loading');
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
       modelState.textContent = copy[currentLang].solving;
@@ -555,7 +661,7 @@
       updateInterpretation(nextSpec, 'draft');
       let remote = null;
       try {
-        remote = await requestBackend(value);
+        remote = await requestBackend(backendPrompt);
       } catch (error) {
         console.warn('Geometry backend unavailable; using local preview.', error);
       }
@@ -580,14 +686,14 @@
       modelState.textContent = remote ? (currentLang === 'zh' ? 'OCCT B-Rep 实体' : 'OCCT B-REP SOLID') : copy[currentLang].state;
       updateInterpretation(modelSpec, remote ? 'backend' : 'local');
       updateChecks(modelSpec, remote && remote.checks);
-      saveRevision(value, modelSpec, remote ? 'backend' : 'local');
+      saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
       generate.classList.remove('loading');
       generateLabel.textContent = copy[currentLang].regenerate;
     }
     generate.addEventListener('click', generateModel);
     prompt.addEventListener('input', () => {
       backendArtifact = null;
-      updateInterpretation(parseModel(prompt.value), 'draft');
+      updateInterpretation(previewSpec(prompt.value), 'draft');
     });
     prompt.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') generateModel();
@@ -628,6 +734,7 @@
     renderModel(modelSpec, currentView);
     updateInterpretation(modelSpec, 'draft');
     updateChecks(modelSpec, null);
+    renderFeatureTree(modelSpec);
     renderRevisions();
   </script>
 </body>
