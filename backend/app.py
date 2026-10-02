@@ -7,7 +7,7 @@ import re
 import shutil
 import time
 import uuid
-from threading import Lock
+from threading import Lock, Thread
 from pathlib import Path
 from typing import Any, Literal
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -115,6 +115,8 @@ class GenerateResponse(BaseModel):
 
 CACHE_LOCK = Lock()
 MODEL_CACHE: dict[str, GenerateResponse] = {}
+JOB_LOCK = Lock()
+JOBS: dict[str, dict[str, Any]] = {}
 
 
 def _cache_key(request: GenerateRequest) -> str:
@@ -586,7 +588,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -654,6 +656,67 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
         if model_id:
             shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"geometry generation failed: {exc}") from exc
+
+
+def _run_job(job_id: str, request: GenerateRequest) -> None:
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        if not job or job["status"] == "cancelled":
+            return
+        job["status"] = "running"
+    try:
+        result = generate_model(request)
+        with JOB_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            if job["status"] == "cancelled":
+                return
+            job["status"] = "succeeded"
+            job["result"] = result.model_dump()
+    except HTTPException as exc:
+        with JOB_LOCK:
+            if job_id in JOBS and JOBS[job_id]["status"] != "cancelled":
+                JOBS[job_id]["status"] = "failed"
+                JOBS[job_id]["error"] = {"status_code": exc.status_code, "detail": exc.detail}
+    except Exception as exc:
+        with JOB_LOCK:
+            if job_id in JOBS and JOBS[job_id]["status"] != "cancelled":
+                JOBS[job_id]["status"] = "failed"
+                JOBS[job_id]["error"] = {"status_code": 500, "detail": str(exc)}
+
+
+@app.post("/v1/jobs")
+def create_job(request: GenerateRequest) -> dict[str, Any]:
+    job_id = uuid.uuid4().hex
+    with JOB_LOCK:
+        JOBS[job_id] = {"job_id": job_id, "status": "queued", "created_at": time.time()}
+    Thread(target=_run_job, args=(job_id, request), daemon=True).start()
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/v1/jobs/{job_id}")
+def get_job(job_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(status_code=400, detail="invalid job id")
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        return dict(job)
+
+
+@app.delete("/v1/jobs/{job_id}")
+def cancel_job(job_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(status_code=400, detail="invalid job id")
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        if job["status"] in {"queued", "running"}:
+            job["status"] = "cancelled"
+        return {"job_id": job_id, "status": job["status"]}
 
 
 @app.get("/v1/models/{model_id}/analysis")
