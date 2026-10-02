@@ -969,26 +969,84 @@ def build_geometry(params: ModelParameters) -> Any:
     return outer
 
 
-def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any]) -> dict[str, bool]:
+def _shape_metrics(shape: Any) -> dict[str, Any]:
     solid = shape.val()
-    volume = float(solid.Volume())
     bbox = solid.BoundingBox()
+    return {
+        "volume_mm3": round(float(solid.Volume()), 6),
+        "bbox_mm": {
+            "x": round(float(bbox.xlen), 6),
+            "y": round(float(bbox.ylen), 6),
+            "z": round(float(bbox.zlen), 6),
+        },
+        "solid_count": len(shape.solids().vals()),
+        "valid_brep": bool(solid.isValid()),
+    }
+
+
+def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any]) -> dict[str, Any]:
+    metrics = _shape_metrics(shape)
+    bbox = metrics["bbox_mm"]
     issue_codes = {issue["code"] for issue in analysis["issues"]}
     return {
-        "valid_brep": bool(solid.isValid()),
-        "single_solid": len(shape.solids().vals()) == 1,
-        "positive_volume": volume > 0,
-        "bounded": all(
-            dimension > 0
-            for dimension in (bbox.xlen, bbox.ylen, bbox.zlen)
-        ),
+        "valid_brep": metrics["valid_brep"],
+        "single_solid": metrics["solid_count"] == 1,
+        "positive_volume": metrics["volume_mm3"] > 0,
+        "bounded": all(dimension > 0 for dimension in bbox.values()),
         "wall_thickness": "wall_thickness" not in issue_codes,
         "edge_treatment": "edge_treatment" not in issue_codes,
-        "overhang": "overhang" not in issue_codes,
-        "draft_angle": "draft_angle" not in issue_codes,
-        "clearance": "clearance" not in issue_codes,
-        # Export readiness is set to true only after all files have been written.
+        "overhang": "unknown",
+        "draft_angle": "unknown",
+        "clearance": "unknown",
         "export_ready": False,
+        "measurement_quality": "nominal",
+    }
+
+
+def _roundtrip_step_check(source_shape: Any, step_path: Path) -> dict[str, Any]:
+    """Read STEP back through CadQuery when available and compare core metrics."""
+    if cq is None:
+        return {"status": "skipped", "reason": "cadquery_unavailable"}
+    try:
+        imported = cq.importers.importStep(str(step_path))
+        source = _shape_metrics(source_shape)
+        target = _shape_metrics(imported)
+        volume_delta = abs(target["volume_mm3"] - source["volume_mm3"]) / max(source["volume_mm3"], 1.0)
+        bbox_delta = max(
+            abs(target["bbox_mm"][axis] - source["bbox_mm"][axis])
+            for axis in ("x", "y", "z")
+        )
+        passed = (
+            target["valid_brep"]
+            and target["solid_count"] == source["solid_count"]
+            and volume_delta <= 0.005
+            and bbox_delta <= 0.02
+        )
+        return {
+            "status": "pass" if passed else "fail",
+            "source": source,
+            "roundtrip": target,
+            "volume_relative_error": round(volume_delta, 8),
+            "bbox_max_error_mm": round(bbox_delta, 8),
+        }
+    except Exception as exc:
+        return {"status": "failed", "reason": str(exc)[:240]}
+
+
+def _mesh_validation(mesh: Any) -> dict[str, Any]:
+    bounds = mesh.bounds
+    return {
+        "watertight": bool(getattr(mesh, "is_watertight", False)),
+        "volume": bool(getattr(mesh, "is_volume", False)),
+        "face_count": int(len(mesh.faces)),
+        "vertex_count": int(len(mesh.vertices)),
+        "bbox_mm": {
+            "x": round(float(bounds[1][0] - bounds[0][0]), 6),
+            "y": round(float(bounds[1][1] - bounds[0][1]), 6),
+            "z": round(float(bounds[1][2] - bounds[0][2]), 6),
+        },
+        "units": "mm",
+        "axis": "Z-up",
     }
 
 
