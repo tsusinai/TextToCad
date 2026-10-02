@@ -772,12 +772,20 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
     profile = PROCESS_PROFILES[params.process]
     issues: list[dict[str, Any]] = []
     wall_ok = params.wall >= profile["min_wall"] and params.wall < min(params.width, params.depth) / 3
-    edge_ok = (params.chamfer == 0 or params.chamfer >= profile["min_radius"]) and params.chamfer <= min(params.width, params.depth, params.height) / 4
-    clearance_ok = params.wall >= profile["clearance"]
-    draft_ok = profile["draft_angle"] == 0.0
-    overhang_ok = profile["max_overhang"] >= 45.0
+    edge_ok = (
+        (params.chamfer == 0 or params.chamfer >= profile["min_radius"])
+        and params.chamfer <= min(params.width, params.depth, params.height) / 4
+    )
+    clearance_nominal_ok = params.wall >= profile["clearance"]
 
-    def add_issue(code: str, severity: str, message: str, message_zh: str, value: float | None = None, limit: float | None = None) -> None:
+    def add_issue(
+        code: str,
+        severity: str,
+        message: str,
+        message_zh: str,
+        value: float | None = None,
+        limit: float | None = None,
+    ) -> None:
         issue: dict[str, Any] = {
             "code": code,
             "severity": severity,
@@ -791,15 +799,41 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
         issues.append(issue)
 
     if not wall_ok:
-        add_issue("wall_thickness", "error", "Wall thickness is below the selected process minimum.", "壁厚低于当前工艺的最小值。", params.wall, profile["min_wall"])
+        add_issue(
+            "wall_thickness",
+            "error",
+            "Wall thickness is below the selected process minimum.",
+            "壁厚低于当前工艺的最小值。",
+            params.wall,
+            profile["min_wall"],
+        )
     if not edge_ok:
-        add_issue("edge_treatment", "warning", "Edge radius/chamfer is outside the process range.", "圆角或倒角超出当前工艺范围。", params.chamfer, profile["min_radius"])
-    if not clearance_ok:
-        add_issue("clearance", "warning", "Clearance is below the selected process recommendation.", "间隙低于当前工艺建议值。", params.wall, profile["clearance"])
-    if not overhang_ok:
-        add_issue("overhang", "warning", "The selected process needs support review for this overhang.", "当前工艺需要复核悬空和支撑。", profile["max_overhang"], 45.0)
-    if not draft_ok:
-        add_issue("draft_angle", "warning", "Injection molding requires an explicit draft feature.", "注塑需要明确的拔模特征。", profile["draft_angle"], 1.0)
+        add_issue(
+            "edge_treatment",
+            "warning",
+            "Edge radius/chamfer is outside the process range.",
+            "圆角或倒角超出当前工艺范围。",
+            params.chamfer,
+            profile["min_radius"],
+        )
+    if not clearance_nominal_ok:
+        add_issue(
+            "clearance",
+            "warning",
+            "Nominal clearance proxy is below the selected process recommendation.",
+            "名义间隙代理值低于当前工艺建议值。",
+            params.wall,
+            profile["clearance"],
+        )
+    if params.process == "injection":
+        add_issue(
+            "draft_angle",
+            "warning",
+            "Face-level draft analysis is not available; injection molding needs review.",
+            "当前没有面级拔模分析，注塑模型必须人工复核。",
+            profile["draft_angle"],
+            1.0,
+        )
 
     wall_map = [
         {
@@ -808,6 +842,7 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
             "nominal_mm": round(params.wall, 3),
             "minimum_mm": round(params.wall, 3),
             "status": "pass" if wall_ok else "fail",
+            "measurement": "nominal",
         },
         {
             "region": "bottom",
@@ -815,6 +850,7 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
             "nominal_mm": round(params.bottom, 3),
             "minimum_mm": round(params.bottom, 3),
             "status": "pass" if params.bottom >= profile["min_wall"] else "fail",
+            "measurement": "nominal",
         },
     ]
     if params.compartments > 1:
@@ -824,7 +860,9 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
             "nominal_mm": round(params.wall, 3),
             "minimum_mm": round(params.wall, 3),
             "status": "pass" if wall_ok else "fail",
+            "measurement": "nominal",
         })
+
     has_errors = any(issue["severity"] == "error" for issue in issues)
     has_warnings = any(issue["severity"] == "warning" for issue in issues)
     return {
@@ -833,8 +871,17 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
         "wall_map": wall_map,
         "issues": issues,
         "nominal": True,
-        "review_required": has_errors or has_warnings,
-        "manufacturing_ready": not has_errors,
+        "assessment": {
+            "wall_thickness": "nominal_pass" if wall_ok else "nominal_fail",
+            "clearance": "nominal_pass" if clearance_nominal_ok else "nominal_fail",
+            "overhang": "unknown",
+            "draft_angle": "unknown",
+        },
+        "review_required": True,
+        "manufacturing_ready": False,
+        "readiness_reason": "face-level clearance, overhang, draft, and thickness measurements are not complete",
+        "has_errors": has_errors,
+        "has_warnings": has_warnings,
     }
 
 
