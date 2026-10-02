@@ -97,3 +97,13 @@ Track interpretation confirmation rate, valid-B-Rep rate, median generation time
 ## 第三轮交互与生成优化（2026-10-02）
 
 已完成异步 job/status/cancel 接口、可编辑参数卡、渐进式 GLB/OrbitControls 视图和 SVG 降级；面级制造采样与持久化队列继续排入下一阶段。
+
+## LLM intent layer（本轮完成）
+
+- 高级模式接入 OpenAI-compatible Chat Completions；标准模式仍为无 API 的确定性解析。
+- LLM 只返回受限 JSON 参数，后端进行类型、范围、有限枚举和布尔值校验，再交给 CadQuery/OCCT 建模与 B-Rep 校验。
+- 后端记录 mode、llm_used 和 assumptions；API key 只存在后端环境变量，前端不接触密钥。
+- provider 缺失、超时、响应过大或 JSON 无效时，安全回退到确定性基线，并在 UI 显示原因。
+- 前端保留原始自然语言与基线参数，支持中英文模式切换、后端能力探测和高级特征树展示。
+
+下一轮：增加结构化 JSON Schema 校验、provider 预算与速率限制、可选的二次几何修复建议，以及真实 CadQuery 回归样例集。
