@@ -72,9 +72,7 @@
     .view-pill { background: #30342f; color: #c5d4b7; border: 1px solid transparent; }
     .view-pill.active { color: var(--lime); border-color: #50604d; }
     .model-stage { position: relative; z-index: 1; display: grid; place-items: center; height: calc(100% - 87px); min-height: 450px; }
-    .model-wrap { width: min(520px, 68%); transform: translateY(-7px); transition: transform .6s ease; }
-    .model-wrap.top-view { transform: translateY(-7px) rotateX(58deg) rotateZ(0deg) scale(.82); }
-    .model-wrap.front-view { transform: translateY(4px) rotateY(17deg) scale(.92); }
+    .model-wrap { width: min(520px, 68%); transform: translateY(-7px); transition: opacity .25s ease; }
     .model-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)); }
     .model-svg .solid { transition: fill .3s ease; }
     .model-svg .accent { stroke: var(--lime); }
@@ -238,6 +236,8 @@
     const bodyValue = document.getElementById('bodyValue');
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
+    let currentView = 'iso';
+    let modelSpec = null;
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
@@ -334,18 +334,74 @@
       const height = valueFor('tall|height|高') || unitNumbers[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
       return { width, depth, height };
     }
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+    function parseModel(text) {
+      const normalized = text.toLowerCase();
+      const countMatch = normalized.match(/(\\d+)\\s*(?:compartments?|隔间|格)/);
+      const wordCount = normalized.includes('three') || normalized.includes('三个') ? 3 : (normalized.includes('two') || normalized.includes('两个') ? 2 : 0);
+      const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (titleFor(text) === 'Desk organizer' ? 3 : 1))), 1, 6);
+      const chamferMatch = normalized.match(/(?:chamfer|倒角|radius|圆角)[^\\d]{0,8}(\\d+(?:\\.\\d+)?)/);
+      const chamfer = chamferMatch ? Number(chamferMatch[1]) : 4;
+      const dimensions = dimensionsFor(text);
+      return { title: titleFor(text), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer };
+    }
+    function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
+    function renderIso(spec) {
+      const w = clamp(spec.width / 120, .7, 1.6) * 240;
+      const d = clamp(spec.depth / 80, .7, 1.6) * 170;
+      const h = clamp(spec.height / 42, .65, 1.8) * 130;
+      const project = (x, y, z) => [150 + (x - y) * .72, 205 + (x + y) * .36 - z];
+      const top = [project(0,0,h), project(w,0,h), project(w,d,h), project(0,d,h)];
+      const front = [project(0,d,0), project(w,d,0), project(w,d,h), project(0,d,h)];
+      const side = [project(w,0,0), project(w,d,0), project(w,d,h), project(w,0,h)];
+      const cells = [];
+      const dividerLines = [];
+      for (let i = 0; i < spec.compartments; i += 1) {
+        const x0 = i * w / spec.compartments + 12;
+        const x1 = (i + 1) * w / spec.compartments - 12;
+        cells.push('<polygon points="' + pointList([project(x0,12,h+2),project(x1,12,h+2),project(x1,d-12,h+2),project(x0,d-12,h+2)]) + '" fill="#f7fbef" stroke="#243323" stroke-width="3"/>');
+        if (i > 0) { const a = project(i*w/spec.compartments, 12, h+3); const b = project(i*w/spec.compartments, d-12, h+3); dividerLines.push('<path d="M ' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) + ' L ' + b[0].toFixed(1) + ' ' + b[1].toFixed(1) + '" stroke="#243323" stroke-width="4"/>'); }
+      }
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated isometric CAD model"><ellipse cx="205" cy="370" rx="154" ry="22" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="3" stroke-linejoin="round"><polygon points="' + pointList(top) + '" fill="#ddf79b"/><polygon points="' + pointList(front) + '" fill="#9fca82"/><polygon points="' + pointList(side) + '" fill="#6e9e68"/>' + cells.join('') + dividerLines.join('') + '<path d="M ' + project(0,d,0)[0].toFixed(1) + ' ' + project(0,d,0)[1].toFixed(1) + ' L ' + project(w,d,0)[0].toFixed(1) + ' ' + project(w,d,0)[1].toFixed(1) + '" stroke="#ddf79b" opacity=".75"/></g></svg>';
+    }
+    function renderTop(spec) {
+      const w = clamp(spec.width / 120, .7, 1.6) * 280;
+      const d = clamp(spec.depth / 80, .7, 1.6) * 190;
+      const x = (520 - w) / 2;
+      const y = (410 - d) / 2;
+      const cellW = (w - 24) / spec.compartments;
+      const cells = [];
+      for (let i = 0; i < spec.compartments; i += 1) cells.push('<rect x="' + (x + 12 + i*cellW).toFixed(1) + '" y="' + (y + 12).toFixed(1) + '" width="' + (cellW - 8).toFixed(1) + '" height="' + (d - 24).toFixed(1) + '" rx="12" fill="#f7fbef" stroke="#243323" stroke-width="3"/>');
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated top view CAD model"><rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + d.toFixed(1) + '" rx="18" fill="#ddf79b" stroke="#243323" stroke-width="4"/><g>' + cells.join('') + '</g><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + spec.width + ' × ' + spec.depth + ' mm</text></svg>';
+    }
+    function renderFront(spec) {
+      const w = clamp(spec.width / 120, .7, 1.6) * 300;
+      const h = clamp(spec.height / 42, .65, 1.8) * 180;
+      const x = (520 - w) / 2;
+      const y = (350 - h) / 2;
+      const lines = [];
+      for (let i = 1; i < spec.compartments; i += 1) lines.push('<line x1="' + (x + i*w/spec.compartments).toFixed(1) + '" y1="' + (y + 16).toFixed(1) + '" x2="' + (x + i*w/spec.compartments).toFixed(1) + '" y2="' + (y + h - 16).toFixed(1) + '" stroke="#243323" stroke-width="3"/>');
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated front view CAD model"><rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(18, spec.chamfer * 2) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><rect x="' + (x+14).toFixed(1) + '" y="' + (y+14).toFixed(1) + '" width="' + (w-28).toFixed(1) + '" height="' + (h-28).toFixed(1) + '" rx="10" fill="#b8d99a" opacity=".65"/>' + lines.join('') + '<text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
+    function renderModel(spec, view) {
+      if (!spec) return;
+      modelWrap.className = 'model-wrap ' + view + '-view';
+      modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
+    }
     function generateModel() {
       const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
-      const dimensions = dimensionsFor(value);
+      const nextSpec = parseModel(value);
       generate.classList.add('loading');
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
       modelState.textContent = copy[currentLang].solving;
       solved.textContent = copy[currentLang].parsing;
       setTimeout(() => {
-        const title = titleFor(value);
-        bodyValue.textContent = displayTitle(title);
-        sizeValue.textContent = dimensions.width + ' × ' + dimensions.depth + ' × ' + dimensions.height + ' mm';
-        modelMeta.textContent = (title === 'Cable clip' ? copy[currentLang].cableMeta : copy[currentLang].defaultMeta);
+        modelSpec = nextSpec;
+        renderModel(modelSpec, currentView);
+        bodyValue.textContent = displayTitle(nextSpec.title);
+        sizeValue.textContent = nextSpec.width + ' × ' + nextSpec.depth + ' × ' + nextSpec.height + ' mm';
+        bodyMeta.textContent = currentLang === 'zh' ? nextSpec.compartments + ' 个隔间 · 可制造实体' : nextSpec.compartments + ' compartments · closed volume';
+        modelMeta.textContent = currentLang === 'zh' ? nextSpec.compartments + ' 个隔间 · 壁厚 12 毫米 · 倒角 ' + nextSpec.chamfer + ' 毫米' : nextSpec.compartments + ' compartments · 12 mm wall · chamfer ' + nextSpec.chamfer + ' mm';
         modelState.textContent = copy[currentLang].state;
         solved.textContent = copy[currentLang].solved;
         generate.classList.remove('loading');
@@ -363,17 +419,21 @@
       button.addEventListener('click', () => {
         document.querySelectorAll('[data-view]').forEach((item) => item.classList.remove('active'));
         button.classList.add('active');
-        modelWrap.className = 'model-wrap ' + (button.dataset.view === 'iso' ? '' : button.dataset.view + '-view');
+        currentView = button.dataset.view;
+        renderModel(modelSpec || parseModel(prompt.value), currentView);
       });
     });
+    function objFor(spec) {
+      const w = spec.width, d = spec.depth, h = spec.height;
+      const rows = ['# FORM AI CAD export', '# Parametric ' + spec.title, '# compartments=' + spec.compartments + ' chamfer=' + spec.chamfer, 'o ' + spec.title.replace(/\\s+/g, '_')];
+      rows.push('v 0 0 0','v ' + w + ' 0 0','v ' + w + ' ' + d + ' 0','v 0 ' + d + ' 0','v 0 0 ' + h,'v ' + w + ' 0 ' + h,'v ' + w + ' ' + d + ' ' + h,'v 0 ' + d + ' ' + h);
+      rows.push('f 1 2 3 4','f 5 8 7 6','f 1 5 6 2','f 2 6 7 3','f 3 7 8 4','f 5 1 4 8');
+      for (let i = 1; i < spec.compartments; i += 1) { const x = (w * i / spec.compartments).toFixed(2); rows.push('v ' + x + ' 0 ' + h, 'v ' + x + ' ' + d + ' ' + h); }
+      return rows.join('\\n') + '\\n';
+    }
     document.getElementById('exportObj').addEventListener('click', () => {
-      const { width, depth, height } = dimensionsFor(prompt.value);
-      const obj = '# FORM AI CAD export\n# Parametric block\n' +
-        'o ' + titleFor(prompt.value).replace(/\s+/g, '_') + '\n' +
-        'v 0 0 0\nv ' + width + ' 0 0\nv ' + width + ' ' + depth + ' 0\nv 0 ' + depth + ' 0\n' +
-        'v 0 0 ' + height + '\nv ' + width + ' 0 ' + height + '\nv ' + width + ' ' + depth + ' ' + height + '\nv 0 ' + depth + ' ' + height + '\n' +
-        'f 1 2 3 4\nf 5 8 7 6\nf 1 5 6 2\nf 2 6 7 3\nf 3 7 8 4\nf 5 1 4 8\n';
-      const blob = new Blob([obj], { type: 'text/plain' });
+      const spec = modelSpec || parseModel(prompt.value);
+      const blob = new Blob([objFor(spec)], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url; link.download = 'form-cad-model.obj'; link.click();
