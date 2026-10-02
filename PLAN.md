@@ -24,7 +24,15 @@ Acceptance criteria:
 
 ## Phase 2 — Conversational parametric editing
 
-Turn follow-up instructions into revisions: change a dimension, add or remove features, lock a parameter, and undo/redo changes. Add a structured feature tree and a revision diff.
+Status: completed in this release.
+
+Delivered:
+
+- Follow-up instructions for relative and absolute width, depth, height, wall, chamfer, and compartment edits.
+- Canonical prompt generation so edited browser specs can be sent to the geometry backend.
+- A feature tree showing the base solid, shell, compartments, and edge treatment.
+- Revision diffs showing changed parameters and one-click restoration of an exact canonical revision.
+- Three consecutive edits can be made without rewriting the original design prompt.
 
 Acceptance target: a user can make three consecutive edits without rewriting the original prompt.
 
