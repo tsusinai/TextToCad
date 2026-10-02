@@ -345,12 +345,15 @@ def _rounded_edges(workplane: Any, radius: float) -> Any:
     if radius <= 0:
         return workplane
     try:
-        return workplane.edges("|Z").fillet(radius)
+        # The UI value is a chamfer; use the matching B-Rep operation first.
+        return workplane.edges("|Z").chamfer(radius)
     except Exception:
-        # A valid sharp solid is preferable to failing the whole request when
-        # a user asks for a radius that is too large for a local edge.
-        return workplane
-
+        try:
+            # Keep a fillet fallback for CadQuery versions or edge selections
+            # where chamfer is unavailable, while preserving a valid solid.
+            return workplane.edges("|Z").fillet(radius)
+        except Exception:
+            return workplane
 
 def build_geometry(params: ModelParameters) -> Any:
     if cq is None:
