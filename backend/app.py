@@ -365,9 +365,18 @@ def parse_prompt_detailed(
         "bottom": bottom_found,
     }
     if not explicit_units and unit_factor != 1.0:
-        for field in ("width", "depth", "height", "chamfer", "wall", "bottom"):
-            if field_found[field]:
-                locals()[field] *= unit_factor
+        if field_found["width"]:
+            width *= unit_factor
+        if field_found["depth"]:
+            depth *= unit_factor
+        if field_found["height"]:
+            height *= unit_factor
+        if field_found["chamfer"]:
+            chamfer *= unit_factor
+        if field_found["wall"]:
+            wall *= unit_factor
+        if field_found["bottom"]:
+            bottom *= unit_factor
 
     width = _bounded(width, 10.0, 1000.0)
     depth = _bounded(depth, 10.0, 1000.0)
