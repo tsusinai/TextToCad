@@ -27,7 +27,7 @@ The response contains validated STEP and STL download URLs plus optional 3MF and
 - `GET /health` reports CadQuery/OCCT, preview, LLM, authentication, and queue status. It does not require the API key.
 - `GET /v1/process-profiles` returns FDM, SLA, CNC, and injection molding constraints.
 - `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`.
-- `POST /v1/jobs` creates a bounded asynchronous job; `GET /v1/jobs/{job_id}` polls it and `DELETE /v1/jobs/{job_id}` cancels it. A full queue returns HTTP 429.
+- `POST /v1/jobs` creates a bounded asynchronous job; `GET /v1/jobs/{job_id}` polls it and `DELETE /v1/jobs/{job_id}` cancels it. A full queue returns HTTP 429. Generation mutations also use a bounded per-client rate limit (configurable with `RATE_LIMIT_WINDOW_SECONDS` and `MAX_MUTATIONS_PER_WINDOW`).
 - `GET /v1/models/{model_id}/manifest` returns parameters, checks, process metadata, exports, and the reproducible manifest.
 - `GET /v1/models/{model_id}/ir` returns Semantic CAD IR v0.1.
 - `GET /v1/models/{model_id}/analysis` returns nominal wall-map samples, issues, and review status.
