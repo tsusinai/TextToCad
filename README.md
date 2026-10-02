@@ -56,8 +56,8 @@ The default **Standard** mode uses the deterministic parser and does not require
 Configure the provider only on the backend:
 
     LLM_API_KEY=...
-    LLM_API_URL=https://api.openai.com/v1/chat/completions
-    LLM_MODEL=gpt-4o-mini
+    LLM_API_URL=https://api.deepseek.com/chat/completions
+    LLM_MODEL=deepseek-chat
     LLM_TIMEOUT_SECONDS=20
     LLM_MAX_RESPONSE_BYTES=65536
 
