@@ -1,0 +1,19 @@
+services:
+  texttocad-backend:
+    build:
+      context: ./backend
+    image: texttocad-backend:local
+    env_file:
+      - ./backend/.env
+    environment:
+      ARTIFACT_ROOT: /data/artifacts
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://tsusinai.github.io
+      MAX_CONCURRENT_JOBS: 2
+    ports:
+      - "8787:8787"
+    volumes:
+      - texttocad-artifacts:/data
+    restart: unless-stopped
+
+volumes:
+  texttocad-artifacts:
