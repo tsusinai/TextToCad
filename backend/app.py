@@ -27,10 +27,50 @@ ARTIFACT_ROOT = Path(os.getenv("ARTIFACT_ROOT", APP_DIR / "artifacts"))
 ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 MAX_PROMPT_LENGTH = 4000
 
+PROCESS_PROFILES: dict[str, dict[str, Any]] = {
+    "fdm": {
+        "label": "FDM / FFF",
+        "min_wall": 1.2,
+        "min_radius": 0.8,
+        "max_overhang": 45.0,
+        "draft_angle": 0.0,
+        "tolerance": 0.2,
+        "clearance": 0.3,
+    },
+    "sla": {
+        "label": "SLA / Resin",
+        "min_wall": 0.8,
+        "min_radius": 0.4,
+        "max_overhang": 60.0,
+        "draft_angle": 0.0,
+        "tolerance": 0.1,
+        "clearance": 0.2,
+    },
+    "cnc": {
+        "label": "CNC Milling",
+        "min_wall": 2.0,
+        "min_radius": 1.0,
+        "max_overhang": 90.0,
+        "draft_angle": 0.0,
+        "tolerance": 0.1,
+        "clearance": 0.1,
+    },
+    "injection": {
+        "label": "Injection Molding",
+        "min_wall": 1.5,
+        "min_radius": 0.8,
+        "max_overhang": 90.0,
+        "draft_angle": 1.0,
+        "tolerance": 0.05,
+        "clearance": 0.2,
+    },
+}
+
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=MAX_PROMPT_LENGTH)
     units: Literal["mm"] = "mm"
+    process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
 
 
 class ModelParameters(BaseModel):
@@ -42,6 +82,9 @@ class ModelParameters(BaseModel):
     chamfer: float
     wall: float
     bottom: float
+    process: str = "fdm"
+    tolerance: float = 0.2
+    clearance: float = 0.3
 
 
 class GenerateResponse(BaseModel):
@@ -50,6 +93,8 @@ class GenerateResponse(BaseModel):
     parameters: ModelParameters
     checks: dict[str, bool]
     artifacts: dict[str, str]
+    process: str
+    profile: dict[str, Any]
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -77,7 +122,7 @@ def _bounded(value: float, minimum: float, maximum: float) -> float:
     return round(max(minimum, min(maximum, value)), 2)
 
 
-def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
+def parse_prompt(prompt: str, process: str = "fdm") -> tuple[str, ModelParameters]:
     text = " ".join(prompt.strip().lower().split())
     if not text:
         raise ValueError("prompt must contain a shape description")
@@ -182,6 +227,9 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
         chamfer=chamfer,
         wall=wall,
         bottom=bottom,
+        process=process,
+        tolerance=float(PROCESS_PROFILES[process]["tolerance"]),
+        clearance=float(PROCESS_PROFILES[process]["clearance"]),
     )
     return title, params
 
@@ -252,8 +300,11 @@ def _validate_shape(shape: Any, params: ModelParameters) -> dict[str, bool]:
             dimension > 0
             for dimension in (bbox.xlen, bbox.ylen, bbox.zlen)
         ),
-        "wall_thickness": params.wall >= 1.2 and params.wall < min(params.width, params.depth) / 3,
-        "edge_treatment": params.chamfer <= min(params.width, params.depth, params.height) / 4,
+        "wall_thickness": params.wall >= PROCESS_PROFILES[params.process]["min_wall"] and params.wall < min(params.width, params.depth) / 3,
+        "edge_treatment": (params.chamfer == 0 or params.chamfer >= PROCESS_PROFILES[params.process]["min_radius"]) and params.chamfer <= min(params.width, params.depth, params.height) / 4,
+        "overhang": PROCESS_PROFILES[params.process]["max_overhang"] >= 45.0,
+        "draft_angle": PROCESS_PROFILES[params.process]["draft_angle"] == 0.0,
+        "clearance": params.wall >= PROCESS_PROFILES[params.process]["clearance"],
         "export_ready": True,
     }
 
@@ -272,6 +323,10 @@ def _write_artifacts(model_id: str, shape: Any, title: str, params: ModelParamet
         "title": title,
         "parameters": params.model_dump(),
         "checks": checks,
+        "process": params.process,
+        "process_profile": PROCESS_PROFILES[params.process],
+        "units": "mm",
+        "generator": "TextToCad geometry backend 0.2.0",
         "formats": ["step", "stl"],
     }
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -311,16 +366,23 @@ def health() -> dict[str, Any]:
         "engine": "CadQuery/OCCT",
         "cadquery_available": cq is not None,
         "cadquery_error": CADQUERY_ERROR or None,
+        "process_profiles": list(PROCESS_PROFILES),
     }
+
+
+@app.get("/v1/process-profiles")
+def get_process_profiles() -> dict[str, dict[str, Any]]:
+    return PROCESS_PROFILES
 
 
 @app.post("/v1/models", response_model=GenerateResponse)
 def generate_model(request: GenerateRequest) -> GenerateResponse:
     try:
-        title, params = parse_prompt(request.prompt)
+        title, params = parse_prompt(request.prompt, request.process)
         shape = build_geometry(params)
         checks = _validate_shape(shape, params)
-        if not all(checks.values()):
+        hard_checks = {key: checks[key] for key in ("valid_brep", "single_solid", "positive_volume", "bounded")}
+        if not all(hard_checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
         model_id = uuid.uuid4().hex
         artifacts = _write_artifacts(model_id, shape, title, params, checks)
@@ -330,6 +392,8 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             parameters=params,
             checks=checks,
             artifacts=artifacts,
+            process=params.process,
+            profile=PROCESS_PROFILES[params.process],
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
