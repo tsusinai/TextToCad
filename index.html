@@ -124,6 +124,10 @@
       .param-grid { grid-template-columns: 1fr; }
       .plan-grid { grid-template-columns: repeat(2, 1fr); }
     }
+    @media (max-width: 420px) {
+      .plan-grid { grid-template-columns: 1fr; }
+      .plan-head { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
@@ -235,11 +239,11 @@
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
     const langToggle = document.getElementById('langToggle');
-    let currentLang = 'en';
+    let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '92% READY', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '准备度 92%', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -260,6 +264,14 @@
       document.getElementById('exportObj').textContent = t.export;
       document.querySelector('.params-head .section-label').textContent = t.params;
       solved.textContent = t.solved;
+      modelState.textContent = t.state;
+      modelMeta.textContent = titleFor(prompt.value) === 'Cable clip' ? t.cableMeta : t.defaultMeta;
+      document.querySelector('.chip').textContent = t.rounded;
+      document.querySelector('.chip.neutral').textContent = t.dimension;
+      document.getElementById('bodyMeta').textContent = t.bodyMeta;
+      document.querySelector('.param-card:nth-child(2) small').textContent = t.bounding;
+      prompt.setAttribute('aria-label', t.promptLabel);
+      document.querySelector('.viewport').setAttribute('aria-label', t.viewportAria);
       document.querySelector('.param-card:nth-child(1) .label').textContent = t.body;
       document.querySelector('.param-card:nth-child(2) .label').textContent = t.size;
       document.querySelector('.param-card:nth-child(3) .label').textContent = t.material;
@@ -278,18 +290,19 @@
       document.getElementById('planExport').textContent = t.exportTarget;
       document.getElementById('planExportMeta').textContent = t.exportMeta;
       langToggle.textContent = t.toggle;
+      langToggle.setAttribute('aria-pressed', String(currentLang === 'zh'));
       if (prompt.value === defaultPrompt || prompt.value === '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。') prompt.value = currentLang === 'zh' ? '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。' : defaultPrompt;
     }
-    langToggle.addEventListener('click', () => { currentLang = currentLang === 'en' ? 'zh' : 'en'; translate(); });
+    langToggle.addEventListener('click', () => { currentLang = currentLang === 'en' ? 'zh' : 'en'; try { localStorage.setItem('formCadLang', currentLang); } catch (error) {} translate(); });
     translate();
 
     function titleFor(text) {
       const value = text.toLowerCase();
-      if (value.includes('cable') || value.includes('clip')) return 'Cable clip';
-      if (value.includes('plant') || value.includes('pot')) return 'Plant pot';
-      if (value.includes('lamp')) return 'Lamp base';
-      if (value.includes('pen')) return 'Pen cup';
-      if (value.includes('tray')) return 'Storage tray';
+      if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
+      if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'Plant pot';
+      if (value.includes('lamp') || value.includes('灯')) return 'Lamp base';
+      if (value.includes('pen') || value.includes('笔')) return 'Pen cup';
+      if (value.includes('tray') || value.includes('托盘') || value.includes('收纳')) return 'Storage tray';
       return 'Desk organizer';
     }
     function dimensionsFor(text) {
@@ -304,15 +317,15 @@
       const dimensions = dimensionsFor(value);
       generate.classList.add('loading');
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
-      modelState.textContent = 'SOLVING CONSTRAINTS';
-      solved.textContent = 'Parsing natural language';
+      modelState.textContent = copy[currentLang].solving;
+      solved.textContent = copy[currentLang].parsing;
       setTimeout(() => {
         const title = titleFor(value);
         bodyValue.textContent = title;
         sizeValue.textContent = dimensions.width + ' × ' + dimensions.depth + ' × ' + dimensions.height + ' mm';
-        modelMeta.textContent = (title === 'Cable clip' ? '1 solid · 6 mm cable · snap fit' : '3 solids · 12 mm wall · chamfer 4 mm');
-        modelState.textContent = 'PARAMETRIC BODY';
-        solved.textContent = 'All constraints solved';
+        modelMeta.textContent = (title === 'Cable clip' ? copy[currentLang].cableMeta : copy[currentLang].defaultMeta);
+        modelState.textContent = copy[currentLang].state;
+        solved.textContent = copy[currentLang].solved;
         generate.classList.remove('loading');
         generateLabel.textContent = copy[currentLang].regenerate;
       }, 720);
