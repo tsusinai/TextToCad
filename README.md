@@ -35,7 +35,7 @@ A deployed frontend can instead define window.FORM_CAD_BACKEND_URL before the in
 
 ## Local preview
 
-Open index.html directly or serve the repository with any static server. Without a backend URL, the browser keeps a deterministic preview and OBJ export so the interface remains usable.
+Open index.html directly or serve the repository with any static server. Without a backend URL, the browser keeps a deterministic SVG concept preview and OBJ export so the interface remains usable; the page labels this as a concept preview because a true GLB/OCCT solid requires the backend.
 
 ## Live version
 
