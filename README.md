@@ -136,7 +136,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 
 本地 Docker 默认不要求 API key，便于快速试用。公网部署请在 `backend/.env` 设置 `BACKEND_API_KEY`；之后所有 `/v1/*` 请求都必须携带 `X-API-Key`，前端可在加载页面前注入 `window.FORM_CAD_BACKEND_API_KEY`。不要把密钥写进 GitHub Pages 仓库，生产环境应使用 HTTPS、反向代理鉴权、严格 CORS、持久化 `ARTIFACT_ROOT` 和监控。
 
-异步生成队列有进程内上限，满载时返回 HTTP 429。当前缓存和任务状态也是进程内的，Docker 使用单 worker；多副本部署需要外部队列和共享存储。GitHub Pages 连接远程后端时只能使用 HTTPS，`http://localhost` 仅用于同一台机器上的本机调试。
+异步生成队列有进程内上限，满载时返回 HTTP 429；生成接口还按客户端地址限制单位时间内的创建次数。当前缓存和任务状态也是进程内的，Docker 使用单 worker；多副本部署需要外部队列和共享存储。GitHub Pages 连接远程后端时只能使用 HTTPS，`http://localhost` 仅用于同一台机器上的本机调试。
 
 
 ## 文档
