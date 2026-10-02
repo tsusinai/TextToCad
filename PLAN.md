@@ -38,21 +38,23 @@ Acceptance target: a user can make three consecutive edits without rewriting the
 
 ## Phase 3 — Manufacturing-grade CAD
 
-Status: in progress in this release.
+Status: completed in this release.
 
 Delivered:
 
 - FDM, SLA, CNC, and injection molding process profiles in the frontend and backend.
 - Process-aware wall thickness, edge treatment, overhang, draft, clearance, and export checks.
-- Process selector in the workspace with tolerance and minimum wall guidance.
-- Reproducible STEP/STL manifests containing units, process profile, parameters, checks, and generator version.
-- Backend endpoint for retrieving the available process profiles.
+- Wall-map samples and localized issue markers in the manufacturing panel.
+- Reproducible STEP/STL manifests containing units, process profile, parameters, checks, analysis, and generator version.
+- AP242 STEP export attempt with an explicit fallback schema recorded in the manifest.
+- Optional 3MF and GLB preview artifacts with download endpoints.
+- Backend endpoint for retrieving process profiles and per-model analysis.
 
-Next:
+Follow-up work for the next CAD kernel iteration:
 
-- Add wall-thickness maps and localized issue markers in the viewport.
-- Add STEP AP242 metadata and 3MF/GLB preview artifacts.
-- Add process-specific geometry such as true draft angles, machining access, and support-aware orientation.
+- Replace parametric wall samples with face-level thickness maps.
+- Add true draft angles, machining access, support-aware orientation, and process-specific feature generation.
+- Expand AP242 product metadata and preview materials.
 
 Acceptance target: every exported model includes units, parameters, checks, and a reproducible generation manifest.
 
