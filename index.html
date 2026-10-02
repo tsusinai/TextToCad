@@ -49,6 +49,25 @@
     .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
     .chip { padding: 7px 11px; border-radius: 999px; border: 0; background: var(--soft-lime); color: #59714a; font-size: 12px; font-weight: 700; }
     .chip.neutral { background: #ecece7; color: #70736b; }
+    .interpretation { margin-top: 14px; padding: 14px; border: 1px solid #d9dad2; border-radius: 14px; background: #f8f9f4; }
+    .interpretation-head, .revision-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .interpretation-status { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+    .interpretation-summary { display: block; margin-top: 8px; font-size: 14px; }
+    .interpretation-details { display: block; margin-top: 6px; color: #7a7c74; font-size: 11px; line-height: 1.4; }
+    .revision-head { margin-top: 20px; }
+    .revision-clear { border: 0; background: transparent; color: #7a7c74; font-size: 11px; padding: 3px 0; }
+    .revision-clear:hover { color: var(--ink); }
+    .revision-list { display: grid; gap: 8px; margin-top: 10px; }
+    .revision-item { border: 1px solid #e0e2d9; background: #fbfbf8; border-radius: 10px; padding: 9px 10px; text-align: left; }
+    .revision-item:hover { border-color: #99ad86; background: var(--soft-lime); }
+    .revision-item strong, .revision-item span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .revision-item strong { font-size: 11px; }
+    .revision-item span, .revision-empty { margin-top: 4px; color: #8a8c84; font-size: 10px; }
+    .revision-empty { line-height: 1.4; }
+    .check.warn { background: #fff0c2; color: #856b2c; }
+    .check.fail { background: #ffd9d1; color: #9a4434; }
+    .plan-item.warn { background: #fffaf0; }
+    .plan-item.fail { background: #fff2ef; }
     .generate { width: 100%; height: 52px; margin-top: 24px; border: 0; border-radius: 14px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; font-size: 14px; font-weight: 700; transition: transform .2s ease, background .2s ease; }
     .generate:hover { transform: translateY(-2px); background: #30332c; }
     .generate.loading { background: #506847; }
@@ -148,6 +167,11 @@
           <textarea id="prompt" aria-label="Describe your part">A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.</textarea>
           <div class="chip-row"><span class="chip">rounded edges</span><span class="chip neutral">120 × 80 mm</span></div>
         </div>
+        <div class="interpretation" id="interpretation" aria-live="polite">
+          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">INTERPRETED SPEC</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
+          <strong class="interpretation-summary" id="interpretationSummary">Desk organizer · 120 × 80 × 42 mm</strong>
+          <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · defaults will be shown here</small>
+        </div>
         <button class="generate" id="generate" type="button"><span id="generateLabel">Generate model</span><span class="shortcut">⌘ ↵</span></button>
         <div class="starter">
           <div class="section-label">OR TRY A STARTER</div>
@@ -165,6 +189,8 @@
             <button class="recent-item" type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening."><strong>Cable management clip</strong><span>1 body · edited yesterday</span></button>
             <button class="recent-item" type="button" data-prompt="A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall."><strong>Minimal pen cup</strong><span>2 bodies · edited Sep 28</span></button>
           </div>
+          <div class="revision-head"><span class="section-label" id="revisionLabel">LOCAL REVISIONS</span><button class="revision-clear" id="clearRevisions" type="button">Clear</button></div>
+          <div class="revision-list" id="revisionList"></div>
         </div>
       </aside>
       <div class="content">
@@ -216,10 +242,10 @@
               <span class="readiness" id="readiness">92% READY</span>
             </div>
             <div class="plan-grid">
-              <div class="plan-item"><span class="check">✓</span><div><strong id="planWall">Wall thickness</strong><small id="planWallMeta">≥ 2.4 mm · passes</small></div></div>
-              <div class="plan-item"><span class="check">✓</span><div><strong id="planRadius">Edge treatment</strong><small id="planRadiusMeta">4 mm chamfer · stable</small></div></div>
-              <div class="plan-item"><span class="check">✓</span><div><strong id="planDraft">Print orientation</strong><small id="planDraftMeta">Low support volume</small></div></div>
-              <div class="plan-item"><span class="check">✓</span><div><strong id="planExport">Export target</strong><small id="planExportMeta">STEP · IGES · GLB</small></div></div>
+              <div class="plan-item"><span class="check" id="checkWall">✓</span><div><strong id="planWall">Wall thickness</strong><small id="planWallMeta">≥ 2.4 mm · passes</small></div></div>
+              <div class="plan-item"><span class="check" id="checkRadius">✓</span><div><strong id="planRadius">Edge treatment</strong><small id="planRadiusMeta">4 mm chamfer · stable</small></div></div>
+              <div class="plan-item"><span class="check" id="checkDraft">✓</span><div><strong id="planDraft">Print orientation</strong><small id="planDraftMeta">Low support volume</small></div></div>
+              <div class="plan-item"><span class="check" id="checkExport">✓</span><div><strong id="planExport">Export target</strong><small id="planExportMeta">STEP · IGES · GLB</small></div></div>
             </div>
           </div>
         </section>
@@ -237,6 +263,21 @@
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
     const exportStep = document.getElementById('exportStep');
+    const interpretationLabel = document.getElementById('interpretationLabel');
+    const interpretationStatus = document.getElementById('interpretationStatus');
+    const interpretationSummary = document.getElementById('interpretationSummary');
+    const interpretationDetails = document.getElementById('interpretationDetails');
+    const revisionLabel = document.getElementById('revisionLabel');
+    const revisionList = document.getElementById('revisionList');
+    const clearRevisions = document.getElementById('clearRevisions');
+    const checkEls = {
+      wall: document.getElementById('checkWall'),
+      radius: document.getElementById('checkRadius'),
+      draft: document.getElementById('checkDraft'),
+      export: document.getElementById('checkExport')
+    };
+    const revisionStorageKey = 'formCadRevisions';
+    let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const backendUrl = (window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '').replace(/\/+$/, '');
     let backendArtifact = null;
     let currentView = 'iso';
@@ -245,8 +286,8 @@
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '4 项检查', state: '参数化实体', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -274,6 +315,9 @@
       document.querySelector('[data-view="front"]').textContent = t.front;
       document.getElementById('exportObj').textContent = t.export;
       if (exportStep) exportStep.textContent = t.exportStep;
+      interpretationLabel.textContent = t.interpretation;
+      revisionLabel.textContent = t.revision;
+      clearRevisions.textContent = t.clear;
       document.querySelector('.params-head .section-label').textContent = t.params;
       solved.textContent = t.solved;
       modelState.textContent = t.state;
@@ -305,6 +349,9 @@
       langToggle.textContent = t.toggle;
       langToggle.setAttribute('aria-pressed', String(currentLang === 'zh'));
       if (prompt.value === defaultPrompt || prompt.value === '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。') prompt.value = currentLang === 'zh' ? '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。' : defaultPrompt;
+      if (typeof updateInterpretation === 'function') updateInterpretation(modelSpec || parseModel(prompt.value), backendArtifact ? 'backend' : 'draft');
+      if (typeof updateChecks === 'function') updateChecks(modelSpec || parseModel(prompt.value), backendArtifact && backendArtifact.checks);
+      if (typeof renderRevisions === 'function') renderRevisions();
     }
     langToggle.addEventListener('click', () => { currentLang = currentLang === 'en' ? 'zh' : 'en'; try { localStorage.setItem('formCadLang', currentLang); } catch (error) {} translate(); });
     translate();
@@ -335,7 +382,8 @@
       const footprint = valueFor('footprint|占地');
 
       const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
-      const genericNumbers = unitNumbers.filter((value) => !treatmentValues.includes(value));
+      const leadingTreatmentValues = Array.from(normalized.matchAll(/(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)[^\d]{0,8}(\d+(?:\.\d+)?)\s*(?:mm|毫米)?/gi)).map((match) => Number(match[1]));
+      const genericNumbers = unitNumbers.filter((value) => !treatmentValues.concat(leadingTreatmentValues).includes(value));
       const width = valueFor('wide|width|宽') || diameter || footprint || genericNumbers[0] || 120;
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
       const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (genericNumbers[1] || width || 80));
@@ -352,7 +400,9 @@
       const chamferMatch = normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const chamfer = chamferMatch ? Number(chamferMatch[1]) : 4;
       const dimensions = dimensionsFor(text);
-      return { title: titleFor(text), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer };
+      const wallMatch = normalized.match(/(?:wall|壁厚)[^\d]{0,8}(\d+(?:\.\d+)?)/) || normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚)/);
+      const wall = wallMatch ? Number(wallMatch[1]) : 3;
+      return { title: titleFor(text), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
     function renderIso(spec) {
@@ -397,6 +447,93 @@
       modelWrap.className = 'model-wrap ' + view + '-view';
       modelWrap.innerHTML = view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec));
     }
+    function assumptionList(text) {
+      const normalized = text.toLowerCase();
+      const assumptions = [];
+      if (!/(wide|width|宽|diameter|直径)/i.test(normalized)) assumptions.push(currentLang === 'zh' ? '宽度默认' : 'width default');
+      if (!/(deep|depth|length|长|深|footprint|占地|见方)/i.test(normalized)) assumptions.push(currentLang === 'zh' ? '深度默认' : 'depth default');
+      if (!/(height|tall|高)/i.test(normalized)) assumptions.push(currentLang === 'zh' ? '高度默认' : 'height default');
+      if (!/(chamfer|radius|倒角|圆角|圆弧|半径)/i.test(normalized)) assumptions.push(currentLang === 'zh' ? '倒角默认' : 'edge default');
+      return assumptions;
+    }
+    function updateInterpretation(spec, source) {
+      if (!spec) return;
+      const t = copy[currentLang];
+      const assumptions = assumptionList(prompt.value);
+      const separator = currentLang === 'zh' ? '、' : ', ';
+      interpretationSummary.textContent = displayTitle(spec.title) + ' · ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm';
+      interpretationDetails.textContent = spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments') + ' · ' + (currentLang === 'zh' ? '倒角 ' : 'chamfer ') + spec.chamfer + ' mm' + (assumptions.length ? ' · ' + t.assumptions + ': ' + assumptions.join(separator) : '');
+      interpretationStatus.textContent = source === 'backend' ? 'OCCT B-Rep' : (source === 'draft' ? t.interpretationReady : (currentLang === 'zh' ? '本地预览' : 'LOCAL PREVIEW'));
+      document.querySelector('.chip.neutral').textContent = spec.width + ' × ' + spec.depth + ' mm';
+    }
+    function setCheckState(element, state) {
+      if (!element) return;
+      element.classList.remove('warn', 'fail');
+      element.textContent = state === true ? '✓' : (state === 'warn' ? '!' : '×');
+      if (state === 'warn') element.classList.add('warn');
+      if (state === false) element.classList.add('fail');
+    }
+    function updateChecks(spec, remoteChecks) {
+      if (!spec) return;
+      const checks = remoteChecks ? {
+        wall: remoteChecks.wall_thickness,
+        radius: remoteChecks.edge_treatment,
+        draft: remoteChecks.positive_volume && remoteChecks.bounded,
+        export: remoteChecks.export_ready
+      } : {
+        wall: spec.width >= 20 && spec.depth >= 20 && (spec.wall || 3) >= 1.2,
+        radius: spec.chamfer <= Math.min(spec.width, spec.depth, spec.height) / 4,
+        draft: spec.compartments >= 1 && spec.compartments <= 6 && spec.height > 0,
+        export: true
+      };
+      const values = Object.values(checks);
+      const passed = values.filter((value) => value === true).length;
+      Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : 'warn'));
+      document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项检查' : 'checks');
+      solved.textContent = passed === 4 ? (currentLang === 'zh' ? '全部检查通过' : 'All checks passed') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
+      document.getElementById('planWallMeta').textContent = checks.wall ? (currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes') : (currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
+      document.getElementById('planRadiusMeta').textContent = checks.radius ? (currentLang === 'zh' ? '边缘处理稳定' : 'edge treatment stable') : (currentLang === 'zh' ? '倒角半径需要复核' : 'review edge radius');
+      document.getElementById('planDraftMeta').textContent = checks.draft ? (currentLang === 'zh' ? '实体体积有效' : 'positive volume') : (currentLang === 'zh' ? '实体体积异常' : 'invalid volume');
+      document.getElementById('planExportMeta').textContent = checks.export ? (remoteChecks ? 'STEP · STL · ready' : 'OBJ preview · backend offline') : (currentLang === 'zh' ? '导出未就绪' : 'export not ready');
+      Object.entries(checkEls).forEach(([key, element]) => {
+        const item = element && element.parentElement && element.parentElement.parentElement;
+        if (item) { item.classList.remove('warn', 'fail'); if (checks[key] !== true) item.classList.add('warn'); }
+      });
+    }
+    function persistRevisions() {
+      try { localStorage.setItem(revisionStorageKey, JSON.stringify(revisions)); } catch (error) {}
+    }
+    function renderRevisions() {
+      revisionList.innerHTML = '';
+      if (!revisions.length) {
+        const empty = document.createElement('div');
+        empty.className = 'revision-empty';
+        empty.textContent = copy[currentLang].emptyRevision;
+        revisionList.appendChild(empty);
+        return;
+      }
+      revisions.slice(0, 6).forEach((entry) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'revision-item';
+        const title = document.createElement('strong');
+        title.textContent = displayTitle(entry.spec && entry.spec.title ? entry.spec.title : titleFor(entry.prompt));
+        const meta = document.createElement('span');
+        const time = new Date(entry.createdAt).toLocaleString(currentLang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        meta.textContent = (entry.source === 'backend' ? copy[currentLang].revisionBackend : copy[currentLang].revisionLocal) + ' · ' + time;
+        button.appendChild(title);
+        button.appendChild(meta);
+        button.addEventListener('click', () => { prompt.value = entry.prompt; updateInterpretation(entry.spec, entry.source === 'backend' ? 'backend' : 'draft'); generateModel(); });
+        revisionList.appendChild(button);
+      });
+    }
+    function saveRevision(value, spec, source) {
+      const entry = { id: Date.now(), prompt: value, spec, source, createdAt: new Date().toISOString() };
+      revisions = [entry].concat(revisions.filter((item) => item.prompt !== value)).slice(0, 6);
+      persistRevisions();
+      renderRevisions();
+    }
+    clearRevisions.addEventListener('click', () => { revisions = []; persistRevisions(); renderRevisions(); });
     async function requestBackend(value) {
       if (!backendUrl) return null;
       const response = await fetch(backendUrl + '/v1/models', {
@@ -408,12 +545,14 @@
       return response.json();
     }
     async function generateModel() {
+      if (generate.classList.contains('loading')) return;
       const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
       const nextSpec = parseModel(value);
       generate.classList.add('loading');
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
       modelState.textContent = copy[currentLang].solving;
       solved.textContent = copy[currentLang].parsing;
+      updateInterpretation(nextSpec, 'draft');
       let remote = null;
       try {
         remote = await requestBackend(value);
@@ -428,25 +567,33 @@
         depth: remoteParams.depth || nextSpec.depth,
         height: remoteParams.height || nextSpec.height,
         compartments: remoteParams.compartments || nextSpec.compartments,
-        chamfer: remoteParams.chamfer || nextSpec.chamfer
+        chamfer: remoteParams.chamfer || nextSpec.chamfer,
+        wall: remoteParams.wall || nextSpec.wall,
+        bottom: remoteParams.bottom || nextSpec.bottom
       } : nextSpec;
-      backendArtifact = remote && remote.artifacts ? remote.artifacts : null;
+      backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks }) : null;
       renderModel(modelSpec, currentView);
       bodyValue.textContent = displayTitle(modelSpec.title);
       sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
       bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
-      modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 12 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · 12 mm wall · chamfer ' + modelSpec.chamfer + ' mm';
+      modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
       modelState.textContent = remote ? (currentLang === 'zh' ? 'OCCT B-Rep 实体' : 'OCCT B-REP SOLID') : copy[currentLang].state;
-      solved.textContent = remote ? (currentLang === 'zh' ? 'B-Rep 检查通过' : 'B-Rep checks passed') : copy[currentLang].solved;
+      updateInterpretation(modelSpec, remote ? 'backend' : 'local');
+      updateChecks(modelSpec, remote && remote.checks);
+      saveRevision(value, modelSpec, remote ? 'backend' : 'local');
       generate.classList.remove('loading');
       generateLabel.textContent = copy[currentLang].regenerate;
     }
     generate.addEventListener('click', generateModel);
+    prompt.addEventListener('input', () => {
+      backendArtifact = null;
+      updateInterpretation(parseModel(prompt.value), 'draft');
+    });
     prompt.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') generateModel();
     });
     document.querySelectorAll('[data-prompt]').forEach((button) => {
-      button.addEventListener('click', () => { prompt.value = button.dataset.prompt; prompt.focus(); });
+      button.addEventListener('click', () => { prompt.value = button.dataset.prompt; backendArtifact = null; updateInterpretation(parseModel(prompt.value), 'draft'); prompt.focus(); });
     });
     document.querySelectorAll('[data-view]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -477,6 +624,11 @@
       link.href = url; link.download = 'form-cad-model.obj'; link.click();
       URL.revokeObjectURL(url);
     });
+    modelSpec = parseModel(prompt.value);
+    renderModel(modelSpec, currentView);
+    updateInterpretation(modelSpec, 'draft');
+    updateChecks(modelSpec, null);
+    renderRevisions();
   </script>
 </body>
 </html>
