@@ -38,7 +38,21 @@ Acceptance target: a user can make three consecutive edits without rewriting the
 
 ## Phase 3 — Manufacturing-grade CAD
 
-Add process profiles for FDM, SLA, CNC, and injection molding; wall-thickness maps; draft and overhang checks; tolerance and clearance rules; STEP AP242 metadata; and 3MF/GLB preview exports.
+Status: in progress in this release.
+
+Delivered:
+
+- FDM, SLA, CNC, and injection molding process profiles in the frontend and backend.
+- Process-aware wall thickness, edge treatment, overhang, draft, clearance, and export checks.
+- Process selector in the workspace with tolerance and minimum wall guidance.
+- Reproducible STEP/STL manifests containing units, process profile, parameters, checks, and generator version.
+- Backend endpoint for retrieving the available process profiles.
+
+Next:
+
+- Add wall-thickness maps and localized issue markers in the viewport.
+- Add STEP AP242 metadata and 3MF/GLB preview artifacts.
+- Add process-specific geometry such as true draft angles, machining access, and support-aware orientation.
 
 Acceptance target: every exported model includes units, parameters, checks, and a reproducible generation manifest.
 
