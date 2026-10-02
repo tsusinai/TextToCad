@@ -122,7 +122,19 @@ def parse_prompt(prompt: str) -> tuple[str, ModelParameters]:
     width = width or (unit_numbers[0] if unit_numbers else 120.0)
     depth = depth or (unit_numbers[1] if len(unit_numbers) > 1 else width * 0.67)
     default_height = 18.0 if kind == "tray" else 42.0 if kind == "organizer" else 24.0
-    height = height or (unit_numbers[2] if len(unit_numbers) > 2 else default_height)
+    treatment_numbers = [
+        float(value)
+        for value in re.findall(
+            r"(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|wall|壁厚|bottom|floor|底厚)",
+            text,
+            flags=re.IGNORECASE,
+        )
+    ]
+    generic_height = next(
+        (value for value in unit_numbers[2:] if value not in treatment_numbers),
+        None,
+    )
+    height = height or (generic_height if generic_height is not None else default_height)
 
     compartments = _word_number(text)
     if compartments is None:
