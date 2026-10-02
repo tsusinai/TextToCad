@@ -871,58 +871,73 @@
       if (generationController) generationController.abort();
       const sequence = ++generationSeq;
       generationController = new AbortController();
-      const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
-      const previousSpec = modelSpec ? Object.assign({}, modelSpec) : null;
-      const editing = Boolean(previousSpec && isEditIntent(value));
-      const nextSpec = editing ? applyEdit(value, previousSpec) : parseModel(value);
-      const backendPrompt = canonicalPrompt(nextSpec);
       generate.classList.add('loading');
       setGenerationError('');
       backendArtifact = null;
       updateExportButtons();
       generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
-      modelState.textContent = copy[currentLang].solving;
-      solved.textContent = copy[currentLang].parsing;
-      updateInterpretation(nextSpec, 'draft');
-      let remote = null;
-      let backendError = null;
       try {
-        remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal);
+        const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
+        const previousSpec = modelSpec ? Object.assign({}, modelSpec) : null;
+        const editing = Boolean(previousSpec && isEditIntent(value));
+        const nextSpec = editing ? applyEdit(value, previousSpec) : parseModel(value);
+        const backendPrompt = canonicalPrompt(nextSpec);
+        modelState.textContent = copy[currentLang].solving;
+        solved.textContent = copy[currentLang].parsing;
+        updateInterpretation(nextSpec, 'draft');
+        let remote = null;
+        let backendError = null;
+        try {
+          remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal);
+        } catch (error) {
+          if (error.name === 'AbortError') return;
+          backendError = error;
+          console.warn('Geometry backend unavailable; using local preview.', error);
+        }
+        if (sequence !== generationSeq) return;
+        await new Promise((resolve) => setTimeout(resolve, remote ? 120 : 720));
+        if (sequence !== generationSeq) return;
+        const remoteParams = remote && remote.parameters ? remote.parameters : {};
+        modelSpec = remote ? {
+          title: remote.title || titleFor(value),
+          width: remoteParams.width ?? nextSpec.width,
+          depth: remoteParams.depth ?? nextSpec.depth,
+          height: remoteParams.height ?? nextSpec.height,
+          compartments: remoteParams.compartments ?? nextSpec.compartments,
+          chamfer: remoteParams.chamfer ?? nextSpec.chamfer,
+          wall: remoteParams.wall ?? nextSpec.wall,
+          bottom: remoteParams.bottom ?? nextSpec.bottom,
+          process: remote.process || selectedProcess,
+          tolerance: remoteParams.tolerance ?? processProfiles[selectedProcess].tolerance,
+          clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance
+        } : nextSpec;
+        backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        renderModel(modelSpec, currentView);
+        bodyValue.textContent = displayTitle(modelSpec.title);
+        sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
+        bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
+        modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
+        modelState.textContent = remote ? (currentLang === 'zh' ? 'OCCT B-Rep 实体' : 'OCCT B-REP SOLID') : copy[currentLang].state;
+        updateInterpretation(modelSpec, remote ? 'backend' : 'local');
+        updateProcessHint(remote && remote.profile);
+        updateChecks(modelSpec, remote && remote.checks);
+        updateExportButtons();
+        if (backendError && backendUrl) setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+        saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
       } catch (error) {
         if (error.name === 'AbortError') return;
-        backendError = error;
-        console.warn('Geometry backend unavailable; using local preview.', error);
+        console.error('Model generation failed.', error);
+        if (sequence === generationSeq) {
+          setGenerationError(currentLang === 'zh' ? '生成失败，请检查描述后重试。' : 'Generation failed. Check the description and retry.');
+          modelState.textContent = currentLang === 'zh' ? '生成失败' : 'Generation failed';
+        }
+      } finally {
+        if (sequence === generationSeq) {
+          generate.classList.remove('loading');
+          generateLabel.textContent = copy[currentLang].regenerate;
+          generationController = null;
+        }
       }
-      if (sequence !== generationSeq) return;
-      await new Promise((resolve) => setTimeout(resolve, remote ? 120 : 720));
-      if (sequence !== generationSeq) return;
-      const remoteParams = remote && remote.parameters ? remote.parameters : {};
-      modelSpec = remote ? {
-        title: remote.title || titleFor(value),
-        width: remoteParams.width ?? nextSpec.width,
-        depth: remoteParams.depth ?? nextSpec.depth,
-        height: remoteParams.height ?? nextSpec.height,
-        compartments: remoteParams.compartments ?? nextSpec.compartments,
-        chamfer: remoteParams.chamfer ?? nextSpec.chamfer,
-        wall: remoteParams.wall ?? nextSpec.wall,
-        bottom: remoteParams.bottom ?? nextSpec.bottom,
-        process: remote.process || selectedProcess,
-        tolerance: remoteParams.tolerance ?? processProfiles[selectedProcess].tolerance,
-        clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance
-      } : nextSpec;
-      backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
-      renderModel(modelSpec, currentView);
-      bodyValue.textContent = displayTitle(modelSpec.title);
-      sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
-      bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
-      modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
-      modelState.textContent = remote ? (currentLang === 'zh' ? 'OCCT B-Rep 实体' : 'OCCT B-REP SOLID') : copy[currentLang].state;
-      updateInterpretation(modelSpec, remote ? 'backend' : 'local');
-      updateProcessHint(remote && remote.profile);
-      updateChecks(modelSpec, remote && remote.checks);
-      updateExportButtons();
-      if (backendError && backendUrl) setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
-      saveRevision(value, modelSpec, remote ? 'backend' : 'local', backendPrompt, previousSpec);
     }
     generate.addEventListener('click', generateModel);
     bindViewportControls();
