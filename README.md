@@ -67,3 +67,17 @@ The browser never receives the key. If the key is missing, the provider times ou
 
 The response and manifest.json record "mode", "llm_used", and bounded assumptions so a revision can be audited and reproduced. The generated geometry still comes exclusively from the supported parametric builders.
 
+## Why this architecture is used
+
+Text-to-CAD is split into an intent layer and a geometry layer:
+
+1. Natural language is interpreted into a bounded CAD specification.
+2. The specification becomes a parametric feature tree.
+3. CadQuery/OCCT performs the solid operations and B-Rep validation.
+4. STEP/STL/3MF/GLB artifacts are exported and the browser previews the result.
+
+An LLM is therefore a design-intent planner, not an unchecked CAD-code executor. This keeps manufacturing rules, units, topology checks, and reproducible exports inside the backend.
+
+A stronger future implementation can add a versioned JSON Schema or Pydantic model for the intent contract, a feature-grammar retrieval layer for uncommon parts, a constraint solver that explains and repairs conflicts, and a second geometry-review pass that measures actual faces instead of relying on nominal wall estimates. For manufacturable products, this constrained hybrid approach is a better default than direct text-to-mesh generation; direct mesh or B-Rep generation can be added later as an exploratory mode with separate validation and export gates.
+
+
