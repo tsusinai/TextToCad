@@ -132,6 +132,7 @@ class GenerateResponse(BaseModel):
     mode: str = "standard"
     llm_used: bool = False
     assumptions: list[str] = Field(default_factory=list)
+    design_ir: dict[str, Any] = Field(default_factory=dict)
 
 
 CACHE_LOCK = Lock()
@@ -483,6 +484,70 @@ def interpret_prompt(prompt: str, process: str, mode: str) -> tuple[str, ModelPa
     ][:6] if isinstance(raw_assumptions, list) else []
     return titles[kind], params, True, assumptions
 
+def build_design_ir(
+    prompt: str,
+    params: ModelParameters,
+    mode: str,
+    llm_used: bool,
+    assumptions: list[str],
+) -> dict[str, Any]:
+    """Create a small semantic CAD IR that is independent of the CadQuery builder."""
+    feature_nodes: list[dict[str, Any]] = [
+        {"id": "base_solid", "type": "primitive", "operation": "box", "status": "planned"},
+    ]
+    if params.kind in {"tray", "organizer"}:
+        feature_nodes.extend([
+            {"id": "shell_cavity", "type": "shell", "operation": "cut_inner_volume", "source": "base_solid", "status": "planned"},
+            {"id": "dividers", "type": "divider", "operation": "union", "source": "shell_cavity", "count": params.compartments, "status": "planned"},
+        ])
+    elif params.kind in {"plant", "pen"}:
+        feature_nodes.append({"id": "rotational_cavity", "type": "shell", "operation": "cut_inner_cylinder", "source": "base_solid", "status": "planned"})
+    elif params.kind == "clip":
+        feature_nodes.append({"id": "cable_relief", "type": "cut", "operation": "cut_relief", "source": "base_solid", "status": "planned"})
+    if params.kind == "plant" and params.drainage_holes:
+        feature_nodes.append({"id": "drainage_holes", "type": "pattern", "operation": "cut_cylinders", "count": params.drainage_holes, "source": "shell_cavity", "status": "planned"})
+    if params.kind == "lamp" and params.cable_channel:
+        feature_nodes.append({"id": "cable_channel", "type": "cut", "operation": "cut_recess", "source": "base_solid", "status": "planned"})
+    if params.chamfer > 0:
+        feature_nodes.append({"id": "edge_treatment", "type": "edge", "operation": "chamfer", "source": "base_solid", "value_mm": params.chamfer, "status": "planned"})
+    constraints = [
+        {"id": "width_bounds", "type": "range", "parameter": "width", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
+        {"id": "depth_bounds", "type": "range", "parameter": "depth", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
+        {"id": "height_bounds", "type": "range", "parameter": "height", "min_mm": 5.0, "max_mm": 1000.0, "hard": True},
+        {"id": "wall_bounds", "type": "range", "parameter": "wall", "min_mm": 1.2, "max_mm": round(min(20.0, params.width / 3, params.depth / 3), 2), "hard": True},
+        {"id": "bottom_bounds", "type": "range", "parameter": "bottom", "min_mm": 1.2, "max_mm": round(min(params.height - 1.0, 20.0), 2), "hard": True},
+        {"id": "manufacturing_wall", "type": "process_rule", "parameter": "wall", "minimum_mm": PROCESS_PROFILES[params.process]["min_wall"], "process": params.process, "hard": False},
+    ]
+    parameters = {
+        "width": {"value": params.width, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "hard"},
+        "depth": {"value": params.depth, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "hard"},
+        "height": {"value": params.height, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "hard"},
+        "wall": {"value": params.wall, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "derived"},
+        "bottom": {"value": params.bottom, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "derived"},
+        "chamfer": {"value": params.chamfer, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "soft"},
+        "compartments": {"value": params.compartments, "unit": "count", "source": "llm" if llm_used else "parser", "constraint": "hard"},
+        "drainage_holes": {"value": params.drainage_holes, "unit": "count", "source": "llm" if llm_used else "parser", "constraint": "soft"},
+        "cable_channel": {"value": params.cable_channel, "unit": "boolean", "source": "llm" if llm_used else "parser", "constraint": "soft"},
+    }
+    return {
+        "schema_version": "0.1",
+        "design": {
+            "id": params.kind,
+            "intent": prompt[:400],
+            "mode": mode,
+            "llm_used": llm_used,
+            "assumptions": assumptions[:6],
+        },
+        "units": "mm",
+        "process": params.process,
+        "parameters": parameters,
+        "datums": {"XY": "base plane", "YZ": "width datum", "XZ": "depth datum"},
+        "features": feature_nodes,
+        "constraints": constraints,
+        "builder": "CadQuery/OCCT",
+    }
+
+
 def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
     profile = PROCESS_PROFILES[params.process]
     issues: list[dict[str, Any]] = []
@@ -711,6 +776,7 @@ def _write_artifacts(
     checks: dict[str, bool],
     analysis: dict[str, Any],
     generation: dict[str, Any] | None = None,
+    design_ir: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
     model_dir.mkdir(parents=True, exist_ok=False)
@@ -746,6 +812,7 @@ def _write_artifacts(
         "process": params.process,
         "process_profile": PROCESS_PROFILES[params.process],
         "generation": generation or {"mode": "standard", "llm_used": False, "assumptions": []},
+        "design_ir": design_ir or {},
         "checks": checks,
         "analysis": analysis,
         "step_schema": step_schema,
@@ -838,6 +905,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
     model_id: str | None = None
     try:
         title, params, llm_used, assumptions = interpret_prompt(request.prompt, request.process, request.mode)
+        design_ir = build_design_ir(request.prompt, params, request.mode, llm_used, assumptions)
         shape = build_geometry(params)
         analysis = analyze_manufacturability(params)
         checks = _validate_shape(shape, params, analysis)
@@ -853,6 +921,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             checks,
             analysis,
             {"mode": request.mode, "llm_used": llm_used, "assumptions": assumptions},
+            design_ir,
         )
         response = GenerateResponse(
             model_id=model_id,
@@ -867,6 +936,7 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             mode=request.mode,
             llm_used=llm_used,
             assumptions=assumptions,
+            design_ir=design_ir,
         )
         with CACHE_LOCK:
             MODEL_CACHE[cache_key] = response
