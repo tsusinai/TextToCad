@@ -335,7 +335,7 @@
       const footprint = valueFor('footprint|占地');
       const width = valueFor('wide|width|宽') || diameter || footprint || unitNumbers[0] || 120;
       const depth = valueFor('deep|depth|长|深') || footprint || diameter || unitNumbers[1] || width || 80;
-      const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
+      const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
       const genericHeight = unitNumbers.slice(2).find((value) => !treatmentValues.includes(value));
       const height = valueFor('tall|height|高') || genericHeight || (titleFor(text) === 'Plant pot' ? 82 : 42);
       return { width, depth, height };
@@ -346,7 +346,7 @@
       const countMatch = normalized.match(/(\\d+)\\s*(?:compartments?|隔间|格)/);
       const wordCount = normalized.includes('three') || normalized.includes('三个') ? 3 : (normalized.includes('two') || normalized.includes('两个') ? 2 : 0);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (titleFor(text) === 'Desk organizer' ? 3 : 1))), 1, 6);
-      const chamferMatch = normalized.match(/(?:chamfer|倒角|radius|圆角)[^\\d]{0,8}(\\d+(?:\\.\\d+)?)/);
+      const chamferMatch = normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\\d]{0,8}(\\d+(?:\\.\\d+)?)/);
       const chamfer = chamferMatch ? Number(chamferMatch[1]) : 4;
       const dimensions = dimensionsFor(text);
       return { title: titleFor(text), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer };
