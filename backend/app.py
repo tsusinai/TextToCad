@@ -135,7 +135,7 @@ GENERATION_SEMAPHORE = BoundedSemaphore(MAX_CONCURRENT_JOBS)
 
 def _cache_key(request: GenerateRequest) -> str:
     normalized = " ".join(request.prompt.strip().lower().split())
-    return hashlib.sha256(f"{request.process}\0{request.units}\0{normalized}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{request.mode}\0{request.process}\0{request.units}\0{normalized}".encode("utf-8")).hexdigest()
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -613,6 +613,7 @@ def _write_artifacts(
     params: ModelParameters,
     checks: dict[str, bool],
     analysis: dict[str, Any],
+    generation: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
     model_dir.mkdir(parents=True, exist_ok=False)
@@ -647,6 +648,7 @@ def _write_artifacts(
         "parameters": params.model_dump(),
         "process": params.process,
         "process_profile": PROCESS_PROFILES[params.process],
+        "generation": generation or {"mode": "standard", "llm_used": False, "assumptions": []},
         "checks": checks,
         "analysis": analysis,
         "step_schema": step_schema,
