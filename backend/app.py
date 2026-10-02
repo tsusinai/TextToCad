@@ -126,7 +126,7 @@ class GenerateResponse(BaseModel):
     model_id: str
     title: str
     parameters: ModelParameters
-    checks: dict[str, bool]
+    checks: dict[str, Any]
     artifacts: dict[str, str]
     process: str
     profile: dict[str, Any]
