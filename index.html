@@ -36,6 +36,8 @@
     .pro-pill, .unit-pill, .view-pill, .state-pill { border: 0; border-radius: 999px; padding: 8px 14px; font-size: 11px; letter-spacing: .04em; font-weight: 700; }
     .pro-pill { background: var(--lime); color: var(--ink); }
     .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #d7dad0; font-size: 11px; font-weight: 700; }
+    .language-toggle { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 8px 12px; font-size: 11px; font-weight: 700; }
+    .language-toggle:hover { border-color: #99ad86; background: var(--soft-lime); }
     .workspace { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 28px; padding: 30px 32px 32px; }
     .prompt-panel { background: var(--panel); border-radius: 22px; padding: 24px; min-height: 840px; display: flex; flex-direction: column; }
     .eyebrow, .section-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
@@ -89,6 +91,16 @@
     .param-card .label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; }
     .param-card strong { display: block; margin-top: 13px; font-size: 16px; }
     .param-card small { display: block; margin-top: 10px; color: #7a7c74; font-size: 12px; }
+    .plan-card { margin-top: 18px; padding: 20px; border-radius: 18px; background: #f5f6f1; border: 1px solid #e3e5dc; }
+    .plan-head { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    .plan-head h2 { margin-top: 8px; font-size: 20px; letter-spacing: -.03em; }
+    .plan-subtitle { margin-top: 6px; color: #7a7c74; font-size: 12px; line-height: 1.45; max-width: 560px; }
+    .readiness { flex: 0 0 auto; border-radius: 999px; padding: 8px 11px; background: var(--soft-lime); color: #59714a; font-size: 11px; font-weight: 700; }
+    .plan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+    .plan-item { display: flex; gap: 9px; align-items: flex-start; padding: 12px; border-radius: 12px; background: #fff; }
+    .check { width: 20px; height: 20px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: var(--soft-lime); color: #59714a; font-size: 12px; font-weight: 800; }
+    .plan-item strong { display: block; font-size: 12px; }
+    .plan-item small { display: block; margin-top: 5px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
     @media (max-width: 1050px) {
       body { padding: 0; }
       .app-shell { border-radius: 0; min-height: 100vh; }
@@ -122,7 +134,7 @@
         <button type="button">Templates</button>
         <button type="button">History</button>
       </nav>
-      <div class="top-actions"><span class="pro-pill">PRO</span><span class="avatar">TS</span></div>
+      <div class="top-actions"><button class="language-toggle" id="langToggle" type="button" aria-label="Switch language">中文</button><span class="pro-pill">PRO</span><span class="avatar">TS</span></div>
     </header>
     <section class="workspace">
       <aside class="prompt-panel">
@@ -195,6 +207,18 @@
             <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
             <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · warm white</strong><small>Print-ready surface</small></article>
           </div>
+          <div class="plan-card">
+            <div class="plan-head">
+              <div><div class="section-label" id="planEyebrow">MANUFACTURING PLAN</div><h2 id="planTitle">Ready for fabrication</h2><p class="plan-subtitle" id="planSubtitle">A quality gate for strong, printable, and export-ready geometry.</p></div>
+              <span class="readiness" id="readiness">92% READY</span>
+            </div>
+            <div class="plan-grid">
+              <div class="plan-item"><span class="check">✓</span><div><strong id="planWall">Wall thickness</strong><small id="planWallMeta">≥ 2.4 mm · passes</small></div></div>
+              <div class="plan-item"><span class="check">✓</span><div><strong id="planRadius">Edge treatment</strong><small id="planRadiusMeta">4 mm chamfer · stable</small></div></div>
+              <div class="plan-item"><span class="check">✓</span><div><strong id="planDraft">Print orientation</strong><small id="planDraftMeta">Low support volume</small></div></div>
+              <div class="plan-item"><span class="check">✓</span><div><strong id="planExport">Export target</strong><small id="planExportMeta">STEP · IGES · GLB</small></div></div>
+            </div>
+          </div>
         </section>
       </div>
     </section>
@@ -209,6 +233,54 @@
     const bodyValue = document.getElementById('bodyValue');
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
+    const langToggle = document.getElementById('langToggle');
+    let currentLang = 'en';
+    const defaultPrompt = prompt.value;
+    const copy = {
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING PLAN', planTitle: 'Ready for fabrication', planSubtitle: 'A quality gate for strong, printable, and export-ready geometry.', readiness: '92% READY', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '可制造性计划', planTitle: '可以进入制造', planSubtitle: '检查强度、打印稳定性和可导出性，作为高质量 CAD 的首个质量门。', readiness: '准备度 92%', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+    };
+    function translate() {
+      const t = copy[currentLang];
+      document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+      document.querySelector('.nav button:nth-child(1)').textContent = t.workspace;
+      document.querySelector('.nav button:nth-child(2)').textContent = t.templates;
+      document.querySelector('.nav button:nth-child(3)').textContent = t.history;
+      document.querySelector('.eyebrow').textContent = t.eyebrow;
+      document.querySelector('.prompt-panel h1').textContent = t.title;
+      document.querySelector('.helper').textContent = t.helper;
+      generateLabel.textContent = generate.classList.contains('loading') ? (currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…') : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
+      document.querySelector('.starter .section-label').textContent = t.starter;
+      document.querySelector('.recent .section-label').textContent = t.recent;
+      document.querySelector('.viewport-label').textContent = t.live;
+      document.querySelector('[data-view="iso"]').textContent = t.iso;
+      document.querySelector('[data-view="top"]').textContent = t.top;
+      document.querySelector('[data-view="front"]').textContent = t.front;
+      document.getElementById('exportObj').textContent = t.export;
+      document.querySelector('.params-head .section-label').textContent = t.params;
+      solved.textContent = t.solved;
+      document.querySelector('.param-card:nth-child(1) .label').textContent = t.body;
+      document.querySelector('.param-card:nth-child(2) .label').textContent = t.size;
+      document.querySelector('.param-card:nth-child(3) .label').textContent = t.material;
+      document.querySelector('.param-card:nth-child(3) strong').textContent = t.materialValue;
+      document.querySelector('.param-card:nth-child(3) small').textContent = t.materialMeta;
+      document.getElementById('planEyebrow').textContent = t.planEyebrow;
+      document.getElementById('planTitle').textContent = t.planTitle;
+      document.getElementById('planSubtitle').textContent = t.planSubtitle;
+      document.getElementById('readiness').textContent = t.readiness;
+      document.getElementById('planWall').textContent = t.wall;
+      document.getElementById('planWallMeta').textContent = t.wallMeta;
+      document.getElementById('planRadius').textContent = t.radius;
+      document.getElementById('planRadiusMeta').textContent = t.radiusMeta;
+      document.getElementById('planDraft').textContent = t.draft;
+      document.getElementById('planDraftMeta').textContent = t.draftMeta;
+      document.getElementById('planExport').textContent = t.exportTarget;
+      document.getElementById('planExportMeta').textContent = t.exportMeta;
+      langToggle.textContent = t.toggle;
+      if (prompt.value === defaultPrompt || prompt.value === '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。') prompt.value = currentLang === 'zh' ? '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。' : defaultPrompt;
+    }
+    langToggle.addEventListener('click', () => { currentLang = currentLang === 'en' ? 'zh' : 'en'; translate(); });
+    translate();
 
     function titleFor(text) {
       const value = text.toLowerCase();
@@ -230,7 +302,7 @@
       const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
       const dimensions = dimensionsFor(value);
       generate.classList.add('loading');
-      generateLabel.textContent = 'Generating geometry…';
+      generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
       modelState.textContent = 'SOLVING CONSTRAINTS';
       solved.textContent = 'Parsing natural language';
       setTimeout(() => {
@@ -241,7 +313,7 @@
         modelState.textContent = 'PARAMETRIC BODY';
         solved.textContent = 'All constraints solved';
         generate.classList.remove('loading');
-        generateLabel.textContent = 'Regenerate model';
+        generateLabel.textContent = copy[currentLang].regenerate;
       }, 720);
     }
     generate.addEventListener('click', generateModel);
