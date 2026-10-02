@@ -1098,15 +1098,24 @@ def _write_3mf(mesh: Any, three_mf_path: Path) -> None:
         archive.writestr("3D/3dmodel.model", model_xml)
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _write_artifacts(
     model_id: str,
     shape: Any,
     title: str,
     params: ModelParameters,
-    checks: dict[str, bool],
+    checks: dict[str, Any],
     analysis: dict[str, Any],
     generation: dict[str, Any] | None = None,
     design_ir: dict[str, Any] | None = None,
+    provenance: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
     model_dir.mkdir(parents=True, exist_ok=False)
@@ -1116,25 +1125,50 @@ def _write_artifacts(
 
     with EXPORT_LOCK:
         step_schema = _export_step_ap242(shape, step_path)
+    step_roundtrip = _roundtrip_step_check(shape, step_path)
     exporters.export(shape, str(stl_path))
+
     preview_files: dict[str, Path] = {}
+    mesh_validation: dict[str, Any] = {"status": "skipped", "reason": "trimesh_unavailable"}
     if trimesh is not None:
         try:
             mesh = trimesh.load_mesh(str(stl_path), file_type="stl", force="mesh")
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
+            mesh_validation = {"status": "pass", **_mesh_validation(mesh)}
             glb_path = model_dir / "model.glb"
             three_mf_path = model_dir / "model.3mf"
             mesh.export(str(glb_path), file_type="glb")
             _write_3mf(mesh, three_mf_path)
             preview_files = {"glb": glb_path, "3mf": three_mf_path}
-        except Exception:
+        except Exception as exc:
+            mesh_validation = {"status": "failed", "reason": str(exc)[:240]}
             preview_files = {}
+
     analysis_path.write_text(json.dumps(analysis, indent=2), encoding="utf-8")
     export_paths = [step_path, stl_path, analysis_path, *preview_files.values()]
     checks["export_ready"] = all(path.exists() and path.stat().st_size > 0 for path in export_paths)
+    checks["step_roundtrip"] = step_roundtrip["status"] in {"pass", "skipped"}
+    checks["mesh_validation"] = mesh_validation["status"] in {"pass", "skipped"}
     if not checks["export_ready"]:
         raise RuntimeError("one or more generated artifacts are empty")
+
+    artifact_metadata: dict[str, Any] = {}
+    for format_name, path in {
+        "step": step_path,
+        "stl": stl_path,
+        "analysis": analysis_path,
+        **preview_files,
+    }.items():
+        artifact_metadata[format_name] = {
+            "bytes": path.stat().st_size,
+            "sha256": _sha256_file(path),
+            "units": "mm",
+            "axis": "Z-up",
+        }
+    if preview_files:
+        artifact_metadata["glb"]["viewer_transform"] = "cad_z_up_to_three_y_up"
+
     manifest = {
         "model_id": model_id,
         "title": title,
@@ -1142,12 +1176,24 @@ def _write_artifacts(
         "process": params.process,
         "process_profile": PROCESS_PROFILES[params.process],
         "generation": generation or {"mode": "standard", "llm_used": False, "assumptions": []},
+        "provenance": provenance or {},
         "design_ir": design_ir or {},
         "checks": checks,
         "analysis": analysis,
+        "geometry_metrics": _shape_metrics(shape),
+        "validation": {
+            "step_roundtrip": step_roundtrip,
+            "mesh": mesh_validation,
+        },
+        "artifact_metadata": artifact_metadata,
         "step_schema": step_schema,
         "units": "mm",
-        "generator": "TextToCad geometry backend 0.3.0",
+        "coordinate_system": {
+            "cad": "Z-up",
+            "mesh": "Z-up",
+            "viewer": "Three.js Y-up with explicit transform",
+        },
+        "generator": "TextToCad geometry backend 0.4.0",
         "formats": ["step", "stl"] + sorted(preview_files),
     }
     manifest_path = model_dir / "manifest.json"
