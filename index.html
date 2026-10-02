@@ -335,7 +335,9 @@
       const footprint = valueFor('footprint|占地');
       const width = valueFor('wide|width|宽') || diameter || footprint || unitNumbers[0] || 120;
       const depth = valueFor('deep|depth|长|深') || footprint || diameter || unitNumbers[1] || width || 80;
-      const height = valueFor('tall|height|高') || unitNumbers[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
+      const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
+      const genericHeight = unitNumbers.slice(2).find((value) => !treatmentValues.includes(value));
+      const height = valueFor('tall|height|高') || genericHeight || (titleFor(text) === 'Plant pot' ? 82 : 42);
       return { width, depth, height };
     }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
