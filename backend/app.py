@@ -557,7 +557,12 @@ def _write_artifacts(
 
 
 def cleanup_artifacts() -> None:
-    """Remove expired model directories so repeated previews cannot fill the disk."""
+    """Remove expired model and job records so repeated previews cannot fill memory or disk."""
+    cutoff = time.time() - max(ARTIFACT_TTL_SECONDS, 3600)
+    with JOB_LOCK:
+        for job_id, job in list(JOBS.items()):
+            if job.get("status") in {"succeeded", "failed", "cancelled"} and job.get("created_at", 0) < cutoff:
+                JOBS.pop(job_id, None)
     if ARTIFACT_TTL_SECONDS <= 0:
         return
     cutoff = time.time() - ARTIFACT_TTL_SECONDS
