@@ -884,6 +884,7 @@ def health() -> dict[str, Any]:
         "trimesh_available": trimesh is not None,
         "trimesh_error": TRIMESH_ERROR or None,
         "advanced_mode_available": bool(LLM_API_KEY),
+        "llm_provider": urllib.parse.urlparse(LLM_API_URL).netloc or None,
         "llm_model": LLM_MODEL,
         "process_profiles": list(PROCESS_PROFILES),
     }
