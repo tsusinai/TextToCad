@@ -263,6 +263,8 @@
       document.querySelectorAll('.recent-item strong').forEach((item, index) => { item.textContent = recentLabels[index]; });
       const recentMeta = currentLang === 'zh' ? ['3 个实体 · 2 分钟前编辑', '1 个实体 · 昨天编辑', '2 个实体 · 9 月 28 日编辑'] : ['3 bodies · edited 2m ago', '1 body · edited yesterday', '2 bodies · edited Sep 28'];
       document.querySelectorAll('.recent-item span').forEach((item, index) => { item.textContent = recentMeta[index]; });
+      const localizedPrompts = currentLang === 'zh' ? ['一个浅的收纳托盘，160 毫米见方，圆角半径 12 毫米。', '适配 6 毫米线缆的柔性卡扣，开口 3 毫米。', '一个直径 90 毫米、高 82 毫米并带排水孔的极简花盆。', '一个宽 110 毫米并隐藏走线槽的小型灯座。', '一个带三个圆角隔间的桌面收纳盒，宽 120 毫米、深 80 毫米，所有边缘做柔和倒角。', '一个适配 6 毫米线缆、开口 3 毫米的柔性线缆夹。', '一个直径 72 毫米、高 95 毫米、壁厚 4 毫米的极简笔筒。'] : ['A shallow storage tray with a 160 mm footprint and 12 mm rounded corners.', 'A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.', 'A minimal plant pot, 90 mm diameter and 82 mm tall, with drainage holes.', 'A small lamp base, 110 mm wide, with a hidden cable channel.', 'A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.', 'A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.', 'A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall.'];
+      document.querySelectorAll('[data-prompt]').forEach((item, index) => { item.dataset.prompt = localizedPrompts[index]; });
       document.querySelector('.viewport-label').textContent = t.live;
       document.querySelector('[data-view="iso"]').textContent = t.iso;
       document.querySelector('[data-view="top"]').textContent = t.top;
@@ -318,10 +320,18 @@
       return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘' })[title] || title;
     }
     function dimensionsFor(text) {
-      const values = (text.match(/\d+(?:\.\d+)?/g) || []).map(Number);
-      const width = values[0] || 120;
-      const depth = values[1] || 80;
-      const height = values[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
+      const normalized = text.toLowerCase();
+      const unitNumbers = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)).map((match) => Number(match[1]));
+      const valueFor = (terms) => {
+        const before = normalized.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)\\s*(?:' + terms + ')', 'i'));
+        const after = normalized.match(new RegExp('(?:' + terms + ')[^\\d]{0,8}(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)', 'i'));
+        return before ? Number(before[1]) : (after ? Number(after[1]) : null);
+      };
+      const diameter = valueFor('diameter|直径');
+      const footprint = valueFor('footprint|占地');
+      const width = valueFor('wide|width|宽') || diameter || footprint || unitNumbers[0] || 120;
+      const depth = valueFor('deep|depth|长|深') || footprint || diameter || unitNumbers[1] || width || 80;
+      const height = valueFor('tall|height|高') || unitNumbers[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
       return { width, depth, height };
     }
     function generateModel() {
