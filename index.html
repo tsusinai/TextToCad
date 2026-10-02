@@ -770,8 +770,8 @@
     function setCheckState(element, state) {
       if (!element) return;
       element.classList.remove('warn', 'fail');
-      element.textContent = state === true ? '✓' : (state === 'warn' ? '!' : '×');
-      if (state === 'warn') element.classList.add('warn');
+      element.textContent = state === true ? '✓' : (state === 'unknown' ? '?' : (state === 'warn' ? '!' : '×'));
+      if (state === 'warn' || state === 'unknown') element.classList.add('warn');
       if (state === false) element.classList.add('fail');
     }
     function localAnalysis(spec) {
@@ -841,27 +841,30 @@
     function updateChecks(spec, remoteChecks) {
       if (!spec) return;
       const profile = (backendArtifact && backendArtifact.profile) || processProfiles[selectedProcess];
+      const analysis = backendArtifact && backendArtifact.analysis;
+      const measured = Boolean(analysis && (analysis.face_samples || analysis.measured_wall_map));
       const checks = remoteChecks ? {
         wall: remoteChecks.wall_thickness,
         radius: remoteChecks.edge_treatment,
-        draft: remoteChecks.overhang && remoteChecks.draft_angle && remoteChecks.clearance,
+        draft: measured ? (remoteChecks.overhang && remoteChecks.draft_angle && remoteChecks.clearance) : 'unknown',
         export: remoteChecks.export_ready
       } : {
         wall: (spec.wall || 3) >= profile.minWall,
         radius: (spec.chamfer === 0 || spec.chamfer >= profile.minRadius) && spec.chamfer <= Math.min(spec.width, spec.depth, spec.height) / 4,
-        draft: profile.draftAngle === 0 && profile.maxOverhang >= 45 && (spec.wall || 3) >= profile.clearance,
-        export: true
+        draft: 'unknown',
+        export: false
       };
       const values = Object.values(checks);
       const passed = values.filter((value) => value === true).length;
-      Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : 'warn'));
-      document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项检查' : 'checks');
-      solved.textContent = passed === 4 ? (currentLang === 'zh' ? '全部检查通过' : 'All checks passed') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
-      document.getElementById('planWallMeta').textContent = checks.wall ? (currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes') : (currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
-      document.getElementById('planRadiusMeta').textContent = checks.radius ? (currentLang === 'zh' ? '边缘半径符合工艺' : 'process radius passes') : (currentLang === 'zh' ? '倒角半径需要复核' : 'review process radius');
-      document.getElementById('planDraftMeta').textContent = checks.draft ? (currentLang === 'zh' ? '悬空、拔模和间隙通过' : 'overhang, draft and clearance pass') : (currentLang === 'zh' ? '悬空、拔模或间隙需复核' : 'review overhang, draft or clearance');
+      Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : (checks[key] === 'unknown' ? 'unknown' : 'warn')));
+      document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项已验证' : 'verified');
+      solved.textContent = passed === 4 ? (currentLang === 'zh' ? '检查已验证' : 'Checks verified') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
+      const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
+      document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
+      document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
+      document.getElementById('planDraftMeta').textContent = statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
       document.getElementById('planExportMeta').textContent = checks.export ? (remoteChecks ? profile.label + ' · STEP · STL' : 'OBJ preview · backend offline') : (currentLang === 'zh' ? '导出未就绪' : 'export not ready');
-      updateAnalysis((backendArtifact && backendArtifact.analysis) || localAnalysis(spec));
+      updateAnalysis(analysis || localAnalysis(spec));
       Object.entries(checkEls).forEach(([key, element]) => {
         const item = element && element.parentElement && element.parentElement.parentElement;
         if (item) { item.classList.remove('warn', 'fail'); if (checks[key] !== true) item.classList.add('warn'); }
