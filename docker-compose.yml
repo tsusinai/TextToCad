@@ -11,6 +11,8 @@ services:
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://tsusinai.github.io
       MAX_CONCURRENT_JOBS: 2
       MAX_PENDING_JOBS: 8
+      RATE_LIMIT_WINDOW_SECONDS: 60
+      MAX_MUTATIONS_PER_WINDOW: 30
     ports:
       - "8787:8787"
     volumes:
