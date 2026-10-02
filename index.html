@@ -85,6 +85,10 @@
     .process-copy small { display: block; margin-top: 5px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
     .process-select { min-width: 156px; border: 1px solid #d1d5c9; border-radius: 10px; padding: 9px 10px; background: white; color: var(--ink); font-size: 12px; font-weight: 700; }
     .process-select:focus { outline: 2px solid #b9d58d; outline-offset: 2px; }
+    .mode-controls { margin-top: 10px; padding: 12px 16px; border: 1px solid #e3e5dc; border-radius: 14px; background: #f5f7f0; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .mode-copy { min-width: 0; }
+    .mode-copy small { display: block; margin-top: 4px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
+    .mode-select { min-width: 156px; border: 1px solid #d1d5c9; border-radius: 10px; padding: 9px 10px; background: white; color: var(--ink); font-size: 12px; font-weight: 700; }
     .issue-badge { margin-left: 12px; border-radius: 999px; padding: 6px 9px; background: #30342f; color: #a3aaa0; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
     .issue-badge.warn { background: #5d4730; color: #ffd98b; }
     .analysis-strip { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e3e5dc; }
@@ -320,6 +324,13 @@
               <option value="injection">Injection Molding</option>
             </select>
           </div>
+          <div class="mode-controls">
+            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION MODE</span><small id="modeHint">Rule parser · deterministic and private</small></div>
+            <select class="mode-select" id="generationMode" aria-label="Generation mode">
+              <option value="standard">Standard</option>
+              <option value="advanced">Advanced · LLM</option>
+            </select>
+          </div>
           </div>
           <div class="plan-card">
             <div class="plan-head">
@@ -396,8 +407,13 @@
     const featureMode = document.getElementById('featureMode');
     const featureTree = document.getElementById('featureTree');
     const processSelect = document.getElementById('processSelect');
+    const generationMode = document.getElementById('generationMode');
+    const modeHint = document.getElementById('modeHint');
     const processProfileHint = document.getElementById('processProfileHint');
     const processStorageKey = 'formCadProcess';
+    const modeStorageKey = 'formCadGenerationMode';
+    let selectedMode = (() => { try { return localStorage.getItem(modeStorageKey) || 'standard'; } catch (error) { return 'standard'; } })();
+    if (!['standard', 'advanced'].includes(selectedMode)) selectedMode = 'standard';
     const processProfiles = {
       fdm: { label: 'FDM / FFF', minWall: 1.2, minRadius: 0.8, maxOverhang: 45, draftAngle: 0, tolerance: 0.2, clearance: 0.3 },
       sla: { label: 'SLA / Resin', minWall: 0.8, minRadius: 0.4, maxOverhang: 60, draftAngle: 0, tolerance: 0.1, clearance: 0.2 },
@@ -407,6 +423,7 @@
     let selectedProcess = (() => { try { return localStorage.getItem(processStorageKey) || 'fdm'; } catch (error) { return 'fdm'; } })();
     if (!processProfiles[selectedProcess]) selectedProcess = 'fdm';
     processSelect.value = selectedProcess;
+    if (generationMode) generationMode.value = selectedMode;
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const backendUrl = (window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '').replace(/\/+$/, '');
     let backendArtifact = null;
