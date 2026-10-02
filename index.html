@@ -502,7 +502,8 @@
     function updateProcessHint(profileOverride) {
       const profile = profileOverride || processProfiles[selectedProcess];
       if (!profile || !processProfileHint) return;
-      processProfileHint.textContent = profile.label + ' · ' + (currentLang === 'zh' ? '最小壁厚 ' + profile.minWall + ' mm · 容差 ±' + profile.tolerance + ' mm' : 'minimum wall ' + profile.minWall + ' mm · tolerance ±' + profile.tolerance + ' mm');
+      const minWall = profile.minWall !== undefined ? profile.minWall : profile.min_wall;
+      processProfileHint.textContent = profile.label + ' · ' + (currentLang === 'zh' ? '最小壁厚 ' + minWall + ' mm · 容差 ±' + profile.tolerance + ' mm' : 'minimum wall ' + minWall + ' mm · tolerance ±' + profile.tolerance + ' mm');
     }
     function isEditIntent(text) {
       return /(?:increase|decrease|reduce|raise|lower|add|remove|delete|change|modify|set|make|adjust|增加|减少|加上|减去|添加|增加|移除|删除|修改|改为|设为|调整)/i.test(text);
