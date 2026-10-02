@@ -1,83 +1,141 @@
 # TextToCad
 
-Natural-language to CAD workspace with a front-design interface and a CadQuery geometry backend.
+自然语言驱动的参数化 CAD 工作台：用一句话描述零件，得到可检查、可回溯、可导出的 3D 模型。
 
-## What is included
+<p align="center">
+  <a href="https://tsusinai.github.io/TextToCad/">打开 Live 工作台</a> ·
+  <a href="https://github.com/tsusinai/TextToCad/tree/main/backend">查看几何后端</a> ·
+  <a href="PLAN.md">查看路线图</a>
+</p>
 
-- Natural-language prompt parsing with English and Chinese dimensions, including tray, organizer, cable clip, plant pot, lamp base, and pen cup families.
-- Browser preview with generated isometric, top, and front projections, plus drag orbit, Shift-drag pan, wheel zoom, FIT reset, and touch pointer controls.
-- Optional backend connection for validated OCCT B-Rep geometry.
-- STEP and STL artifact generation from the backend, with optional 3MF/GLB previews; local OBJ fallback in the static demo. GLB artifacts open in a progressive OrbitControls viewer when the browser can load Three.js.
-- Responsive static front end with no build step.
+| 能力 | 当前实现 |
+| --- | --- |
+| 自然语言 | 中文/英文尺寸、模型族、隔间、壁厚、倒角、排水孔、走线槽 |
+| 3D 预览 | Three.js 参数化预览、GLB/OrbitControls、等距/顶视/前视、旋转/缩放/平移 |
+| 几何内核 | CadQuery/OCCT 参数化 B-Rep |
+| 导出 | STEP、STL，条件支持 3MF、GLB；前端保留 OBJ 概念导出 |
+| 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
+| 高级模式 | OpenAI-compatible LLM、DeepSeek 示例、受限 JSON、失败回退 |
+| 可追溯性 | manifest、Semantic CAD IR、assumptions、revision history |
 
-## Geometry backend
+## Live 预览
 
-The production path lives in backend:
+访问 [https://tsusinai.github.io/TextToCad/](https://tsusinai.github.io/TextToCad/)。
 
-1. POST /v1/models parses a prompt into bounded millimetre parameters; production clients can use POST /v1/jobs with GET/DELETE status control for cancellable generation.
-2. CadQuery/OCCT builds a tray, organizer, cable clip, plant pot, lamp base, pen cup, or solid.
-3. B-Rep validity, single-solid, volume, and bounding-box checks run before export.
-4. Validated STEP and STL artifacts are written to persistent storage and exposed by download URLs; manifest files are persisted for reproducibility, with TTL cleanup and repeat-prompt caching.
+没有连接后端时，页面仍会创建真实的 Three.js 参数化预览；如果浏览器不支持 WebGL 或 CDN 加载失败，才退回 SVG 概念图。连接后端后，经过 OCCT 校验的 GLB 会替换本地预览。
 
-Run it locally:
+## 本机启动：Docker + CadQuery + DeepSeek
 
-    cd backend
-    python -m venv .venv
-    . .venv/bin/activate
-    pip install -r requirements.txt
-    uvicorn app:app --reload --port 8787
+项目已经提供 Docker Compose 配置。先准备本地密钥文件：
 
-To connect the static UI, open the page with a backend query parameter:
+~~~bash
+git clone https://github.com/tsusinai/TextToCad.git
+cd TextToCad
+cp backend/.env.example backend/.env
+~~~
 
-    https://tsusinai.github.io/TextToCad/?backend=http://localhost:8787
+编辑 backend/.env：
 
-A deployed frontend can instead define window.FORM_CAD_BACKEND_URL before the inline application script. Configure CORS_ORIGINS and a persistent ARTIFACT_ROOT for production.
+~~~env
+LLM_API_KEY=你的_DEEPSEEK_API_KEY
+LLM_API_URL=https://api.deepseek.com/chat/completions
+LLM_MODEL=deepseek-chat
+LLM_TIMEOUT_SECONDS=20
+LLM_MAX_RESPONSE_BYTES=65536
+~~~
 
-## Local preview
+如果你的 DeepSeek Flash 网关使用不同的 OpenAI-compatible 地址或模型名，只替换 LLM_API_URL 和 LLM_MODEL。backend/.env 已被 .gitignore 排除，不要提交它。
 
-Open index.html directly or serve the repository with any static server. Without a backend URL, the browser keeps a deterministic SVG concept preview and OBJ export so the interface remains usable; the page labels this as a concept preview because a true GLB/OCCT solid requires the backend.
+启动几何服务：
 
-## Live version
+~~~bash
+docker compose up --build -d
+curl http://localhost:8787/health
+~~~
 
-GitHub Pages is published from the gh-pages branch:
-https://tsusinai.github.io/TextToCad/
+健康检查应包含 cadquery_available=true；配置密钥后还应包含 advanced_mode_available=true 和安全的 llm_provider 字段。
 
-## Product plan
+启动静态前端：
 
-The phased roadmap and Phase 1 acceptance criteria are in [PLAN.md](PLAN.md).
+~~~bash
+python3 -m http.server 5173
+~~~
 
+打开 [http://localhost:5173/](http://localhost:5173/)。本机页面会自动尝试连接 http://localhost:8787；也可以显式传入：
 
-The current backend includes manufacturing profiles, nominal wall-map analysis, localized issue reporting, reproducible export manifests, async job status, and editable parameter regeneration from the UI.
+~~~text
+http://localhost:5173/?backend=http://localhost:8787
+~~~
 
-## LLM advanced mode
+## 从文字到 CAD 的链路
 
-The default **Standard** mode uses the deterministic parser and does not require an API. **Advanced · LLM** mode sends the user's natural-language intent plus a deterministic baseline to an OpenAI-compatible chat-completions endpoint. The model is asked for a small JSON parameter object; the backend clamps every dimension, validates feature flags, builds the solid with CadQuery/OCCT, and runs the existing B-Rep checks before returning any artifact.
+~~~mermaid
+flowchart LR
+  A[自然语言<br/>中文 / English] --> B[规则解析或 LLM 意图解析]
+  B --> C[Design Contract<br/>受限参数与 assumptions]
+  C --> D[Semantic CAD IR<br/>参数 / 特征 / 约束]
+  D --> E[CadQuery / OCCT<br/>确定性 B-Rep]
+  E --> F[几何与制造检查]
+  F --> G[STEP / STL / 3MF / GLB]
+  G --> H[Three.js 交互预览]
+~~~
 
-Configure the provider only on the backend:
+LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会对模型族、尺寸、布尔值、数值范围和响应大小做校验，再交给 CadQuery/OCCT 建模。没有 API key、provider 超时、JSON 无效或 provider 不支持 JSON response format 时，会回退到确定性解析器。
 
-    LLM_API_KEY=...
-    LLM_API_URL=https://api.deepseek.com/chat/completions
-    LLM_MODEL=deepseek-chat
-    LLM_TIMEOUT_SECONDS=20
-    LLM_MAX_RESPONSE_BYTES=65536
+## 支持的模型族
 
-The browser never receives the key. If the key is missing, the provider times out, or the response is invalid, Advanced mode falls back to the deterministic baseline and returns the reason in "assumptions"; it never executes model-produced CAD code. Set "mode" to "advanced" in either POST /v1/models or POST /v1/jobs to opt in:
+- Storage tray / organizer：托盘、桌面收纳盒、隔间
+- Cable clip：线缆夹和开口结构
+- Plant pot：花盆、圆柱腔体、排水孔
+- Lamp base：灯座和底部隐藏走线槽
+- Pen cup：笔筒和圆柱腔体
+- Solid block：通用实体块
 
-    {"prompt":"一个带排水孔的极简花盆，直径 90 毫米，高 82 毫米","units":"mm","process":"fdm","mode":"advanced"}
+## API 快速参考
 
-The response and manifest.json record "mode", "llm_used", and bounded assumptions so a revision can be audited and reproduced. The generated geometry still comes exclusively from the supported parametric builders. Each revision also stores a Semantic CAD IR in its manifest and exposes it at GET /v1/models/{id}/ir, making intent, parameter provenance, feature planning, and constraints auditable.
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | /health | CadQuery、GLB、LLM 配置状态 |
+| GET | /v1/process-profiles | FDM、SLA、CNC、注塑工艺约束 |
+| POST | /v1/models | 同步生成一个模型 |
+| POST | /v1/jobs | 创建可轮询、可取消的生成任务 |
+| GET/DELETE | /v1/jobs/{job_id} | 查询或取消任务 |
+| GET | /v1/models/{id}/manifest | 参数、检查、导出和 provenance |
+| GET | /v1/models/{id}/ir | Semantic CAD IR |
+| GET | /v1/models/{id}/analysis | 壁厚采样和制造问题 |
+| GET | /v1/models/{id}/download?format=step | 下载 STEP、STL、3MF 或 GLB |
 
-## Why this architecture is used
+高级模式请求示例：
 
-Text-to-CAD is split into an intent layer and a geometry layer:
+~~~json
+{
+  "prompt": "一个带三个隔间、宽 120 毫米、深 80 毫米的桌面收纳盒",
+  "units": "mm",
+  "process": "fdm",
+  "mode": "advanced"
+}
+~~~
 
-1. Natural language is interpreted into a bounded CAD specification.
-2. The specification becomes a parametric feature tree.
-3. CadQuery/OCCT performs the solid operations and B-Rep validation.
-4. STEP/STL/3MF/GLB artifacts are exported and the browser previews the result.
+## 为什么采用混合架构
 
-An LLM is therefore a design-intent planner, not an unchecked CAD-code executor. This keeps manufacturing rules, units, topology checks, and reproducible exports inside the backend.
+直接让 LLM 生成 CAD 代码或网格，容易出现单位混乱、拓扑失效、不可制造和无法复现。TextToCad 把系统拆成两层：
 
-A stronger future implementation can add a versioned JSON Schema or Pydantic model for the intent contract, a feature-grammar retrieval layer for uncommon parts, a constraint solver that explains and repairs conflicts, and a second geometry-review pass that measures actual faces instead of relying on nominal wall estimates. For manufacturable products, this constrained hybrid approach is a better default than direct text-to-mesh generation; direct mesh or B-Rep generation can be added later as an exploratory mode with separate validation and export gates.
+1. LLM/规则解析层：理解意图，生成受限参数和假设。
+2. 几何确定层：由 Semantic CAD IR、CadQuery/OCCT、验证器和导出器完成实际建模。
 
+每个 revision 会保存参数来源、assumptions、特征规划、约束、检查和导出 manifest。后续可以在 IR 上加入版本化 JSON Schema、Feature DAG、约束求解器、面级 DFM 检查和自动修复闭环。
+
+## 当前边界
+
+- 壁厚、间隙、悬空和拔模目前包含名义估算；真正的面级测量仍是下一阶段。
+- LLM 高级模式需要后端 API key；标准模式无需 API，仍可离线工作。
+- 没有后端时可以进行真实参数化预览和 OBJ 概念导出，但 STEP/STL/OCCT 检查必须连接后端。
+- 生产部署应使用 HTTPS、持久化 ARTIFACT_ROOT、严格 CORS、速率限制和进程级任务隔离。
+
+## 文档
+
+- [DEPLOY.md](DEPLOY.md)：Docker、DeepSeek 和前端连接
+- [PLAN.md](PLAN.md)：阶段计划和 Semantic CAD IR 升级路线
+- [OPTIMIZATION.md](OPTIMIZATION.md)：Astra 审查与执行记录
+- [backend/README.md](backend/README.md)：后端 API 和开发说明
 
