@@ -82,6 +82,7 @@ Track interpretation confirmation rate, valid-B-Rep rate, median generation time
 
 - 后端生成后持久化 \`manifest.json\`，并让 \`export_ready\` 只在 STEP、STL、分析文件及可选预览文件实际写入后变为 true。
 - 生成开始时清理超时产物；生成失败会删除当前模型的部分产物，避免磁盘泄漏。
+- 对规范化提示词和工艺建立进程内缓存，并用导出锁串行化 STEP schema 设置，减少重复建模和并发导出风险。
 - 前后端统一托盘、线缆夹、花盆、灯座、笔筒的类型与标题，连续编辑时保留模型类型。
 - 前端生成请求加入 \`AbortController\`、序列号防竞态、异常收敛和明确的本地预览提示。
 - 3D 预览支持拖动旋转、Shift+拖动平移、滚轮缩放、双击/ FIT 复位，视图切换会回到可预测的相机状态；交互提示随中英文切换。
