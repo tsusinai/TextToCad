@@ -32,3 +32,16 @@ The response contains validated STEP and STL download URLs plus optional 3MF and
 - `GET /v1/models/{model_id}/download?format=step|stl` downloads a manufacturing artifact.
 
 The current parser supports English and Chinese dimensions, footprints, compartment counts, wall/bottom thickness, and chamfer/radius values. STEP export attempts AP242 and records the actual schema used; preview meshes are converted to 3MF and GLB when the optional mesh dependencies are available. For production text understanding, replace or extend `parse_prompt` with an LLM structured-output adapter that returns the same `ModelParameters` fields, then retain the deterministic geometry and validation stages.
+
+## DeepSeek / OpenAI-compatible LLM
+
+Advanced mode is provider-neutral. For local Docker testing with DeepSeek, copy the template and set:
+
+    cp .env.example .env
+    LLM_API_KEY=your_deepseek_key
+    LLM_API_URL=https://api.deepseek.com/chat/completions
+    LLM_MODEL=deepseek-chat
+
+The backend keeps the key server-side, sends only the natural-language intent, and validates the returned JSON before any geometry operation. Providers that reject response_format=json_object receive one compatibility retry without that field. Missing keys or provider failures fall back to the deterministic parser.
+
+The generated revision includes Semantic CAD IR in manifest.json and exposes it at GET /v1/models/{model_id}/ir.
