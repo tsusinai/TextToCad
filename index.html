@@ -478,6 +478,16 @@
       if (value.includes('desk') || value.includes('桌面') || value.includes('收纳盒') || value.includes('收纳')) return 'Desk organizer';
       return 'Desk organizer';
     }
+    function kindForTitle(title) {
+      const value = String(title || '').toLowerCase();
+      if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'plant';
+      if (value.includes('pen') || value.includes('笔')) return 'pen';
+      if (value.includes('lamp') || value.includes('灯')) return 'lamp';
+      if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('夹')) return 'clip';
+      if (value.includes('tray') || value.includes('托盘')) return 'tray';
+      if (value.includes('organizer') || value.includes('desk') || value.includes('收纳')) return 'organizer';
+      return 'block';
+    }
     function displayTitle(title) {
       const normalized = String(title || '').replace(/^Parametric\s+/i, '');
       if (currentLang !== 'zh') return normalized;
