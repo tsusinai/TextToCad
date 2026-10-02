@@ -93,3 +93,7 @@ Track interpretation confirmation rate, valid-B-Rep rate, median generation time
 ## Astra 第二轮体验优化（2026-10-02）
 
 已完成生成取消/超时、阶段状态、名义制造评审、模型类型语义预览、花盆排水孔、灯座走线槽、键盘视图操作、无障碍视图状态和移动端导出换行。真实 GLB 对象视图与面级分析保留为下一阶段。
+
+## 第三轮交互与生成优化（2026-10-02）
+
+已完成异步 job/status/cancel 接口、可编辑参数卡、渐进式 GLB/OrbitControls 视图和 SVG 降级；面级制造采样与持久化队列继续排入下一阶段。
