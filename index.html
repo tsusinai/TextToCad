@@ -849,10 +849,6 @@
         console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
         if (sequence === threeState.loadSeq) hideThreePreview();
       }
-      } catch (error) {
-        console.warn('Three.js preview unavailable; retaining SVG fallback.', error);
-        if (sequence === threeState.loadSeq) hideThreePreview();
-      }
     }
     function renderModel(spec, view) {
       if (!spec) return;
