@@ -725,6 +725,7 @@
 
     function titleFor(text) {
       const value = text.toLowerCase();
+      if (/rounded cube|rounded block|filleted cube|soft cube|no sharp edges|no sharp corners|圆角立方体|圆角方块|圆润方块|无棱角|没有棱角|没用棱角|不带棱角/.test(value) || ((value.includes('cube') || value.includes('正方体') || value.includes('方块')) && /round|fillet|圆角|圆润|倒圆|棱角/.test(value))) return 'Rounded cube';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
       if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'Plant pot';
@@ -736,6 +737,7 @@
     }
     function kindForTitle(title) {
       const value = String(title || '').toLowerCase();
+      if (value.includes('rounded cube') || value.includes('rounded block') || value.includes('filleted cube') || value.includes('soft cube') || value.includes('圆角') || value.includes('无棱角') || value.includes('没有棱角') || value.includes('没用棱角') || value.includes('不带棱角')) return 'rounded_cube';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('angle') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯')) return 'angle';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'plant';
       if (value.includes('pen') || value.includes('笔')) return 'pen';
@@ -748,7 +750,7 @@
     function displayTitle(title) {
       const normalized = String(title || '').replace(/^Parametric\s+/i, '');
       if (currentLang !== 'zh') return normalized;
-      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘', 'L bracket': 'L 形支架' })[normalized] || normalized;
+      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘', 'L bracket': 'L 形支架', 'Rounded cube': '圆角正方体' })[normalized] || normalized;
     }
     function canonicalDimensionText(text) {
       const factors = { mm: 1, cm: 10, m: 1000, in: 25.4 };
@@ -771,6 +773,7 @@
       const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
       const angleShape = kindForTitle(titleFor(text)) === 'angle';
+      const roundedCube = kindForTitle(titleFor(text)) === 'rounded_cube';
       const pairMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])/i);
       const pair = pairMatch ? pairMatch.slice(1).map(Number) : [];
       const valueFor = (terms) => {
@@ -778,6 +781,7 @@
         const after = normalized.match(new RegExp('(?:' + terms + ')[^\\d]{0,8}(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)', 'i'));
         return before ? Number(before[1]) : (after ? Number(after[1]) : null);
       };
+      const cubeEdge = roundedCube ? valueFor('side|边长|边') : null;
       const diameter = valueFor('diameter|dia|直径');
       const footprint = valueFor('footprint|占地|底面');
       const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
@@ -785,10 +789,16 @@
       const featureValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:cable|wire|线缆|电缆|snap\s*opening|开口|diameter|dia|直径)/gi)).map((match) => Number(match[1]));
       const genericNumbers = unitNumbers.filter((value) => !treatmentValues.concat(leadingTreatmentValues, featureValues).includes(value));
       const positional = triplet.length === 3 ? triplet : (genericNumbers.length >= 3 ? genericNumbers.slice(0, 3) : []);
-      const width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || (angleShape && pair[0]) || 120;
+      let width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || (angleShape && pair[0]) || 120;
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
-      const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || width * 0.67));
-      const height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (angleShape ? 40 : 42));
+      let depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || width * 0.67));
+      let height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (angleShape ? 40 : (roundedCube ? 80 : 42)));
+      if (roundedCube && triplet.length !== 3) {
+        const edge = cubeEdge || pair[0] || genericNumbers[0] || 80;
+        width = valueFor('wide|width|宽') || edge;
+        depth = valueFor('deep|depth|长|深') || pair[1] || width;
+        height = valueFor('tall|height|高') || width;
+      }
       const scale = hasExplicitUnit ? 1 : fallbackFactor;
       return { width: width * scale, depth: depth * scale, height: height * scale };
     }
@@ -805,7 +815,7 @@
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       const profile = processProfiles[selectedProcess];
-      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
+      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance, material: selectedMaterial, edge_style: title === 'Rounded cube' ? 'fillet' : 'chamfer' };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
     function renderRotationalIso(spec) {
@@ -1391,7 +1401,8 @@
     }
     function canonicalPrompt(spec) {
       const title = String(spec.title || '').toLowerCase();
-      const type = title.includes('bracket') || title.includes('angle') || title.includes('l形') || title.includes('折条') ? 'l bracket'
+      const type = title.includes('rounded cube') || title.includes('rounded') || title.includes('圆角') ? 'rounded cube'
+        : title.includes('bracket') || title.includes('angle') || title.includes('l形') || title.includes('折条') ? 'l bracket'
         : title.includes('tray') || title.includes('托盘') ? 'storage tray'
         : title.includes('clip') || title.includes('cable') || title.includes('线缆') ? 'cable clip'
         : title.includes('plant') || title.includes('pot') || title.includes('花盆') ? 'plant pot'
