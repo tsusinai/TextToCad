@@ -651,7 +651,7 @@
       if (value.includes('pen') || value.includes('笔')) return 'Pen cup';
       if (value.includes('tray') || value.includes('托盘')) return 'Storage tray';
       if (value.includes('desk') || value.includes('桌面') || value.includes('收纳盒') || value.includes('收纳')) return 'Desk organizer';
-      return 'Desk organizer';
+      return 'Solid block';
     }
     function kindForTitle(title) {
       const value = String(title || '').toLowerCase();
@@ -1198,7 +1198,7 @@
         : title.includes('plant') || title.includes('pot') || title.includes('花盆') ? 'plant pot'
         : title.includes('lamp') || title.includes('灯') ? 'lamp base'
         : title.includes('pen') || title.includes('笔') ? 'pen cup'
-        : 'desk organizer';
+        : 'solid block';
       return 'A parametric ' + type + ' with ' + spec.compartments + ' compartments, ' + spec.width + ' mm wide, ' + spec.depth + ' mm deep, ' + spec.height + ' mm high, ' + (spec.wall || 3) + ' mm wall, ' + (spec.bottom || spec.wall || 3) + ' mm bottom, and ' + spec.chamfer + ' mm chamfer.';
     }
     function diffSpec(previous, next) {
@@ -1577,7 +1577,7 @@
         const canonical = canonicalPrompt(nextSpec);
         const backendPrompt = selectedMode === 'advanced'
           ? value.slice(0, 3200) + '\n\nBaseline CAD parameters: ' + canonical
-          : canonical;
+          : value.slice(0, 3200) + '\n\nParsed CAD parameters: ' + canonical;
         modelState.textContent = copy[currentLang].solving;
         solved.textContent = copy[currentLang].parsing;
         updateInterpretation(nextSpec, 'draft');
