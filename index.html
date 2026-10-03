@@ -75,7 +75,8 @@
     .feature-head { display: flex; align-items: center; justify-content: space-between; }
     .feature-mode { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
     .feature-tree { display: grid; gap: 7px; margin-top: 12px; }
-    .feature-node { display: grid; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: start; padding: 8px 9px; border-radius: 10px; background: #fff; }
+    .feature-node { display: grid; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: start; padding: 8px 9px; border-radius: 10px; background: #fff; cursor: pointer; transition: background .18s ease, box-shadow .18s ease, transform .18s ease; }
+    .feature-node:hover, .feature-node.is-highlighted { background: #f1f8e5; box-shadow: inset 0 0 0 1px #b7d891; transform: translateX(2px); }
     .feature-node .node-dot { width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: #9fca82; }
     .feature-node strong, .feature-node small { display: block; }
     .feature-node strong { font-size: 11px; }
@@ -151,11 +152,20 @@
     .view-pill:focus-visible, .export:focus-visible, .generate:focus-visible, .cancel-generation:focus-visible, .model-stage:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .viewport-header { padding-bottom: 18px; border-bottom: 1px solid #3b3f38; }
     .viewport-label { color: #abb3a5; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-    .view-controls { display: flex; gap: 8px; }
+    .view-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
     .view-pill { background: #30342f; color: #c5d4b7; border: 1px solid transparent; }
     .view-pill.active { color: var(--lime); border-color: #50604d; }
+    .toolbar-divider { width: 1px; height: 18px; background: #4a5148; margin: 0 2px; }
+    .unit-view-select { border: 1px solid #4b5249; border-radius: 999px; padding: 7px 10px; background: #30342f; color: #d8dfd3; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .unit-view-select:focus-visible, .viewport-gizmo button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
     .model-stage { position: relative; z-index: 1; display: grid; place-items: center; height: calc(100% - 87px); min-height: 450px; touch-action: none; cursor: grab; user-select: none; }
     .model-stage.dragging { cursor: grabbing; }
+    .viewport-gizmo { position: absolute; top: 16px; right: 18px; z-index: 5; display: grid; grid-template-columns: repeat(3, auto); align-items: center; gap: 4px; padding: 6px; border: 1px solid rgba(157,182,143,.35); border-radius: 12px; background: rgba(37,39,36,.82); backdrop-filter: blur(8px); }
+    .viewport-gizmo button { border: 0; border-radius: 7px; padding: 6px 7px; background: transparent; color: #aebba9; font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+    .viewport-gizmo button:hover, .viewport-gizmo button.active { background: #4a5b47; color: var(--lime); }
+    .axis-readout { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 7px; padding: 2px 4px 0; font-size: 9px; letter-spacing: .05em; }
+    .axis-x { color: #e98978; } .axis-y { color: #9fca82; } .axis-z { color: #8eb9e8; }
+    .viewport-selection { position: absolute; left: 18px; top: 16px; z-index: 5; max-width: 210px; border: 1px solid rgba(221,247,155,.45); border-radius: 999px; padding: 7px 10px; background: rgba(37,39,36,.84); color: var(--lime); font-size: 10px; font-weight: 800; pointer-events: none; }
     .three-viewport { position: absolute; inset: 0; display: none; z-index: 2; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 50% 35%, #3a4039, #252724 70%); }
     .three-viewport.active { display: block; }
     .three-viewport canvas { width: 100%; height: 100%; display: block; }
@@ -164,6 +174,7 @@
     .model-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)); }
     .model-svg .solid { transition: fill .3s ease; }
     .model-svg .accent { stroke: var(--lime); }
+    .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)) drop-shadow(0 0 16px rgba(221,247,155,.62)); }
     .viewport-footer { position: absolute; bottom: 22px; left: 26px; right: 26px; }
     .state-pill { background: var(--lime); color: #243122; }
     .viewport-meta { color: #a3aaa0; font-size: 12px; }
