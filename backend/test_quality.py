@@ -6,6 +6,8 @@ the Docker image where the CAD kernel is available.
 from pathlib import Path
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app
@@ -79,3 +81,28 @@ def test_nominal_analysis_never_reports_manufacturing_ready():
 def test_strict_dimensions_reject_ambiguous_input():
     _, _, provenance = app.parse_prompt_detailed("a block 120 80", units="mm")
     assert provenance["units"]["ambiguous_dimensions"] is True
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "tray 160 mm footprint, 12 mm wall",
+        "organizer 120 mm wide, 80 mm deep, 42 mm high with 3 compartments",
+        "plant pot 90 mm diameter and 82 mm tall with drainage holes",
+        "pen cup 72 mm diameter and 95 mm tall",
+        "lamp base 110 mm wide with cable channel",
+        "cable clip for a 6 mm cable",
+        "solid block 40 mm x 30 mm x 20 mm",
+    ],
+)
+def test_supported_model_families_produce_valid_brep(prompt):
+    _, params, _ = app.parse_prompt_detailed(prompt)
+    analysis = app.analyze_manufacturability(params)
+    shape = app.build_geometry(params)
+    checks = app._validate_shape(shape, params, analysis)
+    assert checks["valid_brep"] is True
+    assert checks["occt_valid"] is True
+    assert checks["nonzero_faces"] is True
+    assert checks["single_solid"] is True
+    assert checks["positive_volume"] is True
