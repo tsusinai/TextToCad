@@ -107,3 +107,10 @@ Astra 建模质量专项建议已落实第一批 P0/P1：
 - 新增 `backend/test_quality.py` 与 `.github/workflows/quality.yml`。
 
 限制：本轮没有在当前执行环境启动 Docker/CadQuery；必须在目标主机执行完整导出 smoke test 和多设备 GLB 坐标验证。
+
+## 建模过程展示执行（2026-10-03）
+
+- 后端用 `GenerationRecorder` 记录真实解析、特征构建、校验、制造审查和导出事件，异步任务通过 `progress` 实时返回当前步骤。
+- 前端新增建模过程面板，显示每个事件的状态与耗时；`include_steps=true` 时可从实际中间 GLB 快照打开步骤预览。
+- 最终 `generation_trace` 写入响应和 manifest，便于审查实际执行链；后端不可用时显示明确的本地离线流程。
+- GitHub Actions 的 Backend quality 在本轮提交后通过；gh-pages 已同步并由 Pages deployment 发布。
