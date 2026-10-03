@@ -956,6 +956,10 @@
             cylinder(holeRadius, .5, x, bottom + .45, z, dark, false);
           });
         }
+      } else if (kind === 'angle') {
+        const extrusion = Math.max(height, 5);
+        box(width, wall, extrusion, 0, -depth / 2 + wall / 2, 0, side);
+        box(wall, depth, extrusion, -width / 2 + wall / 2, 0, 0, body);
       } else if (kind === 'tray' || kind === 'organizer') {
         const innerWidth = Math.max(width - wall * 2, 2);
         const innerDepth = Math.max(depth - wall * 2, 2);
