@@ -206,6 +206,9 @@
     .solved { color: var(--green); font-size: 12px; font-weight: 700; }
     .param-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
     .param-card { min-height: 120px; padding: 18px; border-radius: 16px; background: var(--card); }
+    .material-card { display: flex; flex-direction: column; align-items: flex-start; }
+    .material-select { width: 100%; margin-top: 12px; border: 1px solid #d5d8ce; border-radius: 9px; padding: 8px 10px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 800; }
+    .material-select:focus-visible { outline: 2px solid #b9d58d; outline-offset: 2px; }
     .param-card .label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; }
     .param-card strong { display: block; margin-top: 13px; font-size: 16px; }
     .param-card small { display: block; margin-top: 10px; color: #7a7c74; font-size: 12px; }
@@ -373,7 +376,13 @@
           <div class="param-grid">
             <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">3 watertight solids</small></article>
             <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
-            <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · warm white</strong><small>Print-ready surface</small></article>
+            <article class="param-card material-card"><div class="label" id="materialCardLabel">MATERIAL PRESET</div><select class="material-select" id="materialSelect" aria-label="Material preset">
+              <option value="pla">Matte PLA · warm white</option>
+              <option value="petg">PETG · translucent green</option>
+              <option value="abs">ABS · graphite</option>
+              <option value="resin">Resin · stone grey</option>
+              <option value="aluminum">Aluminum · anodized</option>
+            </select><small id="materialMeta">Print-ready surface</small></article>
           </div>
           <div class="feature-card">
             <div class="feature-head"><span class="section-label" id="featureLabel">FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC</span></div>
