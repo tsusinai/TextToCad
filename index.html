@@ -146,6 +146,7 @@
     .content { min-width: 0; display: grid; grid-template-rows: minmax(520px, 1fr) auto; gap: 20px; }
     .viewport { min-height: 620px; position: relative; overflow: hidden; background: var(--graphite); border-radius: 22px; color: white; padding: 22px 26px; }
     .viewport::after { content: ""; position: absolute; inset: 78px 80px 106px; background-image: linear-gradient(rgba(188,211,168,.12) 1px, transparent 1px), linear-gradient(120deg, transparent 49.7%, rgba(188,211,168,.12) 50%, transparent 50.3%), linear-gradient(60deg, transparent 49.7%, rgba(188,211,168,.1) 50%, transparent 50.3%); background-size: 100% 38px, 70px 100%, 70px 100%; opacity: .55; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 86%, transparent); }
+    .viewport.grid-hidden::after { opacity: 0; }
     .viewport-header, .viewport-footer { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
     .viewport-footer { flex-wrap: wrap; gap: 10px; }
     .viewport-footer > div:first-child { min-width: 0; flex: 1 1 260px; }
@@ -423,7 +424,12 @@
     const modelWrap = document.getElementById('modelWrap');
     const modelStage = document.getElementById('modelStage');
     const threeViewport = document.getElementById('threeViewport');
+    const viewport = document.querySelector('.viewport');
     const fitView = document.getElementById('fitView');
+    const viewerUnitSelect = document.getElementById('viewerUnitSelect');
+    const toggleGrid = document.getElementById('toggleGrid');
+    const viewGizmo = document.getElementById('viewGizmo');
+    const viewportSelection = document.getElementById('viewportSelection');
     const interactionHint = document.getElementById('interactionHint');
     const generationError = document.getElementById('generationError');
     const generationProcessLabel = document.getElementById('generationProcessLabel');
@@ -515,13 +521,14 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
-    const threeState = { active: false, ready: false, source: '', THREE: null, renderer: null, camera: null, controls: null, scene: null, model: null, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
+    const threeState = { active: false, ready: false, source: '', THREE: null, renderer: null, camera: null, controls: null, scene: null, model: null, helpers: null, grid: null, gridVisible: true, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
+    let highlightedFeature = null;
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', generationProcessLabel: 'BUILD PROCESS', readyStatus: 'READY', runningStatus: 'BUILDING', completedStatus: 'COMPLETE', failedStatus: 'REVIEW', stepPreview: 'VIEW STEP', noProcess: 'Start generation to inspect the build sequence.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', generationProcessLabel: '建模过程', readyStatus: '待开始', runningStatus: '建模中', completedStatus: '已完成', failedStatus: '需复核', stepPreview: '查看步骤', noProcess: '开始生成后查看建模步骤。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', grid: 'GRID', viewerUnits: 'VIEW UNITS', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', generationProcessLabel: 'BUILD PROCESS', readyStatus: 'READY', runningStatus: 'BUILDING', completedStatus: 'COMPLETE', failedStatus: 'REVIEW', stepPreview: 'VIEW STEP', noProcess: 'Start generation to inspect the build sequence.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', grid: '网格', viewerUnits: '视图单位', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', generationProcessLabel: '建模过程', readyStatus: '待开始', runningStatus: '建模中', completedStatus: '已完成', failedStatus: '需复核', stepPreview: '查看步骤', noProcess: '开始生成后查看建模步骤。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -552,6 +559,16 @@
       if (export3mf) export3mf.textContent = t.export3mf;
       if (exportGlb) exportGlb.textContent = t.exportGlb;
       if (fitView) fitView.textContent = t.fit;
+      if (toggleGrid) toggleGrid.textContent = t.grid;
+      if (viewerUnitSelect) {
+        viewerUnitSelect.setAttribute('aria-label', t.viewerUnits);
+        viewerUnitSelect.value = selectedUnits;
+      }
+      if (viewGizmo) {
+        viewGizmo.querySelector('[data-gizmo-view="iso"]').textContent = t.iso;
+        viewGizmo.querySelector('[data-gizmo-view="top"]').textContent = t.top;
+        viewGizmo.querySelector('[data-gizmo-view="front"]').textContent = t.front;
+      }
       if (cancelGeneration) cancelGeneration.textContent = t.cancel;
       if (document.getElementById('paramWidthLabel')) document.getElementById('paramWidthLabel').textContent = currentLang === 'zh' ? '宽度' : 'WIDTH';
       if (document.getElementById('paramDepthLabel')) document.getElementById('paramDepthLabel').textContent = currentLang === 'zh' ? '深度' : 'DEPTH';
@@ -891,6 +908,15 @@
       threeState.controls.target.set(0, 0, 0);
       threeState.controls.update();
     }
+    function setGridVisible(visible) {
+      threeState.gridVisible = Boolean(visible);
+      if (threeState.grid) threeState.grid.visible = threeState.gridVisible;
+      if (viewport) viewport.classList.toggle('grid-hidden', !threeState.gridVisible);
+      if (toggleGrid) {
+        toggleGrid.setAttribute('aria-pressed', String(threeState.gridVisible));
+        toggleGrid.classList.toggle('active', threeState.gridVisible);
+      }
+    }
     function resetThreeCamera() { fitThreeModel(); setThreeView(currentView); }
     async function ensureThreeRenderer() {
       if (threeState.renderer && threeState.THREE) return threeState.THREE;
@@ -902,6 +928,19 @@
         threeState.THREE = THREE;
         threeState.scene = new THREE.Scene();
         threeState.scene.background = new THREE.Color(0x252724);
+        const helpers = new THREE.Group();
+        helpers.name = 'cadHelpers';
+        const grid = new THREE.GridHelper(2000, 200, 0x52624e, 0x354035);
+        grid.material.opacity = .28;
+        grid.material.transparent = true;
+        grid.position.y = -0.01;
+        const axes = new THREE.AxesHelper(80);
+        axes.renderOrder = 2;
+        helpers.add(grid);
+        helpers.add(axes);
+        threeState.helpers = helpers;
+        threeState.grid = grid;
+        threeState.scene.add(helpers);
         threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
         threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -941,6 +980,18 @@
 
     function makeLocalMaterial(THREE, color, roughness = .55, metalness = .04) {
       return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    }
+
+    function addModelEdgeLines(THREE, root) {
+      if (!root) return;
+      root.traverse((node) => {
+        if (!node.isMesh || !node.geometry || node.userData.edgeOverlay) return;
+        const material = new THREE.LineBasicMaterial({ color: 0x182218, transparent: true, opacity: .58 });
+        const line = new THREE.LineSegments(new THREE.EdgesGeometry(node.geometry, 20), material);
+        line.userData.edgeOverlay = true;
+        node.add(line);
+        node.userData.edgeOverlay = true;
+      });
     }
 
     function buildLocalThreeModel(THREE, spec) {
@@ -1014,6 +1065,7 @@
           box(Math.min(width * .4, width - wall * 2), Math.min(wall * 1.6, height * .35), Math.min(depth * .22, depth - wall * 2), 0, .5, depth * .28, dark);
         }
       }
+      addModelEdgeLines(THREE, root);
       root.userData.previewSource = 'local';
       return root;
     }
@@ -1080,6 +1132,7 @@
           disposeThreeObject(threeState.model);
         }
         threeState.model = gltf.scene;
+        addModelEdgeLines(THREE, threeState.model);
         // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
         // imported root so top/front views and orbit controls match the SVG preview.
         threeState.model.rotation.x = -Math.PI / 2;
@@ -1292,8 +1345,49 @@
       const labels = currentLang === 'zh' ? { width: '宽', depth: '深', height: '高', wall: '壁厚', chamfer: '倒角', compartments: '隔间' } : { width: 'width', depth: 'depth', height: 'height', wall: 'wall', chamfer: 'chamfer', compartments: 'compartments' };
       return diff.map((item) => labels[item.key] + ' ' + (item.delta > 0 ? '+' : '') + item.delta + (item.unit ? ' ' + item.unit : '')).join(currentLang === 'zh' ? '、' : ', ');
     }
+    function setFeatureHighlight(index, active) {
+      const selected = active ? index : null;
+      highlightedFeature = selected;
+      document.querySelectorAll('.feature-node').forEach((node) => {
+        node.classList.toggle('is-highlighted', selected !== null && node.dataset.featureIndex === String(selected));
+      });
+      if (viewportSelection) {
+        if (selected === null) {
+          viewportSelection.hidden = true;
+        } else {
+          const node = featureTree && featureTree.querySelector('[data-feature-index="' + selected + '"]');
+          const label = node ? node.querySelector('strong') : null;
+          viewportSelection.textContent = (currentLang === 'zh' ? '已选择：' : 'Selected: ') + (label ? label.textContent : 'CAD feature');
+          viewportSelection.hidden = false;
+        }
+      }
+      if (modelWrap) modelWrap.classList.toggle('feature-highlighted', selected !== null);
+      if (threeState.model) highlightThreeModel(threeState.model, selected !== null);
+    }
+    function highlightThreeModel(root, active) {
+      if (!root) return;
+      root.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (!material.emissive) return;
+          if (active) {
+            if (material.userData._baseEmissive === undefined) {
+              material.userData._baseEmissive = material.emissive.getHex();
+              material.userData._baseIntensity = material.emissiveIntensity || 0;
+            }
+            material.emissive.setHex(0xb6df7b);
+            material.emissiveIntensity = .38;
+          } else if (material.userData._baseEmissive !== undefined) {
+            material.emissive.setHex(material.userData._baseEmissive);
+            material.emissiveIntensity = material.userData._baseIntensity;
+          }
+        });
+      });
+    }
     function renderFeatureTree(spec) {
       if (!featureTree || !spec) return;
+      setFeatureHighlight(null, false);
       featureTree.innerHTML = '';
       const features = spec.kind === 'angle'
         ? [
@@ -1314,9 +1408,13 @@
       if (spec.kind === 'lamp' && spec.cable_channel) {
         features.push([copy[currentLang].cableFeature, currentLang === 'zh' ? '底部隐藏通道' : 'underside recess']);
       }
-      features.forEach((feature) => {
+      features.forEach((feature, index) => {
         const node = document.createElement('div');
         node.className = 'feature-node';
+        node.dataset.featureIndex = String(index);
+        node.addEventListener('mouseenter', () => setFeatureHighlight(index, true));
+        node.addEventListener('mouseleave', () => { if (highlightedFeature !== index) setFeatureHighlight(null, false); });
+        node.addEventListener('click', () => setFeatureHighlight(highlightedFeature === index ? null : index, highlightedFeature !== index));
         const dot = document.createElement('span');
         dot.className = 'node-dot';
         const body = document.createElement('div');
@@ -1772,6 +1870,16 @@
       setGenerationError(copy[currentLang].cancelled);
     });
     bindViewportControls();
+    setGridVisible(true);
+    if (toggleGrid) toggleGrid.addEventListener('click', () => setGridVisible(!threeState.gridVisible));
+    if (viewerUnitSelect) viewerUnitSelect.addEventListener('change', () => {
+      selectedUnits = viewerUnitSelect.value;
+      if (unitSelect) unitSelect.value = selectedUnits;
+      try { localStorage.setItem(unitStorageKey, selectedUnits); } catch (error) {}
+      backendArtifact = null;
+      updateExportButtons();
+      if (modelSpec) generateModel();
+    });
     if (generationMode) generationMode.addEventListener('change', () => {
       selectedMode = generationMode.value === 'advanced' ? 'advanced' : 'standard';
       try { localStorage.setItem(modeStorageKey, selectedMode); } catch (error) {}
@@ -1782,6 +1890,7 @@
     });
     if (unitSelect) unitSelect.addEventListener('change', () => {
       selectedUnits = unitSelect.value;
+      if (viewerUnitSelect) viewerUnitSelect.value = selectedUnits;
       try { localStorage.setItem(unitStorageKey, selectedUnits); } catch (error) {}
       backendArtifact = null;
       updateExportButtons();
@@ -1808,18 +1917,25 @@
     document.querySelectorAll('[data-prompt]').forEach((button) => {
       button.addEventListener('click', () => { prompt.value = button.dataset.prompt; backendArtifact = null; updateInterpretation(parseModel(prompt.value), 'draft'); prompt.focus(); });
     });
-    document.querySelectorAll('[data-view]').forEach((button) => {
-      button.addEventListener('click', () => {
-        document.querySelectorAll('[data-view]').forEach((item) => {
-          item.classList.remove('active');
-          item.setAttribute('aria-pressed', String(item === button));
-        });
-        button.classList.add('active');
-        currentView = button.dataset.view;
-        resetCamera();
-        renderModel(modelSpec || parseModel(prompt.value), currentView);
-        setThreeView(currentView);
+    function selectView(view) {
+      currentView = view;
+      document.querySelectorAll('[data-view]').forEach((item) => {
+        const active = item.dataset.view === view;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-pressed', String(active));
       });
+      document.querySelectorAll('[data-gizmo-view]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.gizmoView === view);
+      });
+      resetCamera();
+      renderModel(modelSpec || parseModel(prompt.value), currentView);
+      setThreeView(currentView);
+    }
+    document.querySelectorAll('[data-view]').forEach((button) => {
+      button.addEventListener('click', () => selectView(button.dataset.view));
+    });
+    document.querySelectorAll('[data-gizmo-view]').forEach((button) => {
+      button.addEventListener('click', () => selectView(button.dataset.gizmoView));
     });
     function objFor(spec) {
       const w = spec.width, d = spec.depth, h = spec.height;
