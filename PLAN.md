@@ -185,3 +185,13 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 已覆盖参数表达式、布尔切除和草图挤出的回归测试。
 
 下一步是将 selector、约束求解和通用 IR 生成器接入主生成路径；旧族型构建器在回归指标达标前继续作为 fallback。
+
+
+## P2/P3 实现进度（2026-10-04）
+
+- 增加 `ir_constraints.py`：解析参数表达式并评估 range/process/manufacturing 规则，区分 hard violation、soft warning 和 deferred geometry check。
+- 增加语义 selector 静态校验：实体、拓扑类型和 where 属性必须来自白名单。
+- 增加 `ir_repair.py` 与 `POST /v1/ir/repair`：默认只建议 `set_parameter` 等受限 patch，显式 apply 后重新验证。
+- 增加 `POST /v1/ir/plan`：高级模式下让 LLM 直接生成 v0.2 IR 草案；服务端执行大小限制、JSON 校验、IR 校验和约束检查。
+- 现有 `POST /v1/generate` 仍走兼容路径，通用 IR 先通过 plan/validate/compile 独立验证，待指标对齐后切换主生成策略。
+
