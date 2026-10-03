@@ -329,6 +329,7 @@ def parse_prompt_detailed(
             and any(token in text for token in ("round", "fillet", "圆角", "圆润", "倒圆", "棱角"))
         )
     )
+    cube_shape = rounded_cube or any(token in text for token in ("cube", "正方体", "方块"))
     if rounded_cube:
         kind = "rounded_cube"
         title = "Parametric rounded cube"
@@ -446,7 +447,7 @@ def parse_prompt_detailed(
     cube_edge = _number_after(text, [
         r"(?:side|边长|边)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:side|边长|边)",
-    ]) if rounded_cube else None
+    ]) if cube_shape else None
     width_found = width is not None or triplet_found or pair_found
     width = width or (generic_numbers[0] if len(generic_numbers) >= 3 else 120.0)
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
@@ -465,7 +466,7 @@ def parse_prompt_detailed(
     generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
     height_found = height is not None or triplet_found or generic_height is not None
     height = height or (generic_height if generic_height is not None else default_height)
-    if rounded_cube and not triplet_found and not diameter_found and not any((width_found, depth_found, height_found)):
+    if cube_shape and not triplet_found and not diameter_found and not any((width_found, depth_found, height_found)):
         edge = cube_edge or (generic_numbers[0] if generic_numbers else 80.0)
         width = depth = height = edge
         width_found = depth_found = height_found = True
@@ -479,7 +480,8 @@ def parse_prompt_detailed(
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
     ])
     chamfer_found = chamfer_value is not None
-    chamfer = chamfer_value if chamfer_value is not None else (0.0 if kind == "angle" else (4.0 if kind == "rounded_cube" else 2.0))
+    chamfer_default = 4.0 if kind == "rounded_cube" else (0.0 if cube_shape or kind == "angle" else 2.0)
+    chamfer = chamfer_value if chamfer_value is not None else chamfer_default
     edge_style = "fillet" if kind == "rounded_cube" else "chamfer"
 
     wall_value = _number_after(text, [
