@@ -282,15 +282,30 @@
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
             <span class="viewport-label">LIVE PREVIEW</span><span class="issue-badge" id="issueBadge">READY</span>
-            <div class="view-controls">
+            <div class="view-controls" aria-label="CAD view tools">
               <button class="view-pill active" type="button" data-view="iso" aria-pressed="true">ISOMETRIC</button>
               <button class="view-pill" type="button" data-view="top" aria-pressed="false">TOP</button>
               <button class="view-pill" type="button" data-view="front" aria-pressed="false">FRONT</button>
-              <span class="unit-pill" style="background:#30342f;color:#a3aaa0;">MM</span><button class="view-pill" id="fitView" type="button" aria-label="Fit view">FIT</button>
+              <span class="toolbar-divider" aria-hidden="true"></span>
+              <select class="unit-view-select" id="viewerUnitSelect" aria-label="Viewer units">
+                <option value="mm">mm</option>
+                <option value="cm">cm</option>
+                <option value="m">m</option>
+                <option value="in">in</option>
+              </select>
+              <button class="view-pill" id="toggleGrid" type="button" aria-pressed="true">GRID</button>
+              <button class="view-pill" id="fitView" type="button" aria-label="Fit view">FIT</button>
             </div>
           </div>
           <div class="model-stage" id="modelStage" tabindex="0" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
             <div class="three-viewport" id="threeViewport" aria-hidden="true"></div>
+            <div class="viewport-gizmo" id="viewGizmo" aria-label="View cube">
+              <button type="button" data-gizmo-view="iso" aria-label="Isometric view">ISO</button>
+              <button type="button" data-gizmo-view="top" aria-label="Top view">TOP</button>
+              <button type="button" data-gizmo-view="front" aria-label="Front view">FRONT</button>
+              <span class="axis-readout"><b class="axis-x">X</b><b class="axis-y">Y</b><b class="axis-z">Z</b></span>
+            </div>
+            <div class="viewport-selection" id="viewportSelection" hidden></div>
             <div class="interaction-hint" id="interactionHint">Drag to orbit · wheel to zoom · double-click to reset</div>
             <div class="model-wrap" id="modelWrap">
               <svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Isometric parametric desk organizer">
