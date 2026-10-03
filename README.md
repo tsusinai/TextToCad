@@ -91,6 +91,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 - Lamp base：灯座和底部隐藏走线槽
 - Pen cup：笔筒和圆柱腔体
 - Solid block：通用实体块
+- L bracket：L 形支架、直角折条，支持两条腿尺寸与板厚
 
 ## API 快速参考
 
