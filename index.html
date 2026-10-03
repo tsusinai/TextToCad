@@ -958,8 +958,8 @@
         }
       } else if (kind === 'angle') {
         const extrusion = Math.max(height, 5);
-        box(width, wall, extrusion, 0, -depth / 2 + wall / 2, 0, side);
-        box(wall, depth, extrusion, -width / 2 + wall / 2, 0, 0, body);
+        box(width, extrusion, wall, 0, extrusion / 2, -(depth - wall) / 2, side);
+        box(wall, extrusion, depth, -(width - wall) / 2, extrusion / 2, 0, body);
       } else if (kind === 'tray' || kind === 'organizer') {
         const innerWidth = Math.max(width - wall * 2, 2);
         const innerDepth = Math.max(depth - wall * 2, 2);
