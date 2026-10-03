@@ -104,6 +104,7 @@ class GenerateRequest(BaseModel):
     units: Literal["mm", "cm", "m", "in"] = "mm"
     process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
     mode: Literal["standard", "advanced"] = "standard"
+    strict_dimensions: bool = False
 
 
 class ModelParameters(BaseModel):
@@ -154,7 +155,9 @@ REQUEST_BUCKETS: dict[str, list[float]] = {}
 
 def _cache_key(request: GenerateRequest) -> str:
     normalized = " ".join(request.prompt.strip().lower().split())
-    return hashlib.sha256(f"{request.mode}\0{request.process}\0{request.units}\0{normalized}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        f"{request.mode}\0{request.process}\0{request.units}\0{request.strict_dimensions}\0{normalized}".encode("utf-8")
+    ).hexdigest()
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -1017,6 +1020,16 @@ def build_geometry(params: ModelParameters) -> Any:
 def _shape_metrics(shape: Any) -> dict[str, Any]:
     solid = shape.val()
     bbox = solid.BoundingBox()
+    faces = solid.Faces()
+    edges = solid.Edges()
+    zero_area_faces = sum(1 for face in faces if abs(float(face.Area())) <= 1e-9)
+    occt_valid = bool(solid.isValid())
+    try:
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        occt_valid = bool(BRepCheck_Analyzer(solid.wrapped).IsValid())
+    except Exception:
+        # CadQuery's Shape.isValid remains the fallback when OCP helpers differ.
+        pass
     return {
         "volume_mm3": round(float(solid.Volume()), 6),
         "bbox_mm": {
@@ -1025,7 +1038,12 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
             "z": round(float(bbox.zlen), 6),
         },
         "solid_count": len(shape.solids().vals()),
+        "face_count": len(faces),
+        "edge_count": len(edges),
+        "zero_area_faces": zero_area_faces,
         "valid_brep": bool(solid.isValid()),
+        "occt_valid": occt_valid,
+        "nonzero_faces": zero_area_faces == 0 and len(faces) > 0,
     }
 
 
@@ -1035,6 +1053,8 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
     issue_codes = {issue["code"] for issue in analysis["issues"]}
     return {
         "valid_brep": metrics["valid_brep"],
+        "occt_valid": metrics["occt_valid"],
+        "nonzero_faces": metrics["nonzero_faces"],
         "single_solid": metrics["solid_count"] == 1,
         "positive_volume": metrics["volume_mm3"] > 0,
         "bounded": all(dimension > 0 for dimension in bbox.values()),
@@ -1378,6 +1398,8 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             request.mode,
             request.units,
         )
+        if request.strict_dimensions and provenance.get("units", {}).get("ambiguous_dimensions"):
+            raise ValueError("ambiguous dimensions; specify width, depth, and height or provide a dimension triplet")
         design_ir = build_design_ir(
             request.prompt,
             params,
@@ -1389,7 +1411,10 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
         shape = build_geometry(params)
         analysis = analyze_manufacturability(params)
         checks = _validate_shape(shape, params, analysis)
-        hard_checks = {key: checks[key] for key in ("valid_brep", "single_solid", "positive_volume", "bounded")}
+        hard_checks = {
+            key: checks[key]
+            for key in ("valid_brep", "occt_valid", "nonzero_faces", "single_solid", "positive_volume", "bounded")
+        }
         if not all(hard_checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
         model_id = uuid.uuid4().hex
