@@ -831,7 +831,7 @@
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       const profile = processProfiles[selectedProcess];
-      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance, material: selectedMaterial, edge_style: title === 'Rounded cube' ? 'fillet' : 'chamfer' };
+      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance, material: selectedMaterial, edge_style: title === 'Rounded cube' ? 'fillet' : 'chamfer', cube_shape: cubeShape };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
     function renderRotationalIso(spec) {
@@ -1993,7 +1993,7 @@
           depth: remoteParams.depth ?? nextSpec.depth,
           height: remoteParams.height ?? nextSpec.height,
           compartments: remoteParams.compartments ?? nextSpec.compartments,
-          chamfer: remoteParams.chamfer ?? nextSpec.chamfer,
+          chamfer: nextSpec.cube_shape ? nextSpec.chamfer : (remoteParams.chamfer ?? nextSpec.chamfer),
           wall: remoteParams.wall ?? nextSpec.wall,
           bottom: remoteParams.bottom ?? nextSpec.bottom,
           process: remote.process || selectedProcess,
@@ -2002,7 +2002,7 @@
           drainage_holes: remoteParams.drainage_holes ?? nextSpec.drainage_holes ?? 0,
           cable_channel: remoteParams.cable_channel ?? nextSpec.cable_channel ?? false,
           material: remoteParams.material || nextSpec.material || selectedMaterial,
-          edge_style: remoteParams.edge_style || nextSpec.edge_style || 'chamfer'
+          edge_style: nextSpec.cube_shape ? nextSpec.edge_style : (remoteParams.edge_style || nextSpec.edge_style || 'chamfer'),
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
         renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
