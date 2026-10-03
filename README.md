@@ -10,13 +10,13 @@
 
 | 能力 | 当前实现 |
 | --- | --- |
-| 自然语言 | 中文/英文尺寸、模型族、隔间、壁厚、倒角、排水孔、走线槽 |
+| 自然语言 | 中文/英文尺寸、mm/cm/m/in 单位换算、模型族、隔间、壁厚、倒角、排水孔、走线槽 |
 | 3D 预览 | Three.js 参数化预览、GLB/OrbitControls、等距/顶视/前视、旋转/缩放/平移 |
 | 几何内核 | CadQuery/OCCT 参数化 B-Rep |
 | 导出 | STEP、STL，条件支持 3MF、GLB；前端保留 OBJ 概念导出 |
 | 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
 | 高级模式 | OpenAI-compatible LLM、DeepSeek 示例、受限 JSON、失败回退 |
-| 可追溯性 | manifest、Semantic CAD IR、assumptions、revision history |
+| 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |
 
 ## Live 预览
 
@@ -80,7 +80,7 @@ flowchart LR
   G --> H[Three.js 交互预览]
 ~~~
 
-LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会对模型族、尺寸、布尔值、数值范围和响应大小做校验，再交给 CadQuery/OCCT 建模。没有 API key、provider 超时、JSON 无效或 provider 不支持 JSON response format 时，会回退到确定性解析器。
+LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会把 mm/cm/m/in 统一换算为毫米，记录原始单位和逐字段来源，对模型族、尺寸、布尔值、数值范围和响应大小做校验，再交给 CadQuery/OCCT 建模。没有 API key、provider 超时、JSON 无效或 provider 不支持 JSON response format 时，会回退到确定性解析器。
 
 ## 支持的模型族
 
@@ -105,6 +105,16 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 | GET | /v1/models/{id}/analysis | 壁厚采样和制造问题 |
 | GET | /v1/models/{id}/download?format=step | 下载 STEP、STL、3MF 或 GLB |
 
+严格尺寸请求示例（遇到无标签尺寸时返回 422）：
+
+~~~json
+{
+  "prompt": "block 120 80",
+  "units": "mm",
+  "strict_dimensions": true
+}
+~~~
+
 高级模式请求示例：
 
 ~~~json
@@ -127,7 +137,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 
 ## 当前边界
 
-- 壁厚、间隙、悬空和拔模目前包含名义估算；真正的面级测量仍是下一阶段。
+- 壁厚、间隙、悬空和拔模目前包含名义估算；真正的面级测量仍是下一阶段。`manufacturing_ready` 会保持 false。
 - LLM 高级模式需要后端 API key；标准模式无需 API，仍可离线工作。
 - 没有后端时可以进行真实参数化预览和 OBJ 概念导出，但 STEP/STL/OCCT 检查必须连接后端。
 - 生产部署应使用 HTTPS、持久化 ARTIFACT_ROOT、严格 CORS、速率限制和进程级任务隔离。
@@ -146,3 +156,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 - [OPTIMIZATION.md](OPTIMIZATION.md)：Astra 审查与执行记录
 - [backend/README.md](backend/README.md)：后端 API 和开发说明
 
+
+## 质量回归
+
+后端包含单位、尺寸语义、特征尺寸过滤、IR 特征计数和制造评估的回归测试；推送到 GitHub 后会由 Actions 自动运行。CadQuery/OCCT 导出回读则在 Docker 环境中执行。
