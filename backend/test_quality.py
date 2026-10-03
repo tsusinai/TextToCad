@@ -337,3 +337,21 @@ def test_generic_ir_executor_builds_sketch_extrusion():
     metrics = app.shape_metrics(execution["shape"])
     assert metrics["valid_brep"] is True
     assert metrics["bbox_mm"] == {"x": 24.0, "y": 12.0, "z": 6.0}
+
+
+
+def test_ir_constraints_report_hard_and_soft_violations():
+    ir = {
+        "schema_version": "0.2",
+        "parameters": {"wall": {"value": 0.8, "unit": "mm", "source": "user"}},
+        "constraints": [
+            {"id": "wall-hard", "type": "range", "parameter": "wall",
+             "minimum_mm": 1.2, "hard": True},
+            {"id": "wall-soft", "type": "process_rule", "parameter": "wall",
+             "minimum_mm": 2.0, "hard": False},
+        ],
+    }
+    report = app.solve_constraints(app.validate_ir(ir))
+    assert report["valid"] is False
+    assert report["hard_violation_count"] == 1
+    assert {item["id"] for item in report["violations"]} == {"wall-hard", "wall-soft"}
