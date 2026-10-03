@@ -2578,16 +2578,60 @@
     }
     function bindViewportControls() {
       if (!modelStage) return;
+      const clearPointerState = () => {
+        const active = pointerState;
+        pointerState = null;
+        modelStage.classList.remove('dragging');
+        if (active && active.id !== undefined) {
+          try {
+            if (modelStage.hasPointerCapture && modelStage.hasPointerCapture(active.id)) modelStage.releasePointerCapture(active.id);
+          } catch (error) {}
+        }
+      };
+      const releasePointerState = (event) => {
+        if (!pointerState) return;
+        if (event && event.pointerId !== undefined && pointerState.id !== event.pointerId) return;
+        clearPointerState();
+      };
+      const preventViewportContextMenu = (event) => {
+        if (!modelStage.contains(event.target)) return;
+        event.preventDefault();
+        clearPointerState();
+      };
       modelStage.addEventListener('pointerdown', (event) => {
         if (threeState.active) return;
-        if (event.button !== 0 && event.button !== 2 && event.pointerType !== 'touch') return;
-        pointerState = { id: event.pointerId, x: event.clientX, y: event.clientY, pan: event.button === 2 || event.shiftKey || event.button === 1 };
-        try { modelStage.setPointerCapture(event.pointerId); } catch (e) {}
+        const touch = event.pointerType === 'touch' || event.pointerType === 'pen';
+        const primary = event.button === 0;
+        const secondary = event.button === 2;
+        if (!touch && !primary && !secondary) {
+          event.preventDefault();
+          clearPointerState();
+          return;
+        }
+        event.preventDefault();
+        clearPointerState();
+        pointerState = {
+          id: event.pointerId,
+          button: touch ? 1 : (secondary ? 2 : 1),
+          x: event.clientX,
+          y: event.clientY,
+          pan: secondary || event.shiftKey || event.button === 1
+        };
+        try { modelStage.setPointerCapture(event.pointerId); } catch (error) {}
         modelStage.classList.add('dragging');
       });
       modelStage.addEventListener('pointermove', (event) => {
         if (threeState.active) return;
         if (!pointerState || pointerState.id !== event.pointerId) return;
+        const touch = event.pointerType === 'touch' || event.pointerType === 'pen';
+        if (!touch && event.buttons !== 0 && (event.buttons & pointerState.button) === 0) {
+          clearPointerState();
+          return;
+        }
+        if (!touch && event.buttons === 0) {
+          clearPointerState();
+          return;
+        }
         const dx = event.clientX - pointerState.x;
         const dy = event.clientY - pointerState.y;
         pointerState.x = event.clientX;
@@ -2601,26 +2645,37 @@
         }
         applyCamera();
       });
-      const release = (event) => {
-        if (!pointerState || pointerState.id !== event.pointerId) return;
-        pointerState = null;
-        modelStage.classList.remove('dragging');
-        try { modelStage.releasePointerCapture(event.pointerId); } catch (error) {}
-      };
-      modelStage.addEventListener('pointerup', release);
-      modelStage.addEventListener('pointercancel', release);
+      modelStage.addEventListener('pointerup', releasePointerState);
+      modelStage.addEventListener('pointercancel', releasePointerState);
+      modelStage.addEventListener('lostpointercapture', clearPointerState);
       modelStage.addEventListener('wheel', (event) => {
+        if (pointerState && event.buttons === 0) clearPointerState();
         if (threeState.active) return;
         event.preventDefault();
         camera.zoom = clamp(camera.zoom * (event.deltaY < 0 ? 1.1 : 0.9), 0.55, 2.8);
         applyCamera();
       }, { passive: false });
-      modelStage.addEventListener('dblclick', resetCamera);
-      modelStage.addEventListener('contextmenu', (event) => event.preventDefault());
+      modelStage.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        clearPointerState();
+        resetCamera();
+      });
+      modelStage.addEventListener('contextmenu', preventViewportContextMenu);
+      window.addEventListener('pointerup', releasePointerState, true);
+      window.addEventListener('pointercancel', releasePointerState, true);
+      window.addEventListener('mouseup', releasePointerState, true);
+      window.addEventListener('blur', clearPointerState);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearPointerState();
+      });
+      window.addEventListener('contextmenu', preventViewportContextMenu, true);
       modelStage.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && generationController) {
-          generationController.abort();
-          setGenerationError(copy[currentLang].cancelled);
+        if (event.key === 'Escape') {
+          clearPointerState();
+          if (generationController) {
+            generationController.abort();
+            setGenerationError(copy[currentLang].cancelled);
+          }
           return;
         }
         if (event.key.toLowerCase() === 'r' || event.key === '0') { event.preventDefault(); resetCamera(); return; }
@@ -2629,7 +2684,10 @@
         if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); camera.rotateY = clamp(camera.rotateY + (event.key === 'ArrowLeft' ? -8 : 8), -180, 180); applyCamera(); return; }
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); camera.rotateX = clamp(camera.rotateX + (event.key === 'ArrowUp' ? 8 : -8), -75, 75); applyCamera(); }
       });
-      if (fitView) fitView.addEventListener('click', resetCamera);
+      if (fitView) fitView.addEventListener('click', () => {
+        clearPointerState();
+        resetCamera();
+      });
     }
     function updateProcessHint(profileOverride) {
       const profile = profileOverride || processProfiles[selectedProcess];
