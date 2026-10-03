@@ -645,6 +645,7 @@
 
     function titleFor(text) {
       const value = text.toLowerCase();
+      if (value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
       if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'Plant pot';
       if (value.includes('lamp') || value.includes('灯')) return 'Lamp base';
@@ -655,6 +656,7 @@
     }
     function kindForTitle(title) {
       const value = String(title || '').toLowerCase();
+      if (value.includes('l bracket') || value.includes('l-shape') || value.includes('angle') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯')) return 'angle';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'plant';
       if (value.includes('pen') || value.includes('笔')) return 'pen';
       if (value.includes('lamp') || value.includes('灯')) return 'lamp';
@@ -666,7 +668,7 @@
     function displayTitle(title) {
       const normalized = String(title || '').replace(/^Parametric\s+/i, '');
       if (currentLang !== 'zh') return normalized;
-      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘' })[normalized] || normalized;
+      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘', 'L bracket': 'L 形支架' })[normalized] || normalized;
     }
     function canonicalDimensionText(text) {
       const factors = { mm: 1, cm: 10, m: 1000, in: 25.4 };
@@ -688,6 +690,9 @@
       const unitNumbers = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)).map((match) => Number(match[1]));
       const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
+      const angleShape = kindForTitle(titleFor(text)) === 'angle';
+      const pairMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])/i);
+      const pair = pairMatch ? pairMatch.slice(1).map(Number) : [];
       const valueFor = (terms) => {
         const before = normalized.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)\\s*(?:' + terms + ')', 'i'));
         const after = normalized.match(new RegExp('(?:' + terms + ')[^\\d]{0,8}(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)', 'i'));
@@ -700,10 +705,10 @@
       const featureValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:cable|wire|线缆|电缆|snap\s*opening|开口|diameter|dia|直径)/gi)).map((match) => Number(match[1]));
       const genericNumbers = unitNumbers.filter((value) => !treatmentValues.concat(leadingTreatmentValues, featureValues).includes(value));
       const positional = triplet.length === 3 ? triplet : (genericNumbers.length >= 3 ? genericNumbers.slice(0, 3) : []);
-      const width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || 120;
+      const width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || (angleShape && pair[0]) || 120;
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
-      const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || width * 0.67));
-      const height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
+      const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || width * 0.67));
+      const height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (angleShape ? 40 : 42));
       const scale = hasExplicitUnit ? 1 : fallbackFactor;
       return { width: width * scale, depth: depth * scale, height: height * scale };
     }
@@ -712,14 +717,15 @@
       const normalized = canonicalDimensionText(text);
       const countMatch = normalized.match(/(\d+)\s*(?:compartments?|隔间|格)/);
       const wordCount = normalized.includes('three') || normalized.includes('三个') ? 3 : (normalized.includes('two') || normalized.includes('两个') ? 2 : 0);
-      const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (titleFor(text) === 'Desk organizer' ? 3 : 1))), 1, 6);
+      const title = titleFor(text);
+      const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (title === 'Desk organizer' ? 3 : 1))), 1, 6);
       const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
-      const chamfer = chamferMatch ? Number(chamferMatch[1]) : 4;
+      const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'L bracket' ? 0 : 4);
       const dimensions = dimensionsFor(text);
-      const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚)/) || normalized.match(/(?:wall|壁厚)[^\d]{0,8}(\d+(?:\.\d+)?)/);
+      const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度)/) || normalized.match(/(?:wall|壁厚|板厚|厚度)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       const profile = processProfiles[selectedProcess];
-      return { title: titleFor(text), kind: kindForTitle(titleFor(text)), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
+      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
     function renderRotationalIso(spec) {
@@ -1072,11 +1078,47 @@
         }
       }
     }
+    function renderAngleIso(spec) {
+      const w = clamp(spec.width / 20, .8, 2.2) * 170;
+      const d = clamp(spec.depth / 20, .8, 2.2) * 170;
+      const h = clamp(spec.height / 40, .65, 1.8) * 190;
+      const t = clamp(spec.wall / Math.max(spec.width, spec.depth) * 0.9, .08, .28);
+      const profile = [[0,0],[w,0],[w,t*d],[t*w,t*d],[t*w,d],[0,d]];
+      const project = (x,y,z) => [170 + (x-y)*.64, 300 + (x+y)*.26 - z];
+      const front = profile.map((p) => project(p[0],p[1],0));
+      const back = profile.map((p) => project(p[0],p[1],h));
+      const sides = profile.map((p,index) => '<path d="M ' + project(p[0],p[1],0)[0].toFixed(1) + ' ' + project(p[0],p[1],0)[1].toFixed(1) + ' L ' + project(p[0],p[1],h)[0].toFixed(1) + ' ' + project(p[0],p[1],h)[1].toFixed(1) + '" stroke="#243323" stroke-width="3"/>').join('');
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated L bracket CAD model"><ellipse cx="210" cy="370" rx="155" ry="20" fill="#0d0f0d" opacity=".42"/><polygon points="' + pointList(back) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><polygon points="' + pointList(front) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/>' + sides + '<text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">L BRACKET / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
+    }
+    function renderAngleTop(spec) {
+      const w = clamp(spec.width / 20, .8, 2.2) * 230;
+      const d = clamp(spec.depth / 20, .8, 2.2) * 230;
+      const t = clamp(spec.wall / Math.max(spec.width, spec.depth) * 0.9, .08, .28);
+      const x = (520 - w) / 2;
+      const y = (390 - d) / 2;
+      const profile = [[x,y],[x+w,y],[x+w,y+t*d],[x+t*w,y+t*d],[x+t*w,y+d],[x,y+d]];
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated L bracket top view"><polygon points="' + pointList(profile) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / L PROFILE / ' + spec.width + ' × ' + spec.depth + ' mm</text></svg>';
+    }
+    function renderAngleFront(spec) {
+      const w = clamp(spec.width / 20, .8, 2.2) * 260;
+      const h = clamp(spec.height / 40, .65, 1.8) * 190;
+      const t = clamp(spec.wall / Math.max(spec.width, spec.height) * 0.9, .08, .28);
+      const x = (520 - w) / 2;
+      const y = (350 - h) / 2;
+      const profile = [[x,y+h],[x+w,y+h],[x+w,y+h-t*h],[x+t*w,y+h-t*h],[x+t*w,y],[x,y]];
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated L bracket front view"><polygon points="' + pointList(profile) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
+
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
       const rotational = spec.kind === 'plant' || spec.kind === 'pen';
-      modelWrap.innerHTML = rotational ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec))) : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
+      const angle = spec.kind === 'angle';
+      modelWrap.innerHTML = rotational
+        ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec)))
+        : angle
+          ? (view === 'top' ? renderAngleTop(spec) : (view === 'front' ? renderAngleFront(spec) : renderAngleIso(spec)))
+          : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
       const svg = modelWrap.querySelector('svg');
       if (svg) svg.setAttribute('aria-label', currentLang === 'zh' ? ('生成的' + (view === 'top' ? '顶视' : (view === 'front' ? '前视' : '等距')) + ' CAD 模型') : ('Generated ' + view + ' CAD model'));
       applyCamera();
@@ -1193,7 +1235,8 @@
     }
     function canonicalPrompt(spec) {
       const title = String(spec.title || '').toLowerCase();
-      const type = title.includes('tray') || title.includes('托盘') ? 'storage tray'
+      const type = title.includes('bracket') || title.includes('angle') || title.includes('l形') || title.includes('折条') ? 'l bracket'
+        : title.includes('tray') || title.includes('托盘') ? 'storage tray'
         : title.includes('clip') || title.includes('cable') || title.includes('线缆') ? 'cable clip'
         : title.includes('plant') || title.includes('pot') || title.includes('花盆') ? 'plant pot'
         : title.includes('lamp') || title.includes('灯') ? 'lamp base'
