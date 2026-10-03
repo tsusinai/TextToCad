@@ -847,10 +847,21 @@ def build_design_ir(
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a small semantic CAD IR that is independent of the CadQuery builder."""
+    base_operation = (
+        "cylinder" if params.kind in {"plant", "pen"}
+        else "l_profile_extrusion" if params.kind == "angle"
+        else "box"
+    )
     feature_nodes: list[dict[str, Any]] = [
-        {"id": "base_solid", "type": "primitive", "operation": "cylinder" if params.kind in {"plant", "pen"} else "box", "status": "planned"},
+        {"id": "base_solid", "type": "primitive", "operation": base_operation, "status": "planned"},
     ]
-    if params.kind in {"tray", "organizer"}:
+    if params.kind == "angle":
+        feature_nodes.append({
+            "id": "angle_profile", "type": "profile", "operation": "union_l_legs",
+            "source": "base_solid", "leg_a_mm": params.width, "leg_b_mm": params.depth,
+            "thickness_mm": params.wall, "status": "planned",
+        })
+    elif params.kind in {"tray", "organizer"}:
         feature_nodes.extend([
             {"id": "shell_cavity", "type": "shell", "operation": "cut_inner_volume", "source": "base_solid", "status": "planned"},
             {"id": "dividers", "type": "divider", "operation": "union", "source": "shell_cavity", "requested_count": params.compartments, "count": max(0, params.compartments - 1), "status": "planned"},
@@ -877,9 +888,11 @@ def build_design_ir(
         {"id": "depth_bounds", "type": "range", "parameter": "depth", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
         {"id": "height_bounds", "type": "range", "parameter": "height", "min_mm": 5.0, "max_mm": 1000.0, "hard": True},
         {"id": "wall_bounds", "type": "range", "parameter": "wall", "min_mm": 1.2, "max_mm": round(min(20.0, params.width / 3, params.depth / 3), 2), "hard": True},
+        {"id": "angle_profile", "type": "profile_rule", "parameter": "wall", "minimum_mm": 1.2, "process": params.process, "hard": False} if params.kind == "angle" else None,
         {"id": "bottom_bounds", "type": "range", "parameter": "bottom", "min_mm": 1.2, "max_mm": round(min(params.height - 1.0, 20.0), 2), "hard": True},
         {"id": "manufacturing_wall", "type": "process_rule", "parameter": "wall", "minimum_mm": PROCESS_PROFILES[params.process]["min_wall"], "process": params.process, "hard": False},
     ]
+    constraints = [constraint for constraint in constraints if constraint is not None]
     parameters = {
         "width": {"value": params.width, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "hard"},
         "depth": {"value": params.depth, "unit": "mm", "source": "llm" if llm_used else "parser", "constraint": "hard"},
@@ -1080,9 +1093,20 @@ def build_geometry(
     if rotational:
         radius = min(w, d) / 2
         outer = cq.Workplane("XY").circle(radius).extrude(h)
+        base_operation = "cylinder"
+    elif params.kind == "angle":
+        leg_a = cq.Workplane("XY").box(
+            w, wall, h, centered=(False, False, False)
+        ).translate((-w / 2, -d / 2, 0))
+        leg_b = cq.Workplane("XY").box(
+            wall, d, h, centered=(False, False, False)
+        ).translate((-w / 2, -d / 2, 0))
+        outer = leg_a.union(leg_b)
+        base_operation = "l_profile_extrusion"
     else:
         outer = cq.Workplane("XY").box(w, d, h, centered=(True, True, False))
-    done("base_solid", outer, "cylinder" if rotational else "box")
+        base_operation = "box"
+    done("base_solid", outer, base_operation)
 
     if params.chamfer > 0:
         selection = "%Circle" if rotational else "|Z"
@@ -1091,6 +1115,10 @@ def build_geometry(
         done("edge_treatment", outer, operation, status, requested_operation="chamfer",
              selection=selection, value_mm=params.chamfer,
              reason="edge_treatment_fallback" if status == "warning" else None)
+
+    if params.kind == "angle":
+        done("angle_profile", outer, "union_l_legs", leg_a_mm=w, leg_b_mm=d, thickness_mm=wall)
+        return outer
 
     if params.kind in ("tray", "organizer"):
         inner_w, inner_d = w - 2 * wall, d - 2 * wall
