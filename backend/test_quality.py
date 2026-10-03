@@ -167,6 +167,7 @@ def test_strict_dimensions_reject_ambiguous_input():
         "lamp base 110 mm wide with cable channel",
         "cable clip for a 6 mm cable",
         "solid block 40 mm x 30 mm x 20 mm",
+        "L bracket 20x20, plate thickness 3",
     ],
 )
 def test_supported_model_families_produce_valid_brep(prompt):
