@@ -167,6 +167,29 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
         major = _number(parameters, values.get("major_radius"), "torus.major_radius")
         minor = _number(parameters, values.get("minor_radius"), "torus.minor_radius")
         return _workplane(frame).torus(major, minor)
+    if operation == "sketch":
+        geometry = values.get("geometry", values.get("elements", []))
+        if not isinstance(geometry, list) or not geometry:
+            raise IRExecutionError("sketch requires a non-empty geometry list")
+        sketch = _workplane(frame)
+        for element in geometry:
+            if not isinstance(element, dict):
+                raise IRExecutionError("sketch geometry entries must be objects")
+            kind = str(element.get("type", "")).lower()
+            if kind in {"rectangle", "rect"}:
+                width = _number(parameters, element.get("width"), "sketch.rectangle.width")
+                height = _number(parameters, element.get("height"), "sketch.rectangle.height")
+                sketch = sketch.rect(width, height, centered=bool(element.get("centered", True)))
+            elif kind == "circle":
+                sketch = sketch.circle(_number(parameters, element.get("radius"), "sketch.circle.radius"))
+            elif kind in {"polygon", "polyline"}:
+                points = _resolve(element.get("points"), parameters)
+                if not isinstance(points, list) or len(points) < 3:
+                    raise IRExecutionError("sketch polygon requires at least three points")
+                sketch = sketch.polyline(points).close()
+            else:
+                raise IRExecutionError(f"unsupported sketch geometry '{kind}'")
+        return sketch
     if operation == "polygon_prism":
         points = _resolve(values.get("points"), parameters)
         height = _number(parameters, values.get("height"), "polygon_prism.height")
@@ -185,6 +208,13 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
         axis = _vector(parameters, values.get("axis", [0, 0, 1]), "rotate.axis")
         angle = _number(parameters, values.get("angle", 0.01), "rotate.angle", -360.0)
         return inputs[0].rotate((0, 0, 0), axis, angle)
+    if operation == "revolve":
+        if len(inputs) != 1:
+            raise IRExecutionError("revolve requires exactly one input")
+        angle = _number(parameters, values.get("angle", 360), "revolve.angle", -360.0)
+        axis_start = _vector(parameters, values.get("axis_start", [0, 0, 0]), "revolve.axis_start")
+        axis_end = _vector(parameters, values.get("axis_end", [0, 0, 1]), "revolve.axis_end")
+        return inputs[0].revolve(angle, axisStart=axis_start, axisEnd=axis_end)
     if operation == "extrude":
         if len(inputs) != 1:
             raise IRExecutionError("extrude requires exactly one input")
