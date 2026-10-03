@@ -50,6 +50,7 @@ LLM_API_KEY = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "").st
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
 # Optional shared-secret protection for public deployments. Keep empty for local-only use.
 BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
+BUILD_VERSION = os.getenv("BUILD_VERSION", "angle-bracket-v1")
 try:
     LLM_TIMEOUT_SECONDS = max(1.0, min(60.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))))
 except ValueError:
@@ -1482,7 +1483,7 @@ def _write_artifacts(
             "mesh": "Z-up",
             "viewer": "Three.js Y-up with explicit transform",
         },
-        "generator": "TextToCad geometry backend 0.4.0",
+        "generator": f"TextToCad geometry backend {BUILD_VERSION}",
         "formats": ["step", "stl"] + sorted(preview_files),
     }
     manifest_path = model_dir / "manifest.json"
@@ -1579,6 +1580,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if cq is not None else "degraded",
         "engine": "CadQuery/OCCT",
+        "build_version": BUILD_VERSION,
         "cadquery_available": cq is not None,
         "cadquery_error": CADQUERY_ERROR or None,
         "trimesh_available": trimesh is not None,
