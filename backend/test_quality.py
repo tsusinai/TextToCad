@@ -70,6 +70,22 @@ def test_ir_divider_count_matches_geometry_loop():
     assert divider["count"] == 2
 
 
+def test_generation_recorder_tracks_real_milestones_in_order():
+    recorder = app.GenerationRecorder()
+    recorder.emit("parsing", "interpretation", "running")
+    recorder.emit("parsing", "interpretation", "succeeded", llm_used=False)
+    recorder.emit("building", "base_solid", "succeeded", operation="box")
+    assert [event["id"] for event in recorder.events] == ["interpretation", "base_solid"]
+    assert recorder.events[0]["status"] == "succeeded"
+    assert recorder.events[0]["duration_ms"] >= 0
+    assert recorder.events[1]["details"]["operation"] == "box"
+
+
+def test_generation_request_can_request_step_previews():
+    request = app.GenerateRequest(prompt="a 40 mm block", include_steps=True)
+    assert request.include_steps is True
+
+
 def test_nominal_analysis_never_reports_manufacturing_ready():
     _, params, _ = app.parse_prompt_detailed("a 120 mm organizer")
     analysis = app.analyze_manufacturability(params)
