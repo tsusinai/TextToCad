@@ -1211,7 +1211,6 @@
           disposeThreeObject(threeState.model);
         }
         threeState.model = buildLocalThreeModel(THREE, spec);
-        applyPreviewMaterial(threeState.model, spec);
         threeState.scene.add(threeState.model);
         threeState.active = true;
         threeState.source = 'local';
@@ -2089,7 +2088,10 @@
       if (modelSpec) {
         modelSpec = Object.assign({}, modelSpec, { material: selectedMaterial });
         updateModelParameterCards(modelSpec);
-        if (threeState.model) applyPreviewMaterial(threeState.model, modelSpec);
+        if (threeState.model) {
+          if (threeState.source === 'local') loadLocalThreePreview(modelSpec);
+          else applyPreviewMaterial(threeState.model, modelSpec);
+        }
         renderModel(modelSpec, currentView);
         generateModel();
       }
