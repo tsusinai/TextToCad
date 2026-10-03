@@ -232,10 +232,20 @@ def _parameter_provenance(
     field_sources: dict[str, str],
     unit_meta: dict[str, Any],
 ) -> dict[str, Any]:
+    status_map = {
+        "parser": "provided",
+        "llm": "provided",
+        "default": "default",
+        "derived": "derived",
+        "inferred": "inferred",
+    }
     return {
         "units": unit_meta,
         "fields": {
-            field: {"source": source, "status": "resolved"}
+            field: {
+                "source": source,
+                "status": status_map.get(source, "resolved"),
+            }
             for field, source in field_sources.items()
         },
     }
@@ -276,6 +286,15 @@ def parse_prompt_detailed(
         float(value)
         for value in re.findall(r"(?<![a-z])(?<!\d)(\d+(?:\.\d+)?)\s*mm\b", text)
     ]
+    triplet_match = re.search(
+        r"(?<![a-z\d])"
+        r"(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*"
+        r"(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*"
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?(?![a-z])",
+        text,
+        flags=re.IGNORECASE,
+    )
+    dimension_triplet = [float(value) for value in triplet_match.groups()] if triplet_match else []
     treatment_numbers = [
         float(value)
         for value in re.findall(
@@ -292,8 +311,16 @@ def parse_prompt_detailed(
             flags=re.IGNORECASE,
         )
     )
+    feature_numbers = [
+        float(value)
+        for value in re.findall(
+            r"(\d+(?:\.\d+)?)\s*mm\s*(?:cable|wire|线缆|电缆|snap\s*opening|开口|diameter|dia|直径)",
+            text,
+            flags=re.IGNORECASE,
+        )
+    ]
     generic_numbers = unit_numbers[:]
-    for value in treatment_numbers:
+    for value in treatment_numbers + feature_numbers:
         if value in generic_numbers:
             generic_numbers.remove(value)
 
@@ -313,15 +340,25 @@ def parse_prompt_detailed(
         r"(?:height|tall|高)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:tall|height|高)",
     ])
-
+    diameter = _number_after(text, [
+        r"(?:diameter|dia|直径)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:diameter|dia|直径)",
+    ])
+    triplet_found = len(dimension_triplet) == 3
+    diameter_found = diameter is not None
     if footprint is not None:
         width = width or footprint
         depth = depth or footprint
-    width_found = width is not None or bool(generic_numbers)
-    width = width or (generic_numbers[0] if generic_numbers else 120.0)
+    if triplet_found and width is None and depth is None and height is None:
+        width, depth, height = dimension_triplet
+    if diameter_found:
+        width = width or diameter
+        depth = depth or diameter
+    width_found = width is not None or triplet_found
+    width = width or (generic_numbers[0] if len(generic_numbers) >= 3 else 120.0)
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
-    depth_found = depth is not None or square_base or len(generic_numbers) > 1
-    depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) > 1 else width * 0.67))
+    depth_found = depth is not None or square_base or triplet_found
+    depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else width * 0.67))
     default_height = (
         18.0 if kind == "tray"
         else 42.0 if kind == "organizer"
@@ -330,8 +367,8 @@ def parse_prompt_detailed(
         else 40.0 if kind == "lamp"
         else 24.0
     )
-    generic_height = next((value for value in generic_numbers[2:]), None)
-    height_found = height is not None or generic_height is not None
+    generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
+    height_found = height is not None or triplet_found or generic_height is not None
     height = height or (generic_height if generic_height is not None else default_height)
 
     compartments_value = _word_number(text)
@@ -394,8 +431,13 @@ def parse_prompt_detailed(
     else:
         unit_confidence = "assumed"
         assumptions.append(f"No explicit dimension unit was found; interpreted values as {units}.")
-    if any(field_found[field] for field in ("width", "depth", "height")) and len(generic_numbers) not in (0, 3):
-        assumptions.append("Dimension order or missing dimensions may require confirmation.")
+    ambiguous_dimensions = (
+        not triplet_found
+        and not any((footprint, width if width_found else None, depth if depth_found else None, height if height_found else None, diameter))
+        and len(generic_numbers) not in (0, 3)
+    )
+    if ambiguous_dimensions:
+        assumptions.append("Unlabeled dimensions are ambiguous; confirm width, depth, and height before manufacturing.")
         unit_confidence = "low"
 
     params = ModelParameters(
@@ -432,6 +474,9 @@ def parse_prompt_detailed(
             "confidence": unit_confidence,
             "explicit_spans": unit_spans,
             "factor": unit_factor,
+            "ambiguous_dimensions": ambiguous_dimensions,
+            "dimension_triplet": dimension_triplet,
+            "diameter_mm": round(diameter * (1.0 if explicit_units else unit_factor), 6) if diameter is not None else None,
         },
     )
     provenance["assumptions"] = assumptions
