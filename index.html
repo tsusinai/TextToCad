@@ -28,6 +28,7 @@
       --lime-hover: #c4f538;
       --soft-lime: #edf8d4;
       --lime-border: #99bf58;
+      --accent-lime-text: #3d5a1f;
       --green: #487541;
       --amber: #f59e0b;
       --coral: #ef4444;
@@ -36,6 +37,8 @@
       --shadow-glow: 0 0 25px rgba(212, 255, 79, 0.35);
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    ::selection { background: rgba(212, 255, 79, 0.55); color: var(--ink); }
     html, body {
       margin: 0;
       min-height: 100%;
@@ -177,7 +180,7 @@
       border: 1px solid var(--line);
       border-radius: 20px;
       padding: 24px;
-      min-height: 840px;
+      align-self: start;
       display: flex;
       flex-direction: column;
       box-shadow: var(--shadow-card);
@@ -275,8 +278,10 @@
       font-weight: 700;
       letter-spacing: 0.06em;
       background: #eef7e9;
-      padding: 2px 7px;
+      padding: 3px 8px;
       border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .interpretation-summary {
       display: block;
@@ -337,8 +342,19 @@
       padding: 2px 8px;
       border-radius: 6px;
     }
-    .feature-tree { display: grid; gap: 7px; margin-top: 12px; }
+    .feature-tree { position: relative; display: grid; gap: 7px; margin-top: 12px; }
+    .feature-tree::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      top: 18px;
+      bottom: 18px;
+      width: 1px;
+      background: linear-gradient(180deg, #b7d891 0%, rgba(183, 216, 145, 0.25) 100%);
+      pointer-events: none;
+    }
     .feature-node {
+      position: relative;
       display: grid;
       grid-template-columns: 18px 1fr;
       column-gap: 8px;
@@ -356,11 +372,14 @@
       transform: translateX(2px);
     }
     .feature-node .node-dot {
-      width: 8px;
-      height: 8px;
-      margin-top: 5px;
+      position: relative;
+      z-index: 1;
+      width: 9px;
+      height: 9px;
+      margin-top: 4px;
       border-radius: 50%;
       background: #9fca82;
+      box-shadow: 0 0 0 3px #fff, 0 0 0 4px #d6e8c2;
     }
     .feature-node strong, .feature-node small { display: block; }
     .feature-node strong { font-family: 'Space Grotesk', sans-serif; font-size: 11.5px; color: var(--ink); }
@@ -428,15 +447,18 @@
     .generation-process-empty { color: var(--muted); font-size: 11px; line-height: 1.4; }
     .process-controls, .mode-controls {
       margin-top: 14px;
-      padding: 14px 18px;
+      padding: 16px 18px;
       border: 1px solid var(--line);
       border-radius: 14px;
       background: #ffffff;
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
+      column-gap: 16px;
+      row-gap: 14px;
     }
+    .mode-controls { grid-template-columns: minmax(0, 1fr) auto; }
+    .unit-copy { padding-left: 16px; border-left: 1px solid var(--line-subtle); }
     .process-copy, .mode-copy { min-width: 0; }
     .process-copy small, .mode-copy small {
       display: block;
@@ -464,7 +486,8 @@
     }
     .process-select:focus, .mode-select:focus { outline: 2px solid #b9d58d; outline-offset: 2px; }
     .issue-badge {
-      margin-left: 10px;
+      margin-left: 12px;
+      margin-right: auto;
       border-radius: 999px;
       padding: 4px 10px;
       background: rgba(40, 48, 56, 0.9);
@@ -589,7 +612,7 @@
       color: var(--ink);
       transform: translateY(-1px);
     }
-    .recent { margin-top: auto; padding-top: 22px; border-top: 1px solid var(--line); }
+    .recent { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
     .recent-list { display: grid; gap: 12px; margin-top: 14px; }
     .recent-item {
       border: 1px solid transparent;
@@ -617,7 +640,7 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
-    .content { min-width: 0; display: grid; grid-template-rows: minmax(560px, 1fr) auto; gap: 24px; }
+    .content { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(560px, 1fr) auto; gap: 24px; }
     .viewport {
       min-height: 640px;
       position: relative;
@@ -649,6 +672,8 @@
     .viewport-footer > div:first-child { min-width: 0; flex: 1 1 260px; }
     .view-pill:focus-visible, .export:focus-visible, .generate:focus-visible, .cancel-generation:focus-visible, .model-stage:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .viewport-header {
+      flex-wrap: wrap;
+      row-gap: 10px;
       padding-bottom: 16px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
@@ -920,14 +945,35 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
       box-sizing: border-box;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
+    .parameter-editor input:focus {
+      outline: 0;
+      border-color: #a8cc60;
+      box-shadow: 0 0 0 3px rgba(212, 255, 79, 0.28);
+    }
+    #applyParameters { background: var(--ink); border-color: var(--ink); color: #fff; }
+    #applyParameters:hover { background: #2b302c; color: var(--lime); border-color: #2b302c; }
     .parameter-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
     .solved {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       color: var(--green);
       font-family: 'JetBrains Mono', monospace;
       font-size: 11.5px;
       font-weight: 700;
     }
+    .solved::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #63a04a;
+      box-shadow: 0 0 0 3px rgba(99, 160, 74, 0.16);
+    }
+    .solved.warn { color: #9a6a12; }
+    .solved.warn::before { background: var(--amber); box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18); }
     .param-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -935,17 +981,29 @@
       margin-top: 18px;
     }
     .param-card {
+      position: relative;
+      overflow: hidden;
       min-height: 110px;
-      padding: 18px;
+      padding: 18px 18px 18px 20px;
       border-radius: 14px;
-      background: var(--card);
+      background: linear-gradient(180deg, #fafbf8 0%, var(--card) 100%);
       border: 1px solid var(--line-subtle);
       transition: all 0.18s ease;
     }
+    .param-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 18px;
+      bottom: 18px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: linear-gradient(180deg, var(--lime) 0%, #9fca82 100%);
+    }
     .param-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
-      border-color: var(--line);
+      box-shadow: 0 10px 24px rgba(20, 30, 15, 0.06);
+      border-color: #d3dcc4;
     }
     .param-card .label {
       color: var(--muted);
@@ -958,8 +1016,9 @@
       display: block;
       margin-top: 10px;
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 700;
+      letter-spacing: -0.01em;
       color: var(--ink);
     }
     .param-card small {
@@ -1001,23 +1060,26 @@
       display: flex;
       gap: 10px;
       align-items: flex-start;
-      padding: 12px 14px;
+      padding: 13px 14px;
       border-radius: 12px;
       background: var(--panel);
       border: 1px solid var(--line-subtle);
+      transition: border-color .16s ease, background .16s ease;
     }
+    .plan-item:hover { border-color: var(--line); background: #f4f5f0; }
     .check {
+      flex-shrink: 0;
       width: 22px;
       height: 22px;
       display: grid;
       place-items: center;
       border-radius: 50%;
-      background: #fff;
+      background: #e6f3d9;
       color: var(--green);
       font-family: 'Space Grotesk', sans-serif;
       font-size: 12px;
       font-weight: 800;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      box-shadow: inset 0 0 0 1px rgba(72, 117, 65, 0.18);
     }
     .plan-item strong { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700; color: var(--ink); }
     .plan-item small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
@@ -1047,6 +1109,8 @@
       .brand { min-width: 170px; }
       .model-wrap { width: min(500px, 82%); }
       .parameter-editor { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .process-controls { grid-template-columns: minmax(0, 1fr) auto; }
+      .unit-copy { padding-left: 0; border-left: 0; padding-top: 14px; border-top: 1px solid var(--line-subtle); }
     }
     @media (max-width: 768px) {
       .topbar { height: auto; min-height: 72px; flex-wrap: wrap; padding: 14px 18px; gap: 12px; }
@@ -1068,6 +1132,8 @@
       .plan-grid { grid-template-columns: 1fr; }
       .plan-head { flex-direction: column; gap: 10px; }
       .parameter-editor { grid-template-columns: 1fr; }
+      .process-controls, .mode-controls { grid-template-columns: 1fr; }
+      .process-select, .mode-select { width: 100%; }
       .view-controls { gap: 4px; }
       .view-pill { padding: 5px 9px; font-size: 10px; }
     }
@@ -1098,7 +1164,7 @@
           <strong class="interpretation-summary" id="interpretationSummary">Desk organizer · 120 × 80 × 42 mm</strong>
           <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · ENGINE DEFAULTS applied where unspecified</small>
         </div>
-        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut">⌘ ↵</span></button>
+        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut" id="generateShortcut">Ctrl ↵</span></button>
         <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
         <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
         <div class="starter">
@@ -1260,6 +1326,8 @@
     const modelState = document.getElementById('modelState');
     const modelMeta = document.getElementById('modelMeta');
     const solved = document.getElementById('solved');
+    const generateShortcut = document.getElementById('generateShortcut');
+    if (generateShortcut && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) generateShortcut.textContent = '⌘ ↵';
     const bodyValue = document.getElementById('bodyValue');
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
@@ -1984,6 +2052,19 @@
       const distance = maxDim * 1.8;
       threeState.camera.near = Math.max(maxDim / 1000, 0.01);
       threeState.camera.far = Math.max(maxDim * 20, 1000);
+      threeState.model.traverse((node) => {
+        const materials = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
+        materials.forEach((material) => { material.fog = false; });
+      });
+      if (threeState.grid) {
+        const cell = Math.pow(10, Math.floor(Math.log10(maxDim / 6)));
+        threeState.grid.scale.setScalar(cell / 10);
+        threeState.grid.position.y = -size.y / 2 - maxDim * 0.002;
+      }
+      if (threeState.scene.fog) {
+        threeState.scene.fog.near = distance * 1.6;
+        threeState.scene.fog.far = distance * 4.2;
+      }
       threeState.camera.position.set(distance, distance * .8, distance);
       threeState.controls.target.set(0, 0, 0);
       threeState.controls.update();
@@ -2051,6 +2132,7 @@
         threeState.THREE = THREE;
         threeState.scene = new THREE.Scene();
         threeState.scene.background = null;
+        threeState.scene.fog = new THREE.Fog(0x15181c, 400, 1200);
         const helpers = new THREE.Group();
         helpers.name = 'cadHelpers';
         const grid = new THREE.GridHelper(2000, 200, 0x52624e, 0x354035);
@@ -2678,6 +2760,7 @@
       Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : (checks[key] === 'unknown' ? 'unknown' : 'warn')));
       document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项已验证' : 'verified');
       solved.textContent = passed === 4 ? (currentLang === 'zh' ? '检查已验证' : 'Checks verified') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
+      solved.classList.toggle('warn', passed !== 4);
       const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
@@ -2892,6 +2975,7 @@
           : value.slice(0, 3200) + '\n\nParsed CAD parameters: ' + canonical;
         modelState.textContent = copy[currentLang].solving;
         solved.textContent = copy[currentLang].parsing;
+        solved.classList.remove('warn');
         updateInterpretation(nextSpec, 'draft');
         renderModel(nextSpec, currentView);
         renderGenerationTrace(localGenerationTrace('preview'), 'running');
@@ -2924,6 +3008,7 @@
         }
         modelState.textContent = copy[currentLang].building;
         solved.textContent = copy[currentLang].building;
+        solved.classList.remove('warn');
         await waitWithSignal(remote ? 120 : 720, generationController.signal);
         if (sequence !== generationSeq) return;
         const remoteParams = remote && remote.parameters ? remote.parameters : {};
