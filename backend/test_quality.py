@@ -70,6 +70,34 @@ def test_ir_divider_count_matches_geometry_loop():
     assert divider["count"] == 2
 
 
+def test_llm_cannot_override_explicit_l_bracket(monkeypatch):
+    monkeypatch.setattr(
+        app,
+        "_llm_json",
+        lambda prompt, process, baseline: {
+            "schema_version": "0.1",
+            "kind": "organizer",
+            "width": 20,
+            "depth": 20,
+            "height": 20,
+            "wall": 3,
+            "bottom": 3,
+            "compartments": 3,
+            "chamfer": 0,
+        },
+    )
+    title, params, used, assumptions, _ = app.interpret_prompt(
+        "20x20 是L形的外轮廓，板厚是3，细折条",
+        "fdm",
+        "advanced",
+    )
+    assert used is True
+    assert title == "Parametric L bracket"
+    assert params.kind == "angle"
+    assert params.compartments == 1
+    assert any("conflicted" in item for item in assumptions)
+
+
 def test_l_bracket_prompt_preserves_angle_family_and_pair_dimensions():
     title, params, provenance = app.parse_prompt_detailed(
         "20x20 是L形的外轮廓，板厚是3，细折条",
