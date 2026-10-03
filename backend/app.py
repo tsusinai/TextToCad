@@ -27,10 +27,12 @@ try:
     from .legacy_adapter import legacy_design_ir_to_v2
     from .ir_validate import IRValidationError, validate_ir
     from .ir_executor import IRExecutionError, execute_ir, shape_metrics
+    from .ir_constraints import solve_constraints
 except ImportError:  # pragma: no cover - direct backend module execution
     from legacy_adapter import legacy_design_ir_to_v2
     from ir_validate import IRValidationError, validate_ir
     from ir_executor import IRExecutionError, execute_ir, shape_metrics
+    from ir_constraints import solve_constraints
 
 try:
     import cadquery as cq
@@ -1727,6 +1729,13 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
             "schema_version": "0.2",
             "issues": exc.issues,
         }) from exc
+    constraint_report = solve_constraints(normalized, process_profile=PROCESS_PROFILES.get(normalized.get("process", "fdm")))
+    if not constraint_report["valid"]:
+        raise HTTPException(status_code=422, detail={
+            "valid": False,
+            "schema_version": "0.2",
+            "constraints": constraint_report,
+        })
     try:
         execution = execute_ir(normalized)
         metrics = shape_metrics(execution["shape"])
@@ -1738,6 +1747,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         "schema_version": "0.2",
         "output_node": execution["output_node"],
         "metrics": metrics,
+        "constraints": constraint_report,
         "trace": execution["trace"],
     }
 
