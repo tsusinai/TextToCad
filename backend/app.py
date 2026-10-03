@@ -434,10 +434,15 @@ def parse_prompt_detailed(
     else:
         unit_confidence = "assumed"
         assumptions.append(f"No explicit dimension unit was found; interpreted values as {units}.")
+    unlabeled_pair = bool(re.search(
+        r"(?<![a-z\d])(\d+(?:\.\d+)?)\s+(?:by|x|×)?\s*(\d+(?:\.\d+)?)(?![a-z\d])",
+        text,
+        flags=re.IGNORECASE,
+    ))
     ambiguous_dimensions = (
         not triplet_found
         and not any((footprint, width if width_found else None, depth if depth_found else None, height if height_found else None, diameter))
-        and len(generic_numbers) not in (0, 3)
+        and (len(generic_numbers) not in (0, 3) or unlabeled_pair)
     )
     if ambiguous_dimensions:
         assumptions.append("Unlabeled dimensions are ambiguous; confirm width, depth, and height before manufacturing.")
@@ -479,6 +484,7 @@ def parse_prompt_detailed(
             "factor": unit_factor,
             "ambiguous_dimensions": ambiguous_dimensions,
             "dimension_triplet": dimension_triplet,
+            "unlabeled_pair": unlabeled_pair,
             "diameter_mm": round(diameter * (1.0 if explicit_units else unit_factor), 6) if diameter is not None else None,
         },
     )
