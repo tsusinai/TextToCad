@@ -74,3 +74,8 @@ def test_nominal_analysis_never_reports_manufacturing_ready():
     assert analysis["nominal"] is True
     assert analysis["review_required"] is True
     assert analysis["manufacturing_ready"] is False
+
+
+def test_strict_dimensions_reject_ambiguous_input():
+    _, _, provenance = app.parse_prompt_detailed("a block 120 80", units="mm")
+    assert provenance["units"]["ambiguous_dimensions"] is True
