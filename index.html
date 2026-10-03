@@ -676,7 +676,7 @@
     }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
     function parseModel(text) {
-      const normalized = text.toLowerCase();
+      const normalized = canonicalDimensionText(text);
       const countMatch = normalized.match(/(\d+)\s*(?:compartments?|隔间|格)/);
       const wordCount = normalized.includes('three') || normalized.includes('三个') ? 3 : (normalized.includes('two') || normalized.includes('两个') ? 2 : 0);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (titleFor(text) === 'Desk organizer' ? 3 : 1))), 1, 6);
