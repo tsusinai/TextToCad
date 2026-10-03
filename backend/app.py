@@ -55,7 +55,7 @@ LLM_API_KEY = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "").st
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
 # Optional shared-secret protection for public deployments. Keep empty for local-only use.
 BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
-BUILD_VERSION = os.getenv("BUILD_VERSION", "angle-bracket-v1")
+BUILD_VERSION = os.getenv("BUILD_VERSION", "rounded-cube-material-v1")
 try:
     LLM_TIMEOUT_SECONDS = max(1.0, min(60.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))))
 except ValueError:
@@ -113,6 +113,7 @@ class GenerateRequest(BaseModel):
     mode: Literal["standard", "advanced"] = "standard"
     strict_dimensions: bool = False
     include_steps: bool = False
+    material: Literal["pla", "petg", "abs", "resin", "aluminum"] = "pla"
 
 
 class ModelParameters(BaseModel):
@@ -129,6 +130,8 @@ class ModelParameters(BaseModel):
     process: str = "fdm"
     tolerance: float = 0.2
     clearance: float = 0.3
+    material: str = "pla"
+    edge_style: str = "chamfer"
 
 
 class GenerateResponse(BaseModel):
@@ -165,7 +168,7 @@ REQUEST_BUCKETS: dict[str, list[float]] = {}
 def _cache_key(request: GenerateRequest) -> str:
     normalized = " ".join(request.prompt.strip().lower().split())
     return hashlib.sha256(
-        f"{request.mode}\0{request.process}\0{request.units}\0{request.strict_dimensions}\0{request.include_steps}\0{normalized}".encode("utf-8")
+        f"{request.mode}\0{request.process}\0{request.units}\0{request.material}\0{request.strict_dimensions}\0{request.include_steps}\0{normalized}".encode("utf-8")
     ).hexdigest()
 
 
@@ -314,12 +317,28 @@ def parse_prompt_detailed(
     prompt: str,
     process: str = "fdm",
     units: str = "mm",
+    material: str = "pla",
 ) -> tuple[str, ModelParameters, dict[str, Any]]:
     text, unit_factor, explicit_units, unit_spans = _normalize_units(prompt, units)
     if not text:
         raise ValueError("prompt must contain a shape description")
 
-    if any(token in text for token in (
+    rounded_cube = (
+        any(token in text for token in (
+            "rounded cube", "rounded block", "filleted cube", "soft cube",
+            "no sharp edges", "no sharp corners", "圆角立方体", "圆角方块",
+            "圆润方块", "无棱角", "没有棱角", "没用棱角", "不带棱角",
+        ))
+        or (
+            any(token in text for token in ("cube", "正方体", "方块"))
+            and any(token in text for token in ("round", "fillet", "圆角", "圆润", "倒圆", "棱角"))
+        )
+    )
+    cube_shape = rounded_cube or any(token in text for token in ("cube", "正方体", "方块"))
+    if rounded_cube:
+        kind = "rounded_cube"
+        title = "Parametric rounded cube"
+    elif any(token in text for token in (
         "l bracket", "l-shape", "l shape", "l-shaped", "angle bracket", "angle profile",
         "right angle", "l形", "l 型", "l型", "直角支架", "角码", "折条", "折弯", "弯折",
     )):
@@ -430,6 +449,10 @@ def parse_prompt_detailed(
     if diameter_found:
         width = width or diameter
         depth = depth or diameter
+    cube_edge = _number_after(text, [
+        r"(?:side|边长|边)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:side|边长|边)",
+    ]) if cube_shape else None
     width_found = width is not None or triplet_found or pair_found
     width = width or (generic_numbers[0] if len(generic_numbers) >= 3 else 120.0)
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
@@ -437,6 +460,7 @@ def parse_prompt_detailed(
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else width * 0.67))
     default_height = (
         40.0 if kind == "angle"
+        else 80.0 if kind == "rounded_cube"
         else 18.0 if kind == "tray"
         else 42.0 if kind == "organizer"
         else 82.0 if kind == "plant"
@@ -447,6 +471,10 @@ def parse_prompt_detailed(
     generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
     height_found = height is not None or triplet_found or generic_height is not None
     height = height or (generic_height if generic_height is not None else default_height)
+    if cube_shape and not triplet_found and not diameter_found and not any((width_found, depth_found, height_found)):
+        edge = cube_edge or (generic_numbers[0] if generic_numbers else 80.0)
+        width = depth = height = edge
+        width_found = depth_found = height_found = True
 
     compartments_value = _word_number(text)
     compartments_found = compartments_value is not None
@@ -457,7 +485,9 @@ def parse_prompt_detailed(
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
     ])
     chamfer_found = chamfer_value is not None
-    chamfer = chamfer_value if chamfer_value is not None else (0.0 if kind == "angle" else 2.0)
+    chamfer_default = 4.0 if kind == "rounded_cube" else (0.0 if cube_shape or kind == "angle" else 2.0)
+    chamfer = chamfer_value if chamfer_value is not None else chamfer_default
+    edge_style = "fillet" if kind == "rounded_cube" else "chamfer"
 
     wall_value = _number_after(text, [
         r"(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
@@ -537,6 +567,8 @@ def parse_prompt_detailed(
         process=process,
         tolerance=float(PROCESS_PROFILES[process]["tolerance"]),
         clearance=float(PROCESS_PROFILES[process]["clearance"]),
+        material=material if material in {"pla", "petg", "abs", "resin", "aluminum"} else "pla",
+        edge_style=edge_style,
     )
     field_sources = {
         "width": "parser" if width_found else "default",
@@ -548,6 +580,7 @@ def parse_prompt_detailed(
         "bottom": "parser" if bottom_found else ("derived" if wall_found else "default"),
         "drainage_holes": "inferred" if kind == "plant" else "default",
         "cable_channel": "inferred" if kind == "lamp" else "default",
+        "material": "parser",
     }
     provenance = _parameter_provenance(
         field_sources,
@@ -568,8 +601,8 @@ def parse_prompt_detailed(
     return title, params, provenance
 
 
-def parse_prompt(prompt: str, process: str = "fdm", units: str = "mm") -> tuple[str, ModelParameters]:
-    title, params, _ = parse_prompt_detailed(prompt, process, units)
+def parse_prompt(prompt: str, process: str = "fdm", units: str = "mm", material: str = "pla") -> tuple[str, ModelParameters]:
+    title, params, _ = parse_prompt_detailed(prompt, process, units, material)
     return title, params
 
 
@@ -581,7 +614,8 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
         raise RuntimeError("LLM_API_URL must be an absolute HTTP(S) URL")
     schema = {
         "schema_version": "0.1",
-        "kind": "tray|organizer|clip|plant|lamp|pen|angle|block",
+        "kind": "tray|organizer|clip|plant|lamp|pen|angle|rounded_cube|block",
+        "edge_style": "chamfer|fillet",
         "width": "number in mm", "depth": "number in mm", "height": "number in mm",
         "compartments": "integer 1-12", "wall": "number in mm", "bottom": "number in mm",
         "chamfer": "number in mm", "drainage_holes": "integer 0-4", "cable_channel": "boolean",
@@ -660,8 +694,9 @@ def interpret_prompt(
     process: str,
     mode: str,
     units: str = "mm",
+    material: str = "pla",
 ) -> tuple[str, ModelParameters, bool, list[str], dict[str, Any]]:
-    baseline_title, baseline, provenance = parse_prompt_detailed(prompt, process, units)
+    baseline_title, baseline, provenance = parse_prompt_detailed(prompt, process, units, material)
     baseline_assumptions = list(provenance.get("assumptions", []))
     if mode != "advanced":
         return baseline_title, baseline, False, baseline_assumptions, provenance
@@ -676,7 +711,7 @@ def interpret_prompt(
         return baseline_title, baseline, False, (baseline_assumptions + ["LLM returned no CAD parameters"])[:6], provenance
     supported_fields = {
         "kind", "width", "depth", "height", "compartments", "wall", "bottom",
-        "chamfer", "drainage_holes", "cable_channel", "features",
+        "chamfer", "edge_style", "drainage_holes", "cable_channel", "features",
     }
     if not supported_fields.intersection(candidate):
         return baseline_title, baseline, False, (baseline_assumptions + ["LLM returned no supported CAD parameters"])[:6], provenance
@@ -689,16 +724,18 @@ def interpret_prompt(
         "lamp_base": "lamp", "lamp base": "lamp",
         "pen_cup": "pen", "pen cup": "pen",
         "cable_clip": "clip", "cable clip": "clip",
+        "rounded_cube": "rounded_cube", "rounded cube": "rounded_cube",
+        "filleted_cube": "rounded_cube", "soft cube": "rounded_cube",
     }
     raw_kind = str(candidate.get("kind", baseline.kind)).strip().lower()
     kind = aliases.get(raw_kind, raw_kind)
     kind_was_provided = "kind" in candidate
     normalization_assumptions: list[str] = []
-    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "angle", "block"}:
+    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "angle", "rounded_cube", "block"}:
         kind = baseline.kind
         if kind_was_provided:
             normalization_assumptions.append("Unsupported model family was replaced with the deterministic baseline.")
-    elif baseline.kind != "block" and kind != baseline.kind:
+    elif (baseline.kind != "block" or any(token in prompt.lower() for token in ("cube", "正方体", "方块"))) and kind != baseline.kind:
         normalization_assumptions.append(
             f"LLM model family '{kind}' conflicted with the explicit '{baseline.kind}' shape; the deterministic family was preserved."
         )
@@ -730,6 +767,14 @@ def interpret_prompt(
     wall = number("wall", baseline.wall, 1.2, min(20.0, width / 3, depth / 3))
     bottom = number("bottom", baseline.bottom, 1.2, min(height - 1.0, 20.0))
     chamfer = number("chamfer", baseline.chamfer, 0.0, min(width, depth, height) / 4)
+    edge_style = str(candidate.get("edge_style", baseline.edge_style)).strip().lower()
+    if edge_style not in {"chamfer", "fillet"}:
+        edge_style = baseline.edge_style
+        normalization_assumptions.append("Unsupported edge style was replaced with the deterministic baseline.")
+    cube_locked = baseline.kind == "block" and any(token in prompt.lower() for token in ("cube", "正方体", "方块"))
+    if cube_locked and kind == "block":
+        chamfer = baseline.chamfer
+        edge_style = baseline.edge_style
 
     try:
         compartments_value = int(float(candidate.get("compartments", baseline.compartments)))
@@ -800,6 +845,8 @@ def interpret_prompt(
         "bottom": bottom,
         "drainage_holes": drainage_holes,
         "cable_channel": cable_channel,
+        "material": baseline.material,
+        "edge_style": "fillet" if kind == "rounded_cube" else edge_style,
     })
     titles = {
         "tray": "Parametric storage tray",
@@ -809,6 +856,7 @@ def interpret_prompt(
         "lamp": "Parametric lamp base",
         "pen": "Parametric pen cup",
         "angle": "Parametric L bracket",
+        "rounded_cube": "Parametric rounded cube",
         "block": "Parametric solid",
     }
     raw_assumptions = raw.get("assumptions", []) if isinstance(raw, dict) else []
@@ -856,6 +904,7 @@ def build_design_ir(
     base_operation = (
         "cylinder" if params.kind in {"plant", "pen"}
         else "l_profile_extrusion" if params.kind == "angle"
+        else "rounded_box" if params.kind == "rounded_cube"
         else "box"
     )
     feature_nodes: list[dict[str, Any]] = [
@@ -886,7 +935,12 @@ def build_design_ir(
     edge_node = next((node for node in feature_nodes if node["id"] == "edge_treatment"), None)
     if edge_node:
         feature_nodes.remove(edge_node)
-        edge_node["selection"] = "circular_rims" if params.kind in {"plant", "pen"} else "vertical_edges"
+        edge_node["selection"] = (
+            "circular_rims" if params.kind in {"plant", "pen"}
+            else "all_edges" if params.edge_style == "fillet"
+            else "vertical_edges"
+        )
+        edge_node["operation"] = "fillet" if params.edge_style == "fillet" else "chamfer"
         feature_nodes.insert(1, edge_node)
     field_provenance = (provenance or {}).get("fields", {})
     constraints = [
@@ -1054,18 +1108,20 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
 def _rounded_edges(
     workplane: Any,
     radius: float,
-    selection: str = "|Z",
+    selection: str | None = "|Z",
+    style: str = "chamfer",
 ) -> tuple[Any, str, str]:
     """Return the shape and actual operation; never hide a degraded feature."""
     if radius <= 0:
         return workplane, "none", "skipped"
-    try:
-        return workplane.edges(selection).chamfer(radius), "chamfer", "succeeded"
-    except Exception:
+    edges = workplane.edges(selection) if selection else workplane.edges()
+    operations = ("fillet", "chamfer") if style == "fillet" else ("chamfer", "fillet")
+    for index, operation in enumerate(operations):
         try:
-            return workplane.edges(selection).fillet(radius), "fillet", "warning"
+            return getattr(edges, operation)(radius), operation, "succeeded" if index == 0 else "warning"
         except Exception:
-            return workplane, "none", "warning"
+            continue
+    return workplane, "none", "warning"
 
 
 def build_geometry(
@@ -1095,6 +1151,7 @@ def build_geometry(
             recorder.emit("building", feature_id, status, operation=operation, **details)
 
     rotational = params.kind in {"plant", "pen"}
+    rounded_cube = params.kind == "rounded_cube"
     start("base_solid", kind=params.kind, dimensions_mm=[w, d, h])
     if rotational:
         radius = min(w, d) / 2
@@ -1111,15 +1168,16 @@ def build_geometry(
         base_operation = "l_profile_extrusion"
     else:
         outer = cq.Workplane("XY").box(w, d, h, centered=(True, True, False))
-        base_operation = "box"
+        base_operation = "rounded_box" if rounded_cube else "box"
     done("base_solid", outer, base_operation)
 
     if params.chamfer > 0:
-        selection = "%Circle" if rotational else "|Z"
-        start("edge_treatment", value_mm=params.chamfer, selection=selection)
-        outer, operation, status = _rounded_edges(outer, params.chamfer, selection)
-        done("edge_treatment", outer, operation, status, requested_operation="chamfer",
-             selection=selection, value_mm=params.chamfer,
+        selection = "%Circle" if rotational else (None if rounded_cube else "|Z")
+        operation_style = "fillet" if rounded_cube or params.edge_style == "fillet" else "chamfer"
+        start("edge_treatment", value_mm=params.chamfer, selection=selection or "all_edges", style=operation_style)
+        outer, operation, status = _rounded_edges(outer, params.chamfer, selection, operation_style)
+        done("edge_treatment", outer, operation, status, requested_operation=operation_style,
+             selection=selection or "all_edges", value_mm=params.chamfer,
              reason="edge_treatment_fallback" if status == "warning" else None)
 
     if params.kind == "angle":
@@ -1636,6 +1694,7 @@ def _generate_model(
             request.process,
             request.mode,
             request.units,
+            request.material,
         )
         if request.strict_dimensions and provenance.get("units", {}).get("ambiguous_dimensions"):
             raise ValueError("ambiguous dimensions; specify width, depth, and height or provide a dimension triplet")
