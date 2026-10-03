@@ -28,11 +28,13 @@ try:
     from .ir_validate import IRValidationError, validate_ir
     from .ir_executor import IRExecutionError, execute_ir, shape_metrics
     from .ir_constraints import solve_constraints
+    from .ir_repair import apply_patches, suggest_repairs
 except ImportError:  # pragma: no cover - direct backend module execution
     from legacy_adapter import legacy_design_ir_to_v2
     from ir_validate import IRValidationError, validate_ir
     from ir_executor import IRExecutionError, execute_ir, shape_metrics
     from ir_constraints import solve_constraints
+    from ir_repair import apply_patches, suggest_repairs
 
 try:
     import cadquery as cq
@@ -133,6 +135,12 @@ class IRValidationRequest(BaseModel):
 
 class IRCompileRequest(BaseModel):
     ir: dict[str, Any]
+
+
+class IRRepairRequest(BaseModel):
+    ir: dict[str, Any]
+    apply: bool = False
+    patches: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ModelParameters(BaseModel):
@@ -1715,6 +1723,32 @@ def validate_ir_endpoint(request: IRValidationRequest) -> dict[str, Any]:
         "node_count": len(normalized.get("nodes", [])),
         "constraint_count": len(normalized.get("constraints", [])),
         "ir": normalized,
+    }
+
+
+@app.post("/v1/ir/repair")
+def repair_ir_endpoint(request: IRRepairRequest) -> dict[str, Any]:
+    """Return deterministic repair patches; applying them is explicit."""
+    try:
+        normalized = validate_ir(request.ir)
+    except IRValidationError as exc:
+        raise HTTPException(status_code=422, detail={"valid": False, "issues": exc.issues}) from exc
+    report = solve_constraints(normalized, process_profile=PROCESS_PROFILES.get(normalized.get("process", "fdm")))
+    patches = request.patches or suggest_repairs(normalized, report)
+    repaired = normalized
+    if request.apply and patches:
+        try:
+            repaired = apply_patches(normalized, patches)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        report = solve_constraints(repaired, process_profile=PROCESS_PROFILES.get(repaired.get("process", "fdm")))
+    return {
+        "valid": report["valid"],
+        "schema_version": "0.2",
+        "applied": bool(request.apply and patches),
+        "constraints": report,
+        "patches": patches,
+        "ir": repaired,
     }
 
 
