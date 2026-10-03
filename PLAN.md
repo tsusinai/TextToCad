@@ -132,3 +132,16 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 3. 引入几何/装配/制造约束求解器，返回冲突解释。
 4. 用面级实测与多视图视觉检查驱动 repair loop。
 5. 将长任务迁移到可中断的进程级 worker，并保留每次 IR/几何/检查的 provenance。
+
+## CAD 质量与准确度升级（2026-10-03）
+
+已完成第一批实现：
+
+- 支持 mm、cm、m、in 输入，统一转换到毫米并保存原始单位、换算因子和尺寸来源。
+- 支持无单位三维尺寸组（例如 `120 x 80 x 42`），对直径、线缆尺寸和卡扣开口进行语义区分，避免把特征尺寸误当主体尺寸。
+- 增加 `strict_dimensions` 请求选项，生产调用可以拒绝含糊尺寸。
+- Semantic CAD IR 对隔板记录 requested count 与实际 divider count，并写入特征降级信息。
+- 增强 OCCT/B-Rep 指标、STEP 回读、网格封闭性、单位/轴向/checksum 元数据。
+- 增加 parser/IR/制造性回归测试和 GitHub Actions 质量工作流。
+
+下一步仍需在带 CadQuery 的 Docker 环境执行多模型族导出 smoke test，并将面级壁厚、间隙、拔模和悬空测量接入质量门禁。
