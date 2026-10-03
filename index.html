@@ -323,6 +323,13 @@
               <option value="cnc">CNC Milling</option>
               <option value="injection">Injection Molding</option>
             </select>
+            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">INPUT UNITS</span><small id="unitHint">Unitless values use this unit</small></div>
+            <select class="process-select" id="unitSelect" aria-label="Input units">
+              <option value="mm">mm</option>
+              <option value="cm">cm</option>
+              <option value="m">m</option>
+              <option value="in">in</option>
+            </select>
           </div>
           <div class="mode-controls">
             <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION MODE</span><small id="modeHint">Rule parser · deterministic and private</small></div>
@@ -407,10 +414,12 @@
     const featureMode = document.getElementById('featureMode');
     const featureTree = document.getElementById('featureTree');
     const processSelect = document.getElementById('processSelect');
+    const unitSelect = document.getElementById('unitSelect');
     const generationMode = document.getElementById('generationMode');
     const modeHint = document.getElementById('modeHint');
     const processProfileHint = document.getElementById('processProfileHint');
     const processStorageKey = 'formCadProcess';
+    const unitStorageKey = 'formCadUnits';
     const modeStorageKey = 'formCadGenerationMode';
     let selectedMode = (() => { try { return localStorage.getItem(modeStorageKey) || 'standard'; } catch (error) { return 'standard'; } })();
     if (!['standard', 'advanced'].includes(selectedMode)) selectedMode = 'standard';
@@ -424,7 +433,10 @@
     };
     let selectedProcess = (() => { try { return localStorage.getItem(processStorageKey) || 'fdm'; } catch (error) { return 'fdm'; } })();
     if (!processProfiles[selectedProcess]) selectedProcess = 'fdm';
+    let selectedUnits = (() => { try { return localStorage.getItem(unitStorageKey) || 'mm'; } catch (error) { return 'mm'; } })();
+    if (!['mm', 'cm', 'm', 'in'].includes(selectedUnits)) selectedUnits = 'mm';
     processSelect.value = selectedProcess;
+    if (unitSelect) unitSelect.value = selectedUnits;
     if (generationMode) generationMode.value = selectedMode;
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
@@ -452,8 +464,8 @@
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -502,6 +514,15 @@
       featureLabel.textContent = t.featureTree;
       featureMode.textContent = t.featureMode;
       document.getElementById('processLabel').textContent = t.processLabel;
+      if (document.getElementById('unitLabel')) document.getElementById('unitLabel').textContent = t.unitLabel;
+      if (document.getElementById('unitHint')) document.getElementById('unitHint').textContent = t.unitHint;
+      if (unitSelect) {
+        unitSelect.setAttribute('aria-label', t.unitLabel);
+        unitSelect.options[0].textContent = t.mmOption;
+        unitSelect.options[1].textContent = t.cmOption;
+        unitSelect.options[2].textContent = t.mOption;
+        unitSelect.options[3].textContent = t.inOption;
+      }
       if (document.getElementById('modeLabel')) document.getElementById('modeLabel').textContent = t.modeLabel;
       if (generationMode) {
         generationMode.setAttribute('aria-label', t.modeLabel);
@@ -614,30 +635,48 @@
       if (currentLang !== 'zh') return normalized;
       return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘' })[normalized] || normalized;
     }
+    function canonicalDimensionText(text) {
+      const factors = { mm: 1, cm: 10, m: 1000, in: 25.4 };
+      const fallbackFactor = factors[selectedUnits] || 1;
+      return String(text || '').toLowerCase().replace(
+        /(\d+(?:\.\d+)?)\s*(mm|毫米|cm|厘米|m|米|inches?|英寸)(?![a-z])/gi,
+        (_, value, unit) => {
+          const normalizedUnit = unit.toLowerCase();
+          const factor = { mm: 1, 毫米: 1, cm: 10, 厘米: 10, m: 1000, 米: 1000, in: 25.4, inch: 25.4, inches: 25.4, 英寸: 25.4 }[normalizedUnit] || fallbackFactor;
+          return (Number(value) * factor).toFixed(6).replace(/\.0+$/, '') + ' mm';
+        }
+      );
+    }
     function dimensionsFor(text) {
-      const normalized = text.toLowerCase();
+      const sourceText = String(text || '').toLowerCase();
+      const normalized = canonicalDimensionText(text);
+      const fallbackFactor = { mm: 1, cm: 10, m: 1000, in: 25.4 }[selectedUnits] || 1;
+      const hasExplicitUnit = /(?:mm|毫米|cm|厘米|m|米|inches?|英寸)/i.test(sourceText);
       const unitNumbers = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)).map((match) => Number(match[1]));
+      const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
+      const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
       const valueFor = (terms) => {
         const before = normalized.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)\\s*(?:' + terms + ')', 'i'));
         const after = normalized.match(new RegExp('(?:' + terms + ')[^\\d]{0,8}(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)', 'i'));
         return before ? Number(before[1]) : (after ? Number(after[1]) : null);
       };
-      const diameter = valueFor('diameter|直径');
-      const footprint = valueFor('footprint|占地');
-
+      const diameter = valueFor('diameter|dia|直径');
+      const footprint = valueFor('footprint|占地|底面');
       const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
       const leadingTreatmentValues = Array.from(normalized.matchAll(/(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)[^\d]{0,8}(\d+(?:\.\d+)?)\s*(?:mm|毫米)?/gi)).map((match) => Number(match[1]));
-      const genericNumbers = unitNumbers.filter((value) => !treatmentValues.concat(leadingTreatmentValues).includes(value));
-      const width = valueFor('wide|width|宽') || diameter || footprint || genericNumbers[0] || 120;
+      const featureValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:cable|wire|线缆|电缆|snap\s*opening|开口|diameter|dia|直径)/gi)).map((match) => Number(match[1]));
+      const genericNumbers = unitNumbers.filter((value) => !treatmentValues.concat(leadingTreatmentValues, featureValues).includes(value));
+      const positional = triplet.length === 3 ? triplet : (genericNumbers.length >= 3 ? genericNumbers.slice(0, 3) : []);
+      const width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || 120;
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
-      const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (genericNumbers[1] || width || 80));
-      const genericHeight = genericNumbers.slice(2).find((value) => !treatmentValues.includes(value));
-      const height = valueFor('tall|height|高') || genericHeight || (titleFor(text) === 'Plant pot' ? 82 : 42);
-      return { width, depth, height };
+      const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || width * 0.67));
+      const height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
+      const scale = hasExplicitUnit ? 1 : fallbackFactor;
+      return { width: width * scale, depth: depth * scale, height: height * scale };
     }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
     function parseModel(text) {
-      const normalized = text.toLowerCase();
+      const normalized = canonicalDimensionText(text);
       const countMatch = normalized.match(/(\d+)\s*(?:compartments?|隔间|格)/);
       const wordCount = normalized.includes('three') || normalized.includes('三个') ? 3 : (normalized.includes('two') || normalized.includes('两个') ? 2 : 0);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (titleFor(text) === 'Desk organizer' ? 3 : 1))), 1, 6);
@@ -1379,7 +1418,7 @@
     }
     async function requestBackend(value, process, signal) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: 'mm', process: process || selectedProcess, mode: selectedMode };
+      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1540,6 +1579,13 @@
       selectedMode = generationMode.value === 'advanced' ? 'advanced' : 'standard';
       try { localStorage.setItem(modeStorageKey, selectedMode); } catch (error) {}
       updateModeHint();
+      backendArtifact = null;
+      updateExportButtons();
+      if (modelSpec) generateModel();
+    });
+    if (unitSelect) unitSelect.addEventListener('change', () => {
+      selectedUnits = unitSelect.value;
+      try { localStorage.setItem(unitStorageKey, selectedUnits); } catch (error) {}
       backendArtifact = null;
       updateExportButtons();
       if (modelSpec) generateModel();
