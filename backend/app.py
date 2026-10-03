@@ -1159,7 +1159,7 @@ def build_geometry(
         base_operation = "l_profile_extrusion"
     else:
         outer = cq.Workplane("XY").box(w, d, h, centered=(True, True, False))
-        base_operation = "box"
+        base_operation = "rounded_box" if rounded_cube else "box"
     done("base_solid", outer, base_operation)
 
     if params.chamfer > 0:
