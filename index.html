@@ -1447,8 +1447,11 @@
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
     const defaultRemoteBackend = 'http://118.31.184.221/cad';
-    const localBackend = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://localhost:8787' : defaultRemoteBackend;
+    const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const localBackend = isLocalHost ? 'http://localhost:8787' : defaultRemoteBackend;
     const backendUrl = (configuredBackend || localBackend).replace(/\/+$/, '');
+    const isHttpsOrigin = window.location.protocol === 'https:';
+    const isMixedContent = isHttpsOrigin && /^http:\/\//i.test(backendUrl);
     function resolveBackendUrl(path) {
       if (!path) return '';
       if (/^https?:\/\//i.test(path)) return path;
@@ -2232,6 +2235,11 @@
         threeState.controls.enableDamping = true;
         threeState.controls.dampingFactor = .08;
         threeState.controls.screenSpacePanning = true;
+        threeState.controls.mouseButtons = {
+          LEFT: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN
+        };
         threeState.controls.minDistance = .05;
         threeState.controls.maxDistance = 100000;
         threeState.scene.add(new THREE.HemisphereLight(0xe8f0d8, 0x141816, 2.0));
@@ -2572,9 +2580,9 @@
       if (!modelStage) return;
       modelStage.addEventListener('pointerdown', (event) => {
         if (threeState.active) return;
-        if (event.button !== 0 && event.pointerType !== 'touch') return;
-        pointerState = { id: event.pointerId, x: event.clientX, y: event.clientY, pan: event.shiftKey || event.button === 1 };
-        modelStage.setPointerCapture(event.pointerId);
+        if (event.button !== 0 && event.button !== 2 && event.pointerType !== 'touch') return;
+        pointerState = { id: event.pointerId, x: event.clientX, y: event.clientY, pan: event.button === 2 || event.shiftKey || event.button === 1 };
+        try { modelStage.setPointerCapture(event.pointerId); } catch (e) {}
         modelStage.classList.add('dragging');
       });
       modelStage.addEventListener('pointermove', (event) => {
@@ -3059,9 +3067,10 @@
       ];
       return steps.map((item, index) => ({ id: item[1], stage: item[0], status: 'succeeded', started_ms: now + index, duration_ms: 0, details: { operation: item[1] } }));
     }
-    function setGenerationError(message) {
+    function setGenerationError(message, asHtml = false) {
       if (!generationError) return;
-      generationError.textContent = message || '';
+      if (asHtml) generationError.innerHTML = message || '';
+      else generationError.textContent = message || '';
       generationError.hidden = !message;
     }
     function updateExportButtons() {
@@ -3222,7 +3231,13 @@
             ? '后端返回的模型类型与输入不一致，已阻止错误模型；请重建后端服务后重试。'
             : 'The backend returned the wrong model family; the incorrect result was blocked. Rebuild the backend and retry.');
         } else if (backendError && backendUrl) {
-          setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+          if (isMixedContent) {
+            setGenerationError(currentLang === 'zh'
+              ? '当前为 HTTPS 页面，受浏览器限制无法调用 HTTP 云端服务；请使用 <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">云端工作台 (点此打开)</a> 或在本地运行。'
+              : 'Mixed Content blocked: HTTPS cannot call HTTP backend. Please open the <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">Cloud Web App</a> directly.', true);
+          } else {
+            setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+          }
         }
         if (selectedMode === 'advanced' && !backendUrl) setGenerationError(copy[currentLang].advancedRequiresBackend);
         saveRevision(value, modelSpec, remote ? 'backend' : 'local', canonical, previousSpec);
@@ -3402,6 +3417,16 @@
 
     async function checkBackendConnectivity() {
       if (!backendUrl) return;
+      if (isMixedContent) {
+        if (solved) {
+          solved.textContent = currentLang === 'zh' ? '需要HTTP访问' : 'HTTP required';
+          solved.classList.add('warn');
+        }
+        setGenerationError(currentLang === 'zh'
+          ? '提示：GitHub Pages 为 HTTPS 协议，受浏览器限制无法直连 HTTP 后端；推荐使用 <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">云端工作台 (点此直达)</a> 或本地部署。'
+          : 'Notice: HTTPS restricts direct HTTP backend calls. Open the <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">Cloud Web App</a> directly.', true);
+        return;
+      }
       try {
         const response = await backendFetch(backendUrl + '/health');
         if (response.ok) {
