@@ -313,7 +313,13 @@ def parse_prompt_detailed(
     if not text:
         raise ValueError("prompt must contain a shape description")
 
-    if any(token in text for token in ("tray", "shallow", "托盘", "盘")):
+    if any(token in text for token in (
+        "l-shape", "l shape", "l-shaped", "angle bracket", "angle profile",
+        "right angle", "l形", "l 型", "l型", "直角支架", "角码", "折条", "折弯", "弯折",
+    )):
+        kind = "angle"
+        title = "Parametric L bracket"
+    elif any(token in text for token in ("tray", "shallow", "托盘", "盘")):
         kind = "tray"
         title = "Parametric storage tray"
     elif any(token in text for token in ("organizer", "desk", "收纳", "隔间", "桌面")):
@@ -348,6 +354,14 @@ def parse_prompt_detailed(
         flags=re.IGNORECASE,
     )
     dimension_triplet = [float(value) for value in triplet_match.groups()] if triplet_match else []
+    pair_match = re.search(
+        r"(?<![a-zd])"
+        r"(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*"
+        r"(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])",
+        text,
+        flags=re.IGNORECASE,
+    )
+    dimension_pair = [float(value) for value in pair_match.groups()] if pair_match else []
     treatment_numbers = [
         float(value)
         for value in re.findall(
@@ -402,18 +416,22 @@ def parse_prompt_detailed(
     if footprint is not None:
         width = width or footprint
         depth = depth or footprint
+    pair_found = len(dimension_pair) == 2 and kind == "angle"
     if triplet_found and width is None and depth is None and height is None:
         width, depth, height = dimension_triplet
+    elif pair_found and width is None and depth is None:
+        width, depth = dimension_pair
     if diameter_found:
         width = width or diameter
         depth = depth or diameter
-    width_found = width is not None or triplet_found
+    width_found = width is not None or triplet_found or pair_found
     width = width or (generic_numbers[0] if len(generic_numbers) >= 3 else 120.0)
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
-    depth_found = depth is not None or square_base or triplet_found
+    depth_found = depth is not None or square_base or triplet_found or pair_found
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else width * 0.67))
     default_height = (
-        18.0 if kind == "tray"
+        40.0 if kind == "angle"
+        else 18.0 if kind == "tray"
         else 42.0 if kind == "organizer"
         else 82.0 if kind == "plant"
         else 95.0 if kind == "pen"
@@ -433,13 +451,13 @@ def parse_prompt_detailed(
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
     ])
     chamfer_found = chamfer_value is not None
-    chamfer = chamfer_value if chamfer_value is not None else 2.0
+    chamfer = chamfer_value if chamfer_value is not None else (0.0 if kind == "angle" else 2.0)
 
     wall_value = _number_after(text, [
-        r"(?:wall|壁厚)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(?:wall|壁厚|板厚|厚度)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
     ])
     wall_found = wall_value is not None
-    wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer") else 2.0)
+    wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer", "angle") else 2.0)
     bottom_value = _number_after(text, [
         r"(?:bottom|floor|底厚)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
     ])
@@ -491,6 +509,7 @@ def parse_prompt_detailed(
     ))
     ambiguous_dimensions = (
         not triplet_found
+        and not pair_found
         and not any((footprint, width if width_found else None, depth if depth_found else None, height if height_found else None, diameter))
         and (len(generic_numbers) not in (0, 3) or unlabeled_pair)
     )
@@ -534,6 +553,7 @@ def parse_prompt_detailed(
             "factor": unit_factor,
             "ambiguous_dimensions": ambiguous_dimensions,
             "dimension_triplet": dimension_triplet,
+            "dimension_pair": dimension_pair,
             "unlabeled_pair": unlabeled_pair,
             "diameter_mm": round(diameter * (1.0 if explicit_units else unit_factor), 6) if diameter is not None else None,
         },
@@ -555,7 +575,7 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
         raise RuntimeError("LLM_API_URL must be an absolute HTTP(S) URL")
     schema = {
         "schema_version": "0.1",
-        "kind": "tray|organizer|clip|plant|lamp|pen|block",
+        "kind": "tray|organizer|clip|plant|lamp|pen|angle|block",
         "width": "number in mm", "depth": "number in mm", "height": "number in mm",
         "compartments": "integer 1-12", "wall": "number in mm", "bottom": "number in mm",
         "chamfer": "number in mm", "drainage_holes": "integer 0-4", "cable_channel": "boolean",
@@ -569,6 +589,8 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
         f"Selected manufacturing process: {process}. Process limits: {json.dumps(PROCESS_PROFILES[process])}. "
         f"Supported JSON shape: {json.dumps(schema)}. "
         f"The deterministic baseline is {json.dumps(baseline.model_dump())}. "
+        "If the baseline identifies a strong shape such as an L bracket, preserve that model family; "
+        "do not replace it with an organizer or another unrelated family. "
         "Return assumptions in the same language as the user when possible."
     )
     base_payload = {
@@ -654,6 +676,9 @@ def interpret_prompt(
         return baseline_title, baseline, False, (baseline_assumptions + ["LLM returned no supported CAD parameters"])[:6], provenance
 
     aliases = {
+        "l_bracket": "angle", "l bracket": "angle", "l_shape": "angle",
+        "l shape": "angle", "l-shaped": "angle", "angle_bracket": "angle",
+        "angle bracket": "angle", "angle_profile": "angle",
         "plant_pot": "plant", "plant pot": "plant",
         "lamp_base": "lamp", "lamp base": "lamp",
         "pen_cup": "pen", "pen cup": "pen",
@@ -663,10 +688,16 @@ def interpret_prompt(
     kind = aliases.get(raw_kind, raw_kind)
     kind_was_provided = "kind" in candidate
     normalization_assumptions: list[str] = []
-    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "block"}:
+    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "angle", "block"}:
         kind = baseline.kind
         if kind_was_provided:
             normalization_assumptions.append("Unsupported model family was replaced with the deterministic baseline.")
+    elif baseline.kind != "block" and kind != baseline.kind:
+        normalization_assumptions.append(
+            f"LLM model family '{kind}' conflicted with the explicit '{baseline.kind}' shape; the deterministic family was preserved."
+        )
+        kind = baseline.kind
+        kind_was_provided = False
 
     llm_status: dict[str, str] = {}
     def number(name: str, fallback: float, minimum: float, maximum: float) -> float:
@@ -771,6 +802,7 @@ def interpret_prompt(
         "plant": "Parametric plant pot",
         "lamp": "Parametric lamp base",
         "pen": "Parametric pen cup",
+        "angle": "Parametric L bracket",
         "block": "Parametric solid",
     }
     raw_assumptions = raw.get("assumptions", []) if isinstance(raw, dict) else []
