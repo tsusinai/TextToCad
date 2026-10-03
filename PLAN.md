@@ -145,3 +145,16 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 增加 parser/IR/制造性回归测试和 GitHub Actions 质量工作流。
 
 下一步仍需在带 CadQuery 的 Docker 环境执行多模型族导出 smoke test，并将面级壁厚、间隙、拔模和悬空测量接入质量门禁。
+
+
+## 建模过程可视化（2026-10-03）
+
+本轮把生成过程从单一 loading 状态升级为可追溯的实际事件流：
+
+- GenerationRecorder 在解析、Semantic CAD IR 规划、每个 CadQuery 特征、几何校验、制造审查和导出时记录状态、耗时、操作和降级原因。
+- 异步 job 的 progress 会在每个真实里程碑后更新，页面轮询时显示当前阶段和已完成事件；取消任务会在下一个安全边界停止。
+- include_steps: true 会保存最多 6 个中间形体快照，并在能使用 trimesh 时导出 GLB；前端的步骤按钮直接加载 /v1/models/{id}/steps/{step_id}。
+- 最终 generation_trace 同时写入 API 响应和 manifest，便于复盘一次生成到底执行了哪些几何操作。
+- 无后端时 UI 显示离线参数化预览的本地流程；连接后端后切换为真实 CadQuery/OCCT 事件，不把等待时间伪装成完成进度。
+
+验收标准：任务状态页能看到 queued/running/succeeded 或 failed；每个事件有稳定 id、状态和耗时；步骤预览缺失时显示可解释的降级状态；刷新页面后最终 manifest 仍保留生成轨迹。
