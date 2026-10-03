@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -14,7 +15,7 @@ import urllib.request
 import uuid
 from threading import BoundedSemaphore, Lock, Thread
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -105,6 +106,7 @@ class GenerateRequest(BaseModel):
     process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
     mode: Literal["standard", "advanced"] = "standard"
     strict_dimensions: bool = False
+    include_steps: bool = False
 
 
 class ModelParameters(BaseModel):
@@ -138,6 +140,7 @@ class GenerateResponse(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
     design_ir: dict[str, Any] = Field(default_factory=dict)
+    generation_trace: list[dict[str, Any]] = Field(default_factory=list)
 
 
 CACHE_LOCK = Lock()
@@ -156,8 +159,55 @@ REQUEST_BUCKETS: dict[str, list[float]] = {}
 def _cache_key(request: GenerateRequest) -> str:
     normalized = " ".join(request.prompt.strip().lower().split())
     return hashlib.sha256(
-        f"{request.mode}\0{request.process}\0{request.units}\0{request.strict_dimensions}\0{normalized}".encode("utf-8")
+        f"{request.mode}\0{request.process}\0{request.units}\0{request.strict_dimensions}\0{request.include_steps}\0{normalized}".encode("utf-8")
     ).hexdigest()
+
+
+
+class GenerationCancelled(Exception):
+    """Stop between safe kernel operations when a job has been cancelled."""
+
+
+class GenerationRecorder:
+    """Ordered, bounded milestones from actual operations; no simulated timings."""
+
+    def __init__(self, report: Callable[[dict[str, Any]], None] | None = None):
+        self.started = time.monotonic()
+        self.events: list[dict[str, Any]] = []
+        self.report = report
+
+    def publish(self) -> None:
+        if self.report:
+            last = self.events[-1] if self.events else {}
+            self.report({
+                "stage": last.get("stage", "queued"),
+                "current_step": last.get("id"),
+                "elapsed_ms": round((time.monotonic() - self.started) * 1000),
+                "events": copy.deepcopy(self.events),
+            })
+
+    def emit(self, stage: str, step_id: str, status: str, **details: Any) -> dict[str, Any]:
+        now_ms = round((time.monotonic() - self.started) * 1000)
+        event = next((item for item in self.events if item["id"] == step_id), None)
+        if event is None:
+            event = {
+                "id": step_id, "stage": stage, "status": status,
+                "started_ms": now_ms, "details": {},
+            }
+            self.events.append(event)
+        event["status"] = status
+        event["details"].update(details)
+        if status != "running":
+            event["duration_ms"] = max(0, now_ms - event["started_ms"])
+        self.publish()
+        return event
+
+    def fail(self, message: str) -> None:
+        running = next((item for item in reversed(self.events) if item["status"] == "running"), None)
+        if running:
+            self.emit(running["stage"], running["id"], "failed", reason=message[:240])
+        else:
+            self.emit("failed", "generation_failed", "failed", reason=message[:240])
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -766,7 +816,7 @@ def build_design_ir(
 ) -> dict[str, Any]:
     """Create a small semantic CAD IR that is independent of the CadQuery builder."""
     feature_nodes: list[dict[str, Any]] = [
-        {"id": "base_solid", "type": "primitive", "operation": "box", "status": "planned"},
+        {"id": "base_solid", "type": "primitive", "operation": "cylinder" if params.kind in {"plant", "pen"} else "box", "status": "planned"},
     ]
     if params.kind in {"tray", "organizer"}:
         feature_nodes.extend([
@@ -783,6 +833,13 @@ def build_design_ir(
         feature_nodes.append({"id": "cable_channel", "type": "cut", "operation": "cut_recess", "source": "base_solid", "status": "planned"})
     if params.chamfer > 0:
         feature_nodes.append({"id": "edge_treatment", "type": "edge", "operation": "chamfer", "source": "base_solid", "selection": "vertical_edges", "value_mm": params.chamfer, "fallback": "fillet_or_original", "status": "planned"})
+    # Execution order matches the builder: base -> edge -> cavity/pattern.
+    edge_node = next((node for node in feature_nodes if node["id"] == "edge_treatment"), None)
+    if edge_node:
+        feature_nodes.remove(edge_node)
+        edge_node["selection"] = "circular_rims" if params.kind in {"plant", "pen"} else "vertical_edges"
+        feature_nodes.insert(1, edge_node)
+    field_provenance = (provenance or {}).get("fields", {})
     constraints = [
         {"id": "width_bounds", "type": "range", "parameter": "width", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
         {"id": "depth_bounds", "type": "range", "parameter": "depth", "min_mm": 10.0, "max_mm": 1000.0, "hard": True},
@@ -802,6 +859,10 @@ def build_design_ir(
         "drainage_holes": {"value": params.drainage_holes, "unit": "count", "source": "llm" if llm_used else "parser", "constraint": "soft"},
         "cable_channel": {"value": params.cable_channel, "unit": "boolean", "source": "llm" if llm_used else "parser", "constraint": "soft"},
     }
+    for key, parameter in parameters.items():
+        source = field_provenance.get(key, {})
+        parameter["source"] = source.get("source", parameter["source"])
+        parameter["status"] = source.get("status", "resolved")
     return {
         "schema_version": "0.1",
         "design": {
@@ -939,87 +1000,130 @@ def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
     }
 
 
-def _rounded_edges(workplane: Any, radius: float) -> Any:
+def _rounded_edges(
+    workplane: Any,
+    radius: float,
+    selection: str = "|Z",
+) -> tuple[Any, str, str]:
+    """Return the shape and actual operation; never hide a degraded feature."""
     if radius <= 0:
-        return workplane
+        return workplane, "none", "skipped"
     try:
-        # The UI value is a chamfer; use the matching B-Rep operation first.
-        return workplane.edges("|Z").chamfer(radius)
+        return workplane.edges(selection).chamfer(radius), "chamfer", "succeeded"
     except Exception:
         try:
-            # Keep a fillet fallback for CadQuery versions or edge selections
-            # where chamfer is unavailable, while preserving a valid solid.
-            return workplane.edges("|Z").fillet(radius)
+            return workplane.edges(selection).fillet(radius), "fillet", "warning"
         except Exception:
-            return workplane
+            return workplane, "none", "warning"
 
-def build_geometry(params: ModelParameters) -> Any:
+
+def build_geometry(
+    params: ModelParameters,
+    recorder: GenerationRecorder | None = None,
+    design_ir: dict[str, Any] | None = None,
+    snapshots: list[tuple[str, Any]] | None = None,
+) -> Any:
     if cq is None:
         raise RuntimeError(f"CadQuery is not installed: {CADQUERY_ERROR}")
-
     w, d, h = params.width, params.depth, params.height
     wall, bottom = params.wall, params.bottom
-    outer = cq.Workplane("XY").box(w, d, h, centered=(True, True, False))
-    outer = _rounded_edges(outer, params.chamfer)
+
+    def start(feature_id: str, **details: Any) -> None:
+        if recorder:
+            recorder.emit("building", feature_id, "running", **details)
+
+    def done(feature_id: str, shape: Any, operation: str, status: str = "succeeded", **details: Any) -> None:
+        if design_ir:
+            node = next((item for item in design_ir["features"] if item["id"] == feature_id), None)
+            if node:
+                node.update({"status": "applied" if status == "succeeded" else "degraded",
+                             "actual_operation": operation})
+        if snapshots is not None and len(snapshots) < 6:
+            snapshots.append((feature_id, shape))
+        if recorder:
+            recorder.emit("building", feature_id, status, operation=operation, **details)
+
+    rotational = params.kind in {"plant", "pen"}
+    start("base_solid", kind=params.kind, dimensions_mm=[w, d, h])
+    if rotational:
+        radius = min(w, d) / 2
+        outer = cq.Workplane("XY").circle(radius).extrude(h)
+    else:
+        outer = cq.Workplane("XY").box(w, d, h, centered=(True, True, False))
+    done("base_solid", outer, "cylinder" if rotational else "box")
+
+    if params.chamfer > 0:
+        selection = "%Circle" if rotational else "|Z"
+        start("edge_treatment", value_mm=params.chamfer, selection=selection)
+        outer, operation, status = _rounded_edges(outer, params.chamfer, selection)
+        done("edge_treatment", outer, operation, status, requested_operation="chamfer",
+             selection=selection, value_mm=params.chamfer,
+             reason="edge_treatment_fallback" if status == "warning" else None)
 
     if params.kind in ("tray", "organizer"):
-        inner_w = w - 2 * wall
-        inner_d = d - 2 * wall
+        inner_w, inner_d = w - 2 * wall, d - 2 * wall
         inner_h = max(1.0, h - bottom)
+        start("shell_cavity", wall_mm=wall, bottom_mm=bottom)
         inner = cq.Workplane("XY").box(
             inner_w, inner_d, inner_h, centered=(True, True, False)
         ).translate((0, 0, bottom))
         shape = outer.cut(inner)
-
+        done("shell_cavity", shape, "cut_inner_volume")
         if params.compartments > 1:
+            start("dividers", count=params.compartments - 1, compartments=params.compartments)
             cell_w = inner_w / params.compartments
-            divider_height = max(1.0, h - bottom)
             for index in range(1, params.compartments):
                 x = -inner_w / 2 + cell_w * index
                 divider = cq.Workplane("XY").box(
-                    wall, inner_d, divider_height, centered=(True, True, False)
+                    wall, inner_d, inner_h, centered=(True, True, False)
                 ).translate((x, 0, bottom))
                 shape = shape.union(divider)
+            done("dividers", shape, "union", count=params.compartments - 1,
+                 compartments=params.compartments)
+        elif design_ir:
+            divider_node = next((node for node in design_ir["features"] if node["id"] == "dividers"), None)
+            if divider_node:
+                divider_node["status"] = "skipped"
         return shape
 
-    if params.kind in ("plant", "pen"):
-        # Rotational containers share a stable hollow profile with the same
-        # wall and bottom parameters as trays, keeping UI and B-Rep semantics aligned.
-        radius = min(w, d) / 2
+    if rotational:
         inner_radius = max(1.0, radius - wall)
-        inner_height = max(1.0, h - bottom)
-        outer_round = cq.Workplane("XY").circle(radius).extrude(h)
-        outer_round = _rounded_edges(outer_round, params.chamfer)
-        inner = cq.Workplane("XY").circle(inner_radius).extrude(inner_height).translate((0, 0, bottom))
-        shape = outer_round.cut(inner)
+        start("rotational_cavity", wall_mm=wall, bottom_mm=bottom)
+        inner = cq.Workplane("XY").circle(inner_radius).extrude(max(1.0, h - bottom)).translate((0, 0, bottom))
+        shape = outer.cut(inner)
+        done("rotational_cavity", shape, "cut_inner_cylinder")
         if params.kind == "plant" and params.drainage_holes > 0:
+            start("drainage_holes", count=params.drainage_holes)
             hole_radius = max(0.8, min(3.0, wall * 0.45))
-            hole_offset = radius * 0.35
-            hole_positions = ((-hole_offset, 0), (hole_offset, 0), (0, hole_offset), (0, -hole_offset))
-            for x, y in hole_positions[:min(params.drainage_holes, len(hole_positions))]:
-                drainage_hole = cq.Workplane("XY").circle(hole_radius).extrude(bottom + 2.0).translate((x, y, -1.0))
-                shape = shape.cut(drainage_hole)
+            offset = radius * 0.35
+            positions = ((-offset, 0), (offset, 0), (0, offset), (0, -offset))
+            for x, y in positions[:min(params.drainage_holes, len(positions))]:
+                hole = cq.Workplane("XY").circle(hole_radius).extrude(bottom + 2.0).translate((x, y, -1.0))
+                shape = shape.cut(hole)
+            done("drainage_holes", shape, "cut_cylinders", count=params.drainage_holes)
         return shape
 
     if params.kind == "lamp" and params.cable_channel:
-        # The cable channel is recessed from the underside so the lamp base
-        # keeps a clean top surface while matching the prompt intent.
+        start("cable_channel")
         channel_w = max(6.0, min(w * 0.4, w - 2 * wall))
         channel_d = max(4.0, min(d * 0.22, d - 2 * wall))
-        channel = cq.Workplane("XY").box(channel_w, channel_d, max(1.0, wall * 1.6), centered=(True, True, False)).translate((0, d * 0.28, -0.1))
-        return outer.cut(channel)
+        channel = cq.Workplane("XY").box(
+            channel_w, channel_d, max(1.0, wall * 1.6), centered=(True, True, False)
+        ).translate((0, d * 0.28, -0.1))
+        shape = outer.cut(channel)
+        done("cable_channel", shape, "cut_recess")
+        return shape
 
     if params.kind == "clip":
-        # A manufacturable cable clip: a rounded base plus a centered cable
-        # relief cut. The cut opens from the top and leaves a strong bottom.
-        relief_w = min(w * 0.55, max(4.0, w - 2 * wall))
-        relief_d = min(d * 0.55, max(4.0, d - 2 * wall))
+        start("cable_relief")
         relief = cq.Workplane("XY").box(
-            relief_w, relief_d, max(1.0, h - wall),
-            centered=(True, True, False),
+            min(w * 0.55, max(4.0, w - 2 * wall)),
+            min(d * 0.55, max(4.0, d - 2 * wall)),
+            max(1.0, h - wall), centered=(True, True, False),
         ).translate((0, 0, wall))
-        return outer.cut(relief)
-
+        shape = outer.cut(relief)
+        done("cable_relief", shape, "cut_relief")
+        return shape
     return outer
 
 
@@ -1187,6 +1291,8 @@ def _write_artifacts(
     generation: dict[str, Any] | None = None,
     design_ir: dict[str, Any] | None = None,
     provenance: dict[str, Any] | None = None,
+    recorder: GenerationRecorder | None = None,
+    snapshots: list[tuple[str, Any]] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
     model_dir.mkdir(parents=True, exist_ok=False)
@@ -1194,6 +1300,8 @@ def _write_artifacts(
     stl_path = model_dir / "model.stl"
     analysis_path = model_dir / "analysis.json"
 
+    if recorder:
+        recorder.emit("exporting", "exports", "running", formats=["step", "stl"])
     with EXPORT_LOCK:
         step_schema = _export_step_ap242(shape, step_path)
     step_roundtrip = _roundtrip_step_check(shape, step_path)
@@ -1236,6 +1344,43 @@ def _write_artifacts(
     if not checks["export_ready"]:
         raise RuntimeError("one or more generated artifacts are empty")
 
+    if recorder:
+        recorder.emit("exporting", "exports",
+                      "succeeded" if step_roundtrip["status"] == "pass" and mesh_validation["status"] == "pass" else "warning",
+                      formats=["step", "stl"] + sorted(preview_files),
+                      step_roundtrip=step_roundtrip["status"], mesh_validation=mesh_validation["status"])
+    if snapshots and recorder:
+        recorder.emit("exporting", "step_previews", "running", count=len(snapshots))
+        available_count = 0
+        if trimesh is not None:
+            steps_dir = model_dir / "steps"
+            steps_dir.mkdir(exist_ok=True)
+            for step_id, intermediate in snapshots:
+                temp_stl = steps_dir / f"{step_id}.stl"
+                preview_glb = steps_dir / f"{step_id}.glb"
+                event = next((item for item in recorder.events if item["id"] == step_id), None)
+                try:
+                    exporters.export(intermediate, str(temp_stl))
+                    step_mesh = trimesh.load_mesh(str(temp_stl), file_type="stl", force="mesh")
+                    step_mesh.export(str(preview_glb), file_type="glb")
+                    if not preview_glb.exists() or preview_glb.stat().st_size == 0:
+                        raise RuntimeError("empty step preview")
+                    if event is not None:
+                        event["preview"] = f"/v1/models/{model_id}/steps/{step_id}"
+                    available_count += 1
+                except Exception:
+                    if event is not None:
+                        event["preview_unavailable"] = True
+                finally:
+                    temp_stl.unlink(missing_ok=True)
+                recorder.publish()
+        recorder.emit("exporting", "step_previews",
+                      "succeeded" if available_count == len(snapshots) else "warning",
+                      available=available_count, requested=len(snapshots))
+    if recorder:
+        recorder.emit("complete", "ready", "succeeded", model_id=model_id,
+                      review_required=True, formats=["step", "stl"] + sorted(preview_files))
+
     artifact_metadata: dict[str, Any] = {}
     for format_name, path in {
         "step": step_path,
@@ -1260,6 +1405,7 @@ def _write_artifacts(
         "process_profile": PROCESS_PROFILES[params.process],
         "generation": generation or {"mode": "standard", "llm_used": False, "assumptions": []},
         "provenance": provenance or {},
+        "generation_trace": copy.deepcopy(recorder.events) if recorder else [],
         "design_ir": design_ir or {},
         "checks": checks,
         "analysis": analysis,
@@ -1398,14 +1544,26 @@ def get_process_profiles() -> dict[str, dict[str, Any]]:
 
 @app.post("/v1/models", response_model=GenerateResponse)
 def generate_model(request: GenerateRequest) -> GenerateResponse:
+    return _generate_model(request)
+
+
+def _generate_model(
+    request: GenerateRequest,
+    report: Callable[[dict[str, Any]], None] | None = None,
+) -> GenerateResponse:
+    recorder = GenerationRecorder(report)
     cleanup_artifacts()
     cache_key = _cache_key(request)
     with CACHE_LOCK:
         cached = MODEL_CACHE.get(cache_key)
         if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
-            return cached
+            cache_event = recorder.emit("complete", "cache", "succeeded", model_id=cached.model_id)
+            return cached.model_copy(update={
+                "generation_trace": [copy.deepcopy(cache_event)] + copy.deepcopy(cached.generation_trace)
+            })
     model_id: str | None = None
     try:
+        recorder.emit("parsing", "interpretation", "running", mode=request.mode, units=request.units)
         title, params, llm_used, assumptions, provenance = interpret_prompt(
             request.prompt,
             request.process,
@@ -1414,6 +1572,10 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
         )
         if request.strict_dimensions and provenance.get("units", {}).get("ambiguous_dimensions"):
             raise ValueError("ambiguous dimensions; specify width, depth, and height or provide a dimension triplet")
+        recorder.emit("parsing", "interpretation", "succeeded", llm_used=llm_used,
+                      dimensions_mm=[params.width, params.depth, params.height],
+                      assumptions_count=len(assumptions))
+        recorder.emit("planning", "feature_plan", "running")
         design_ir = build_design_ir(
             request.prompt,
             params,
@@ -1422,8 +1584,19 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             assumptions,
             provenance,
         )
-        shape = build_geometry(params)
+        recorder.emit("planning", "feature_plan", "succeeded", count=len(design_ir["features"]))
+        snapshots: list[tuple[str, Any]] | None = [] if request.include_steps else None
+        shape = build_geometry(params, recorder, design_ir, snapshots)
+        recorder.emit("validating", "geometry_validation", "running")
         analysis = analyze_manufacturability(params)
+        edge_feature = next((node for node in design_ir["features"] if node["id"] == "edge_treatment"), None)
+        if edge_feature and edge_feature["status"] == "degraded":
+            analysis["issues"].append({
+                "code": "edge_treatment", "severity": "warning",
+                "message": "Requested chamfer was degraded; inspect the recorded operation.",
+                "message_zh": "请求的倒角发生降级，请检查记录的实际操作。",
+            })
+            analysis["has_warnings"] = True
         checks = _validate_shape(shape, params, analysis)
         hard_checks = {
             key: checks[key]
@@ -1431,6 +1604,10 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
         }
         if not all(hard_checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
+        recorder.emit("validating", "geometry_validation", "succeeded",
+                      solid_count=1, metrics=_shape_metrics(shape))
+        recorder.emit("reviewing", "manufacturing_review", "warning",
+                      nominal=True, issue_count=len(analysis["issues"]), review_required=True)
         model_id = uuid.uuid4().hex
         artifacts, step_schema = _write_artifacts(
             model_id,
@@ -1442,6 +1619,8 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             {"mode": request.mode, "llm_used": llm_used, "assumptions": assumptions},
             design_ir,
             provenance,
+            recorder,
+            snapshots,
         )
         response = GenerateResponse(
             model_id=model_id,
@@ -1458,48 +1637,56 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
             assumptions=assumptions,
             provenance=provenance,
             design_ir=design_ir,
+            generation_trace=copy.deepcopy(recorder.events),
         )
         with CACHE_LOCK:
             MODEL_CACHE[cache_key] = response
         return response
+    except GenerationCancelled:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        raise
     except RuntimeError as exc:
         if model_id:
             shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         if model_id:
             shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         if model_id:
             shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
         raise HTTPException(status_code=500, detail=f"geometry generation failed: {exc}") from exc
 
 
 def _run_job(job_id: str, request: GenerateRequest) -> None:
-    with JOB_LOCK:
-        job = JOBS.get(job_id)
-        if not job or job["status"] == "cancelled":
-            return
-        job["status"] = "running"
-    try:
-        with GENERATION_SEMAPHORE:
-            result = generate_model(request)
-        cancelled_model_id: str | None = None
+    def report(progress: dict[str, Any]) -> None:
         with JOB_LOCK:
             job = JOBS.get(job_id)
-            if not job:
-                return
-            if job["status"] == "cancelled":
-                cancelled_model_id = result.model_id
-            else:
+            if not job or job["status"] == "cancelled":
+                raise GenerationCancelled()
+            job["progress"] = progress
+
+    try:
+        # Keep queued jobs queued until a kernel slot becomes available.
+        with GENERATION_SEMAPHORE:
+            with JOB_LOCK:
+                job = JOBS.get(job_id)
+                if not job or job["status"] == "cancelled":
+                    return
+                job["status"] = "running"
+            result = _generate_model(request, report)
+        with JOB_LOCK:
+            job = JOBS.get(job_id)
+            if job and job["status"] != "cancelled":
                 job["status"] = "succeeded"
                 job["result"] = result.model_dump()
-        if cancelled_model_id:
-            # A cancellation can arrive while CadQuery is already running. The
-            # worker cannot interrupt OCCT safely, but it must remove the
-            # completed artifact instead of leaking it after the user cancels.
-            shutil.rmtree(ARTIFACT_ROOT / cancelled_model_id, ignore_errors=True)
+    except GenerationCancelled:
+        return
     except HTTPException as exc:
         with JOB_LOCK:
             if job_id in JOBS and JOBS[job_id]["status"] != "cancelled":
@@ -1526,7 +1713,10 @@ def create_job(request: GenerateRequest) -> dict[str, Any]:
                 detail="job queue is full; retry after existing jobs finish",
                 headers={"Retry-After": "5"},
             )
-        JOBS[job_id] = {"job_id": job_id, "status": "queued", "created_at": time.time()}
+        JOBS[job_id] = {
+            "job_id": job_id, "status": "queued", "created_at": time.time(),
+            "progress": {"stage": "queued", "current_step": None, "elapsed_ms": 0, "events": []},
+        }
     Thread(target=_run_job, args=(job_id, request), daemon=True).start()
     return {"job_id": job_id, "status": "queued"}
 
@@ -1539,7 +1729,7 @@ def get_job(job_id: str) -> dict[str, Any]:
         job = JOBS.get(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
-        return dict(job)
+        return copy.deepcopy(job)
 
 
 @app.delete("/v1/jobs/{job_id}")
@@ -1553,6 +1743,17 @@ def cancel_job(job_id: str) -> dict[str, Any]:
         if job["status"] in {"queued", "running"}:
             job["status"] = "cancelled"
         return {"job_id": job_id, "status": job["status"]}
+
+
+
+@app.get("/v1/models/{model_id}/steps/{step_id}")
+def get_step_preview(model_id: str, step_id: str) -> FileResponse:
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id) or not re.fullmatch(r"[a-z_]{1,40}", step_id):
+        raise HTTPException(status_code=400, detail="invalid model or step id")
+    file_path = ARTIFACT_ROOT / model_id / "steps" / f"{step_id}.glb"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="step preview not available")
+    return FileResponse(file_path, media_type="model/gltf-binary", filename=f"{step_id}.glb")
 
 
 @app.get("/v1/models/{model_id}/ir")
