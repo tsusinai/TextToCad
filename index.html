@@ -1086,23 +1086,23 @@
     </header>
     <section class="workspace">
       <aside class="prompt-panel">
-        <div class="eyebrow">TEXT-TO-CAD</div>
+        <div class="eyebrow">TEXT-TO-CAD ENGINE</div>
         <h1>Describe your part.</h1>
-        <p class="helper">Start with shape, size, and intent.</p>
+        <p class="helper">Specify parametric geometry, target dimensions, and manufacturing intent.</p>
         <div class="prompt-editor">
           <textarea id="prompt" aria-label="Describe your part">A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.</textarea>
-          <div class="chip-row"><span class="chip">rounded edges</span><span class="chip neutral">120 × 80 mm</span></div>
+          <div class="chip-row"><span class="chip">soft chamfer edges</span><span class="chip neutral">120 × 80 mm</span></div>
         </div>
         <div class="interpretation" id="interpretation" aria-live="polite">
-          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">INTERPRETED SPEC</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
+          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">INTERPRETED SPECIFICATIONS</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
           <strong class="interpretation-summary" id="interpretationSummary">Desk organizer · 120 × 80 × 42 mm</strong>
-          <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · defaults will be shown here</small>
+          <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · ENGINE DEFAULTS applied where unspecified</small>
         </div>
-        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate model</span><span class="shortcut">⌘ ↵</span></button>
+        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut">⌘ ↵</span></button>
         <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
         <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
         <div class="starter">
-          <div class="section-label">OR TRY A STARTER</div>
+          <div class="section-label">PARAMETRIC PRESETS</div>
           <div class="starter-buttons">
             <button type="button" data-prompt="A shallow storage tray with a 160 mm footprint and 12 mm rounded corners.">Storage tray</button>
             <button type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.">Cable clip</button>
@@ -1111,20 +1111,20 @@
           </div>
         </div>
         <div class="recent">
-          <div class="section-label">RECENT PROMPTS</div>
+          <div class="section-label">RECENT SESSIONS</div>
           <div class="recent-list">
             <button class="recent-item" type="button" data-prompt="A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge."><strong>Desk organizer</strong><span>3 bodies · edited 2m ago</span></button>
             <button class="recent-item" type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening."><strong>Cable management clip</strong><span>1 body · edited yesterday</span></button>
             <button class="recent-item" type="button" data-prompt="A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall."><strong>Minimal pen cup</strong><span>2 bodies · edited Sep 28</span></button>
           </div>
-          <div class="revision-head"><span class="section-label" id="revisionLabel">LOCAL REVISIONS</span><button class="revision-clear" id="clearRevisions" type="button">Clear</button></div>
+          <div class="revision-head"><span class="section-label" id="revisionLabel">VERSION HISTORY</span><button class="revision-clear" id="clearRevisions" type="button">Clear</button></div>
           <div class="revision-list" id="revisionList"></div>
         </div>
       </aside>
       <div class="content">
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
-            <span class="viewport-label">LIVE PREVIEW</span><span class="issue-badge" id="issueBadge">READY</span>
+            <span class="viewport-label">3D CAD VIEWPORT</span><span class="issue-badge" id="issueBadge">READY</span>
             <div class="view-controls" aria-label="CAD view tools">
               <button class="view-pill active" type="button" data-view="iso" aria-pressed="true">ISOMETRIC</button>
               <button class="view-pill" type="button" data-view="top" aria-pressed="false">TOP</button>
@@ -1159,7 +1159,7 @@
               </div>
             </div>
             <div class="viewport-selection" id="viewportSelection" hidden></div>
-            <div class="interaction-hint" id="interactionHint">Drag to orbit · wheel to zoom · double-click to reset</div>
+            <div class="interaction-hint" id="interactionHint">Left-click drag to orbit · Scroll to zoom · Right-click drag to pan · Double-click to reset</div>
             <div class="model-wrap" id="modelWrap">
               <svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Isometric parametric desk organizer">
                 <g stroke="#243323" stroke-width="3" stroke-linejoin="round">
@@ -1180,12 +1180,12 @@
             </div>
           </div>
           <div class="viewport-footer">
-            <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC BODY</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
+            <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC SOLID</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
             <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button>
           </div>
         </section>
         <section class="params">
-          <div class="params-head"><span class="section-label">MODEL PARAMETERS</span><div class="params-tools"><span class="solved" id="solved">All constraints solved</span><button class="edit-parameters" id="editParameters" type="button">EDIT</button></div></div>
+          <div class="params-head"><span class="section-label">PARAMETRIC CONSTRAINTS</span><div class="params-tools"><span class="solved" id="solved">All constraints fully resolved</span><button class="edit-parameters" id="editParameters" type="button">EDIT</button></div></div>
           <div class="parameter-editor" id="parameterEditor" hidden>
             <label><span id="paramWidthLabel">WIDTH</span><input id="paramWidth" type="number" min="10" max="1000" step="0.1"></label>
             <label><span id="paramDepthLabel">DEPTH</span><input id="paramDepth" type="number" min="10" max="1000" step="0.1"></label>
@@ -1196,27 +1196,27 @@
             <div class="parameter-actions"><button id="resetParameters" type="button">RESET</button><button id="applyParameters" type="button">APPLY</button></div>
           </div>
           <div class="param-grid">
-            <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">3 watertight solids</small></article>
-            <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
-            <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · warm white</strong><small>Print-ready surface</small></article>
+            <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">Watertight solid manifold</small></article>
+            <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Outer Bounding Box</small></article>
+            <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · Warm White</strong><small>Production-ready surface standard</small></article>
           </div>
           <div class="feature-card">
-            <div class="feature-head"><span class="section-label" id="featureLabel">FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC</span></div>
+            <div class="feature-head"><span class="section-label" id="featureLabel">PARAMETRIC FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC B-REP</span></div>
             <div class="feature-tree" id="featureTree"></div>
           <div class="generation-process" aria-live="polite">
-            <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD PROCESS</span><span class="generation-process-status" id="generationStatus">READY</span></div>
+            <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD SEQUENCE TRACE</span><span class="generation-process-status" id="generationStatus">READY</span></div>
             <div class="generation-progress" aria-hidden="true"><div class="generation-progress-bar" id="generationProgressBar"></div></div>
-            <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Start generation to inspect the build sequence.</div></div>
+            <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Submit a prompt to inspect the OCCT feature pipeline execution.</div></div>
           </div>
           <div class="process-controls">
-            <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
+            <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF (3D Print) · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
             <select class="process-select" id="processSelect" aria-label="Manufacturing process">
               <option value="fdm">FDM / FFF</option>
               <option value="sla">SLA / Resin</option>
               <option value="cnc">CNC Milling</option>
               <option value="injection">Injection Molding</option>
             </select>
-            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">INPUT UNITS</span><small id="unitHint">Unitless values use this unit</small></div>
+            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">SYSTEM UNITS</span><small id="unitHint">Unspecified numeric values automatically assume this unit</small></div>
             <select class="process-select" id="unitSelect" aria-label="Input units">
               <option value="mm">mm</option>
               <option value="cm">cm</option>
@@ -1225,7 +1225,7 @@
             </select>
           </div>
           <div class="mode-controls">
-            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION MODE</span><small id="modeHint">Rule parser · deterministic and private</small></div>
+            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION ENGINE</span><small id="modeHint">Parametric rule parser · Deterministic, ultra-fast & private</small></div>
             <select class="mode-select" id="generationMode" aria-label="Generation mode">
               <option value="standard">Standard</option>
               <option value="advanced">Advanced · LLM</option>
@@ -1234,17 +1234,17 @@
           </div>
           <div class="plan-card">
             <div class="plan-head">
-              <div><div class="section-label" id="planEyebrow">MANUFACTURING PLAN</div><h2 id="planTitle">Ready for fabrication</h2><p class="plan-subtitle" id="planSubtitle">A quality gate for strong, printable, and export-ready geometry.</p></div>
+              <div><div class="section-label" id="planEyebrow">DFM MANUFACTURING AUDIT</div><h2 id="planTitle">Design for Manufacturability</h2><p class="plan-subtitle" id="planSubtitle">Rule-based DFM gate. Validates wall limits, tooling draft, and export geometry.</p></div>
               <span class="readiness" id="readiness">92% READY</span>
             </div>
             <div class="plan-grid">
-              <div class="plan-item"><span class="check" id="checkWall">✓</span><div><strong id="planWall">Wall thickness</strong><small id="planWallMeta">≥ 2.4 mm · passes</small></div></div>
-              <div class="plan-item"><span class="check" id="checkRadius">✓</span><div><strong id="planRadius">Edge treatment</strong><small id="planRadiusMeta">4 mm chamfer · stable</small></div></div>
-              <div class="plan-item"><span class="check" id="checkDraft">✓</span><div><strong id="planDraft">Print orientation</strong><small id="planDraftMeta">Low support volume</small></div></div>
-              <div class="plan-item"><span class="check" id="checkExport">✓</span><div><strong id="planExport">Export target</strong><small id="planExportMeta">STEP · IGES · GLB</small></div></div>
+              <div class="plan-item"><span class="check" id="checkWall">✓</span><div><strong id="planWall">Wall Thickness</strong><small id="planWallMeta">≥ 2.4 mm · Compliant</small></div></div>
+              <div class="plan-item"><span class="check" id="checkRadius">✓</span><div><strong id="planRadius">Edge Treatment</strong><small id="planRadiusMeta">4 mm chamfer · Stable</small></div></div>
+              <div class="plan-item"><span class="check" id="checkDraft">✓</span><div><strong id="planDraft">Tooling / Draft Angle</strong><small id="planDraftMeta">Minimal support required</small></div></div>
+              <div class="plan-item"><span class="check" id="checkExport">✓</span><div><strong id="planExport">Export Formats</strong><small id="planExportMeta">STEP · STL · 3MF · GLB</small></div></div>
             </div>
             <div class="analysis-strip">
-              <div class="analysis-head"><span class="section-label" id="analysisLabel">WALL THICKNESS MAP</span><span class="analysis-summary" id="analysisSummary">No issues</span></div>
+              <div class="analysis-head"><span class="section-label" id="analysisLabel">NOMINAL WALL THICKNESS DFM</span><span class="analysis-summary" id="analysisSummary">No issues</span></div>
               <div class="wall-map" id="wallMap"></div>
               <div class="issue-list" id="issueList"></div>
             </div>
@@ -1368,8 +1368,260 @@
     let highlightedFeature = null;
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', grid: 'GRID', viewerUnits: 'VIEW UNITS', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', generationProcessLabel: 'BUILD PROCESS', readyStatus: 'READY', runningStatus: 'BUILDING', completedStatus: 'COMPLETE', failedStatus: 'REVIEW', stepPreview: 'VIEW STEP', noProcess: 'Start generation to inspect the build sequence.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', grid: '网格', viewerUnits: '视图单位', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', generationProcessLabel: '建模过程', readyStatus: '待开始', runningStatus: '建模中', completedStatus: '已完成', failedStatus: '需复核', stepPreview: '查看步骤', noProcess: '开始生成后查看建模步骤。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: {
+        toggle: '中文',
+        workspace: 'Workspace',
+        templates: 'Templates',
+        history: 'History',
+        eyebrow: 'TEXT-TO-CAD ENGINE',
+        title: 'Describe your part.',
+        helper: 'Specify parametric geometry, target dimensions, and manufacturing intent.',
+        generate: 'Generate Model',
+        regenerate: 'Regenerate Model',
+        generating: 'Generating geometry…',
+        starter: 'PARAMETRIC PRESETS',
+        recent: 'RECENT SESSIONS',
+        live: '3D CAD VIEWPORT',
+        iso: 'ISOMETRIC',
+        top: 'TOP',
+        front: 'FRONT',
+        export: 'Export OBJ',
+        exportStep: 'Export STEP',
+        export3mf: 'Export 3MF',
+        exportGlb: 'Export GLB',
+        fit: 'FIT',
+        grid: 'GRID',
+        viewerUnits: 'Viewport Units',
+        interactionHint: 'Left-click drag to orbit · Scroll to zoom · Right-click drag to pan · Double-click to reset',
+        localThreeHint: 'Interactive parametric preview · Connect backend for validated B-Rep geometry',
+        localConceptHint: 'Concept wireframe preview · Connect backend for full solid model',
+        backendFallbackHint: 'SVG wireframe fallback · GLB preview currently unavailable',
+        analysisLabel: 'NOMINAL WALL THICKNESS DFM',
+        modeLabel: 'GENERATION ENGINE',
+        standardMode: 'Standard (Deterministic)',
+        advancedMode: 'Advanced (LLM + OCCT)',
+        standardModeHint: 'Parametric rule parser · Deterministic, ultra-fast & private',
+        advancedModeHint: 'LLM semantic intent extraction · Solved & validated by OCCT',
+        advancedRequiresBackend: 'Advanced LLM mode requires an active backend connection.',
+        advancedUnavailable: 'Backend connected, but LLM API credentials are not configured.',
+        unitLabel: 'SYSTEM UNITS',
+        unitHint: 'Unspecified numeric values automatically assume this unit',
+        mmOption: 'Millimeters (mm)',
+        cmOption: 'Centimeters (cm)',
+        mOption: 'Meters (m)',
+        inOption: 'Inches (in)',
+        backendAuthRequired: 'Backend authentication required: configure server API token.',
+        generationProcessLabel: 'BUILD SEQUENCE TRACE',
+        readyStatus: 'READY',
+        runningStatus: 'BUILDING',
+        completedStatus: 'SOLVED',
+        failedStatus: 'NEEDS REVIEW',
+        stepPreview: 'INSPECT STEP',
+        noProcess: 'Submit prompt to inspect OCCT feature pipeline execution.',
+        llmAssumptions: 'LLM Assumptions',
+        editParameters: 'EDIT',
+        applyParameters: 'APPLY',
+        resetParameters: 'RESET',
+        cancel: 'Cancel',
+        timeoutError: 'Generation request timed out. Please check backend load and retry.',
+        cancelled: 'Generation aborted by user.',
+        invalidParams: 'Parameter values out of bounds. Please review bounding box and wall thickness.',
+        building: 'Building solid volume…',
+        exporting: 'Exporting CAD artifacts…',
+        unknown: 'REVIEW',
+        estimateSummary: 'Nominal dimension check only',
+        verified: 'VERIFIED',
+        noIssues: 'All DFM constraints satisfied',
+        issueCount: 'DFM warnings detected',
+        interpretation: 'INTERPRETED SPECIFICATIONS',
+        interpretationReady: 'Ready for Generation',
+        assumptions: 'ENGINE DEFAULTS',
+        revision: 'VERSION HISTORY',
+        clear: 'Clear All',
+        emptyRevision: 'No saved revisions in this session',
+        revisionBackend: 'OCCT B-Rep Solid',
+        revisionLocal: 'Client Preview',
+        checksPassed: 'checks passed',
+        checksReview: 'requires inspection',
+        featureTree: 'PARAMETRIC FEATURE TREE',
+        featureMode: 'PARAMETRIC B-REP',
+        processLabel: 'MANUFACTURING PROCESS',
+        processHint: 'Process profile',
+        fdmOption: 'FDM / FFF (3D Print)',
+        slaOption: 'SLA / DLP (Resin)',
+        cncOption: 'CNC Milling (Subtractive)',
+        injectionOption: 'Injection Molding (Tooling)',
+        baseFeature: 'Base Solid Volume',
+        shellFeature: 'Shell / Internal Cavity',
+        dividerFeature: 'Internal Partitions',
+        edgeFeature: 'Chamfer & Fillet Treatment',
+        drainageFeature: 'Drainage Relief Holes',
+        cableFeature: 'Underside Cable Pass-through',
+        editHint: 'Submit follow-up instructions to modify this model',
+        diffInitial: 'Initial Baseline',
+        diffNone: 'No parameter variance',
+        params: 'PARAMETRIC CONSTRAINTS',
+        solved: 'All constraints fully resolved',
+        body: 'SOLID CLASSIFICATION',
+        size: 'BOUNDING BOX',
+        material: 'MATERIAL PRESET',
+        materialValue: 'Matte PLA · Warm White',
+        materialMeta: 'Production-ready surface standard',
+        planEyebrow: 'DFM MANUFACTURING AUDIT',
+        planTitle: 'Design for Manufacturability',
+        planSubtitle: 'Rule-based DFM gate. Validates wall limits, tooling draft, and export geometry.',
+        readiness: 'DFM PASSED',
+        state: 'PARAMETRIC SOLID',
+        backendState: 'OCCT B-REP SOLID',
+        advancedState: 'DEEPSEEK LLM + OCCT B-REP',
+        localState: 'CLIENT PREVIEW',
+        failed: 'Generation Failed',
+        solving: 'SOLVING CONSTRAINTS',
+        parsing: 'PARSING INTENT',
+        defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm',
+        cableMeta: '1 solid · 6 mm cable clip · snap-fit',
+        promptLabel: 'Describe your part or assembly',
+        viewportAria: 'Interactive 3D CAD model preview',
+        rounded: 'soft chamfer edges',
+        dimension: '120 × 80 mm',
+        bodyMeta: 'Watertight solid manifold',
+        bounding: 'Outer Bounding Box',
+        wall: 'Wall Thickness',
+        wallMeta: '≥ 2.4 mm · Compliant',
+        radius: 'Edge Treatment',
+        radiusMeta: '4 mm chamfer · Stable',
+        draft: 'Tooling / Draft Angle',
+        draftMeta: 'Minimal support required',
+        exportTarget: 'Export Formats',
+        exportMeta: 'STEP · STL · 3MF · GLB'
+      },
+      zh: {
+        toggle: 'EN',
+        workspace: '工作台',
+        templates: '设计模板',
+        history: '版本历史',
+        eyebrow: '自然语言 CAD 几何引擎',
+        title: '描述你的零件。',
+        helper: '输入形状特征、尺寸参数和制造用途。',
+        generate: '生成三维模型',
+        regenerate: '重新生成模型',
+        generating: '正在构建几何实体…',
+        starter: '快速设计模板',
+        recent: '最近设计会话',
+        live: '3D 实时视口',
+        iso: '轴测投影 (ISO)',
+        top: '俯视图 (TOP)',
+        front: '主视图 (FRONT)',
+        export: '导出 OBJ',
+        exportStep: '导出工业级 STEP',
+        export3mf: '导出 3MF 打印文件',
+        exportGlb: '导出 GLB 预览',
+        fit: '视角复位',
+        grid: '参考网格',
+        viewerUnits: '视口显示单位',
+        interactionHint: '左键拖拽旋转 · 滚轮缩放 · 右键平移 · 双击视角居中',
+        localThreeHint: '本地交互式参数化预览 · 连接后端生成精确 B-Rep 实体',
+        localConceptHint: '几何概念线框 · 启动后端服务可获得完整 3D 实体',
+        backendFallbackHint: '矢量线框降级显示 · GLB 视口暂未就绪',
+        analysisLabel: '名义壁厚可制造性分析 (DFM)',
+        modeLabel: '几何生成引擎',
+        standardMode: '标准规则解析 (确定性)',
+        advancedMode: '高级智能解析 (大模型 + OCCT)',
+        standardModeHint: '规则解析器 · 确定性、响应极快且本地私有',
+        advancedModeHint: 'DeepSeek 语义解析 · OpenCASCADE 工业内核求解验证',
+        advancedRequiresBackend: '高级模式需要连接几何计算后端服务。',
+        advancedUnavailable: '后端已连接，但尚未配置 LLM API 凭证。',
+        unitLabel: '尺寸基准单位',
+        unitHint: '未标注单位的数值将自动采用该单位计算',
+        mmOption: '毫米 (mm)',
+        cmOption: '厘米 (cm)',
+        mOption: '米 (m)',
+        inOption: '英寸 (in)',
+        backendAuthRequired: '后端服务启用了身份鉴权，请配置访问密钥。',
+        generationProcessLabel: '特征构建追踪',
+        readyStatus: '就绪',
+        runningStatus: '构建中',
+        completedStatus: '已求解',
+        failedStatus: '待复核',
+        stepPreview: '预览步骤',
+        noProcess: '提交提示词后实时查看 OCCT 几何建模流水线。',
+        llmAssumptions: '模型推理假设',
+        editParameters: '精确微调',
+        applyParameters: '应用参数',
+        resetParameters: '重置参数',
+        cancel: '取消生成',
+        timeoutError: '几何求解超时，可稍后重新提交。',
+        cancelled: '已取消当前建模任务。',
+        invalidParams: '输入的尺寸或壁厚超出允许的工艺约束范围。',
+        building: '正在构建几何拓扑…',
+        exporting: '正在输出 CAD 格式文件…',
+        unknown: '待复核',
+        estimateSummary: '名义规则估算',
+        verified: '已通过验证',
+        noIssues: '完全符合当前制造工艺规范',
+        issueCount: '项工艺警告',
+        interpretation: '参数解析结果',
+        interpretationReady: '参数完备 · 可直接生成',
+        assumptions: '引擎缺省推导',
+        revision: '本地版本历史',
+        clear: '清空历史',
+        emptyRevision: '当前会话暂无保存的版本',
+        revisionBackend: 'OCCT B-Rep 精确实体',
+        revisionLocal: '本地参数化预览',
+        checksPassed: '项检查通过',
+        checksReview: '项需要复核',
+        featureTree: '参数化特征树',
+        featureMode: '参数化 B-REP',
+        processLabel: '目标制造工艺',
+        processHint: '工艺配置',
+        fdmOption: 'FDM / FFF 熔融沉积 (3D打印)',
+        slaOption: 'SLA / DLP 光固化成型',
+        cncOption: 'CNC 数控铣削 (减材加工)',
+        injectionOption: '注塑成型 (模具)',
+        baseFeature: '基础外形实体',
+        shellFeature: '抽壳 / 内腔成型',
+        dividerFeature: '内部隔断阵列',
+        edgeFeature: '倒角与圆角过渡',
+        drainageFeature: '底部排水导流孔',
+        cableFeature: '隐藏式理线槽',
+        editHint: '继续输入自然语言指令即可递进修改模型',
+        diffInitial: '初始基准版本',
+        diffNone: '参数无变动',
+        params: '几何约束与参数',
+        solved: '几何约束求解完全收敛',
+        body: '实体拓扑类型',
+        size: '空间外轮廓包围盒',
+        material: '材质与工艺预设',
+        materialValue: '哑光工程 PLA · 暖白',
+        materialMeta: '满足量产打印的标准工件表面',
+        planEyebrow: 'DFM 可制造性评审',
+        planTitle: '可制造性设计分析 (DFM)',
+        planSubtitle: '基于工艺规则的几何审查，确保满足壁厚、拔模斜度及格式导出要求。',
+        readiness: 'DFM 验证通过',
+        state: '参数化实体',
+        backendState: 'OCCT B-REP 实体',
+        advancedState: 'DEEPSEEK + OCCT 实体',
+        localState: '本地几何预览',
+        failed: '几何生成失败',
+        solving: '正在求解几何约束',
+        parsing: '正在解析自然语言语义',
+        defaultMeta: '3 个实体 · 壁厚 12 mm · 倒角 4 mm',
+        cableMeta: '1 个实体 · 6 mm 线缆卡扣 · 弹性装配',
+        promptLabel: '描述你的零件或装配件',
+        viewportAria: '可交互 3D CAD 模型预览视口',
+        rounded: '圆角/倒角边缘',
+        dimension: '120 × 80 mm',
+        bodyMeta: '水密流形实体 (Watertight Manifold)',
+        bounding: '外轮廓空间包围盒',
+        wall: '最小壁厚',
+        wallMeta: '≥ 2.4 mm · 符合工艺要求',
+        radius: '边缘处理',
+        radiusMeta: '4 mm 倒角 · 结构过渡平稳',
+        draft: '成型方向与支撑',
+        draftMeta: '悬垂角度良好 · 支撑量极低',
+        exportTarget: '输出格式支持',
+        exportMeta: 'STEP · STL · 3MF · GLB'
+      }
     };
     function translate() {
       const t = copy[currentLang];
@@ -1380,7 +1632,7 @@
       document.querySelector('.eyebrow').textContent = t.eyebrow;
       document.querySelector('.prompt-panel h1').textContent = t.title;
       document.querySelector('.helper').textContent = t.helper;
-      generateLabel.textContent = generate.classList.contains('loading') ? (currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…') : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
+      generateLabel.textContent = generate.classList.contains('loading') ? t.generating : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
       document.querySelector('.starter .section-label').textContent = t.starter;
       document.querySelector('.recent .section-label').textContent = t.recent;
       const starterLabels = currentLang === 'zh' ? ['收纳托盘', '线缆夹', '花盆', '灯座'] : ['Storage tray', 'Cable clip', 'Plant pot', 'Lamp base'];
@@ -2487,7 +2739,7 @@
       const values = {};
       for (const [key, field] of Object.entries(parameterFields)) values[key] = Number(field && field.value);
       const valid = Number.isFinite(values.width) && values.width >= 10 && values.width <= 1000 && Number.isFinite(values.depth) && values.depth >= 10 && values.depth <= 1000 && Number.isFinite(values.height) && values.height >= 5 && values.height <= 1000 && Number.isFinite(values.wall) && values.wall >= 1.2 && values.wall <= Math.min(values.width, values.depth) / 3 && Number.isFinite(values.chamfer) && values.chamfer >= 0 && values.chamfer <= Math.min(values.width, values.depth, values.height) / 4 && Number.isFinite(values.bottom) && values.bottom >= 1.2 && values.bottom < values.height;
-      if (!valid) { setGenerationError(currentLang === 'zh' ? '参数范围无效，请检查尺寸和壁厚。' : 'Parameter range is invalid. Check dimensions and wall thickness.'); return; }
+      if (!valid) { setGenerationError(copy[currentLang].invalidParams); return; }
       const next = Object.assign(base, values);
       prompt.value = canonicalPrompt(next);
       parameterEditor.hidden = true;
@@ -2628,7 +2880,7 @@
       llmAssumptions = [];
       hideThreePreview();
       updateExportButtons();
-      generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
+      generateLabel.textContent = copy[currentLang].generating;
       try {
         const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
         const previousSpec = modelSpec ? Object.assign({}, modelSpec) : null;
