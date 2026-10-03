@@ -95,3 +95,15 @@ Astra 对 README、前端 3D/LLM 交互、CadQuery/OCCT 后端、Docker 和 Deep
 - README、后端 README 和 DEPLOY 补齐 Standard/Advanced、3D 预览降级、异步 API、IR、DeepSeek、HTTPS 和生产安全边界。
 
 仍需真实部署验证：Docker Compose 版本对 optional `env_file` 的支持、WebGL/Three.js 设备差异，以及多副本环境下的共享队列和持久化存储。
+
+## 建模质量提升执行（2026-10-03）
+
+Astra 建模质量专项建议已落实第一批 P0/P1：
+
+- 单位解析支持 `mm/cm/m/in`，带显式换算 provenance；`strict_dimensions` 可阻止含糊尺寸静默采用默认值。
+- 三维尺寸组和圆柱直径进入明确语义路径，线缆/开口/直径等特征尺寸不会再直接变成主体宽度。
+- 质量门增加 OCCT analyzer、零面积面检查、STEP re-import、网格封闭性和 artifact checksum/轴向元数据。
+- IR 记录隔板请求数量与实际生成数量，前端本地预览和后端单位契约同步。
+- 新增 `backend/test_quality.py` 与 `.github/workflows/quality.yml`。
+
+限制：本轮没有在当前执行环境启动 Docker/CadQuery；必须在目标主机执行完整导出 smoke test 和多设备 GLB 坐标验证。
