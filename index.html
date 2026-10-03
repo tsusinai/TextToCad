@@ -722,7 +722,7 @@
       const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'L bracket' ? 0 : 4);
       const dimensions = dimensionsFor(text);
-      const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度)/) || normalized.match(/(?:wall|壁厚|板厚|厚度)[^\d]{0,8}(\d+(?:\.\d+)?)/);
+      const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       const profile = processProfiles[selectedProcess];
       return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
@@ -958,8 +958,8 @@
         }
       } else if (kind === 'angle') {
         const extrusion = Math.max(height, 5);
-        box(width, wall, extrusion, 0, -depth / 2 + wall / 2, 0, side);
-        box(wall, depth, extrusion, -width / 2 + wall / 2, 0, 0, body);
+        box(width, extrusion, wall, 0, extrusion / 2, -(depth - wall) / 2, side);
+        box(wall, extrusion, depth, -(width - wall) / 2, extrusion / 2, 0, body);
       } else if (kind === 'tray' || kind === 'organizer') {
         const innerWidth = Math.max(width - wall * 2, 2);
         const innerDepth = Math.max(depth - wall * 2, 2);
