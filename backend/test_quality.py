@@ -70,6 +70,15 @@ def test_ir_divider_count_matches_geometry_loop():
     assert divider["count"] == 2
 
 
+def test_english_l_bracket_alias_is_supported():
+    title, params, _ = app.parse_prompt_detailed(
+        "L bracket 20x20, plate thickness 3",
+    )
+    assert title == "Parametric L bracket"
+    assert params.kind == "angle"
+    assert (params.width, params.depth, params.wall) == (20.0, 20.0, 3.0)
+
+
 def test_llm_cannot_override_explicit_l_bracket(monkeypatch):
     monkeypatch.setattr(
         app,
