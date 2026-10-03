@@ -377,3 +377,22 @@ def test_ir_selector_is_checked_against_registered_entities():
     with pytest.raises(app.IRValidationError) as error:
         app.validate_ir(ir)
     assert any(issue["code"] == "selector_entity" for issue in error.value.issues)
+
+
+
+def test_ir_repair_returns_and_applies_explicit_patch():
+    ir = {
+        "schema_version": "0.2",
+        "parameters": {"wall": {"value": 0.8, "unit": "mm", "source": "user"}},
+        "constraints": [{
+            "id": "wall-hard", "type": "range", "parameter": "wall",
+            "minimum_mm": 1.2, "hard": True,
+        }],
+    }
+    normalized = app.validate_ir(ir)
+    report = app.solve_constraints(normalized)
+    patches = app.suggest_repairs(normalized, report)
+    assert patches[0]["op"] == "set_parameter"
+    repaired = app.apply_patches(normalized, patches)
+    assert repaired["parameters"]["wall"]["value"] == 1.2
+    assert app.solve_constraints(repaired)["valid"] is True
