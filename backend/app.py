@@ -314,7 +314,7 @@ def parse_prompt_detailed(
         raise ValueError("prompt must contain a shape description")
 
     if any(token in text for token in (
-        "l-shape", "l shape", "l-shaped", "angle bracket", "angle profile",
+        "l bracket", "l-shape", "l shape", "l-shaped", "angle bracket", "angle profile",
         "right angle", "l形", "l 型", "l型", "直角支架", "角码", "折条", "折弯", "弯折",
     )):
         kind = "angle"
