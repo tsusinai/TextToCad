@@ -1446,15 +1446,24 @@
     if (generationMode) generationMode.value = selectedMode;
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
-    const localBackend = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://localhost:8787' : '';
+    const defaultRemoteBackend = 'http://118.31.184.221/cad';
+    const localBackend = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://localhost:8787' : defaultRemoteBackend;
     const backendUrl = (configuredBackend || localBackend).replace(/\/+$/, '');
+    function resolveBackendUrl(path) {
+      if (!path) return '';
+      if (/^https?:\/\//i.test(path)) return path;
+      const base = (backendUrl || defaultRemoteBackend).replace(/\/+$/, '');
+      const normalizedPath = path.startsWith('/') ? path : '/' + path;
+      return base + normalizedPath;
+    }
     // Optional shared key for a protected self-hosted backend. Prefer injecting
     // this value at deploy time; query strings are intentionally not accepted.
     const backendApiKey = String(window.FORM_CAD_BACKEND_API_KEY || '').trim();
     function backendFetch(url, options = {}) {
+      const targetUrl = resolveBackendUrl(url);
       const headers = Object.assign({}, options.headers || {});
       if (backendApiKey) headers['x-api-key'] = backendApiKey;
-      return fetch(url, Object.assign({}, options, { headers }));
+      return fetch(targetUrl, Object.assign({}, options, { headers }));
     }
     let backendArtifact = null;
     let llmAssumptions = [];
@@ -3009,7 +3018,7 @@
           button.className = 'generation-trace-view';
           button.textContent = copy[currentLang].stepPreview;
           button.addEventListener('click', () => {
-            if (backendUrl && modelSpec) loadThreePreview(backendUrl + event.preview, modelSpec);
+            if (backendUrl && modelSpec) loadThreePreview(resolveBackendUrl(event.preview), modelSpec);
           });
           row.appendChild(button);
         }
@@ -3193,7 +3202,7 @@
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
         renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
-        if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(backendUrl + backendArtifact.glb, modelSpec);
+        if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(resolveBackendUrl(backendArtifact.glb), modelSpec);
         else loadLocalThreePreview(modelSpec);
         modelState.textContent = remote ? copy[currentLang].exporting : copy[currentLang].state;
         solved.textContent = remote ? copy[currentLang].exporting : copy[currentLang].solved;
@@ -3344,7 +3353,7 @@
     updateExportButtons();
     async function downloadBackendArtifact(path, format) {
       if (!backendUrl || !path) return;
-      const response = await backendFetch(backendUrl + path);
+      const response = await backendFetch(resolveBackendUrl(path));
       if (!response.ok) throw new Error('artifact download returned ' + response.status);
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -3390,6 +3399,26 @@
     if (initialGizmo) initialGizmo.classList.add('active');
     // Start with a real parameterized 3D preview even before the first backend response.
     loadLocalThreePreview(modelSpec);
+
+    async function checkBackendConnectivity() {
+      if (!backendUrl) return;
+      try {
+        const response = await backendFetch(backendUrl + '/health');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.status === 'ok') {
+            advancedAvailable = Boolean(data.advanced_mode_available);
+            updateModeHint();
+            if (solved && !solved.classList.contains('warn')) {
+              solved.textContent = currentLang === 'zh' ? '云端引擎已就绪' : 'Cloud engine ready';
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Backend initial health check failed:', e);
+      }
+    }
+    checkBackendConnectivity();
   </script>
 </body>
 </html>
