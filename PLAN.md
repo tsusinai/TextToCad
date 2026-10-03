@@ -173,3 +173,15 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 5. P4：图片/草图输入和装配 component/mate。
 
 兼容要求：现有 `POST /v1/generate`、`ModelParameters`、导出 URL 和前端预览继续可用；IR 路径必须记录 schema、IR hash、fallback 原因、执行轨迹和验证结果。
+
+
+## P0/P1 实现进度（2026-10-04）
+
+- P0 已完成：`backend/ir_schema.py`、`backend/ir_validate.py`、`backend/legacy_adapter.py`。
+- 现有 `build_design_ir` 会自动升级为 v0.2，保留 `features` 兼容字段；旧 `ModelParameters`、导出和前端流程未改变。
+- 新增 `POST /v1/ir/validate`，只做 JSON Schema、ID、引用、DAG、操作白名单和表达式安全检查。
+- P1 已开始：`backend/ir_executor.py` 支持 box/cylinder/sphere/cone/torus/polygon_prism、sketch、extrude、revolve、union/cut/intersect、translate/rotate、shell、fillet/chamfer。
+- 新增 `POST /v1/ir/compile`，在内存中执行通用 IR 并返回 B-Rep 指标与执行轨迹；CadQuery 不可用时明确返回服务不可用。
+- 已覆盖参数表达式、布尔切除和草图挤出的回归测试。
+
+下一步是将 selector、约束求解和通用 IR 生成器接入主生成路径；旧族型构建器在回归指标达标前继续作为 fallback。
