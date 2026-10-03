@@ -158,3 +158,18 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 无后端时 UI 显示离线参数化预览的本地流程；连接后端后切换为真实 CadQuery/OCCT 事件，不把等待时间伪装成完成进度。
 
 验收标准：任务状态页能看到 queued/running/succeeded 或 failed；每个事件有稳定 id、状态和耗时；步骤预览缺失时显示可解释的降级状态；刷新页面后最终 manifest 仍保留生成轨迹。
+
+
+## Family-independent Semantic CAD IR v0.2（2026-10-04）
+
+已确定下一代建模协议：用户不选择模型族，LLM 生成版本化的“原语 + 特征 + 约束 + 基准”IR；族型仅作为可选宏编译器，最终统一进入 CadQuery/OCCT 白名单执行器。详细协议、示例、迁移步骤、API 和质量门禁见 [docs/SEMANTIC_CAD_IR.md](docs/SEMANTIC_CAD_IR.md)。
+
+下一轮实现优先级：
+
+1. P0：Pydantic/JSON Schema、引用/DAG/单位/范围校验、legacy → IR 适配器。
+2. P1：box/cylinder/sphere/cone、布尔、变换、sketch、extrude、shell、fillet、chamfer 执行器。
+3. P2：尺寸/几何/拓扑/制造约束与语义 selector。
+4. P3：确定性修复配方与受限 IR patch repair loop。
+5. P4：图片/草图输入和装配 component/mate。
+
+兼容要求：现有 `POST /v1/generate`、`ModelParameters`、导出 URL 和前端预览继续可用；IR 路径必须记录 schema、IR hash、fallback 原因、执行轨迹和验证结果。
