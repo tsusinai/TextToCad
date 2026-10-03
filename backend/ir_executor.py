@@ -112,7 +112,7 @@ def _vector(parameters: dict[str, Any], value: Any, name: str, length: int = 3) 
 def _workplane(frame: str | None) -> Any:
     if cq is None:
         raise IRExecutionError(f"CadQuery is not installed: {CADQUERY_ERROR}")
-    return cq.Workplane(frame or "XY")
+    return cq.Workplane((frame or "XY").upper())
 
 
 def _as_shape(value: Any, node_id: str) -> Any:
