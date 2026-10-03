@@ -339,6 +339,11 @@ def parse_prompt_detailed(
         kind = "rounded_cube"
         title = "Parametric rounded cube"
     elif any(token in text for token in (
+        "airplane", "aircraft", "model plane", "plane model", "飞机", "航模", "机翼", "机身",
+    )):
+        kind = "airplane"
+        title = "Parametric airplane model"
+    elif any(token in text for token in (
         "l bracket", "l-shape", "l shape", "l-shaped", "angle bracket", "angle profile",
         "right angle", "l形", "l 型", "l型", "直角支架", "角码", "折条", "折弯", "弯折",
     )):
@@ -362,6 +367,9 @@ def parse_prompt_detailed(
     elif any(token in text for token in ("pen", "笔")):
         kind = "pen"
         title = "Parametric pen cup"
+    elif any(token in text for token in ("cup", "mug", "杯子", "水杯", "马克杯", "杯")):
+        kind = "cup"
+        title = "Parametric cup"
     else:
         kind = "block"
         title = "Parametric solid"
@@ -432,6 +440,17 @@ def parse_prompt_detailed(
         r"(?:height|tall|高)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:tall|height|高)",
     ])
+    if kind == "airplane":
+        aircraft_length = _number_after(text, [
+            r"(?:aircraft\s*length|airplane\s*length|model\s*length|机身长度|机身长|长度|长)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+            r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:aircraft\s*length|airplane\s*length|model\s*length|机身长度|机身长|长度|长)",
+        ])
+        wing_span = _number_after(text, [
+            r"(?:wingspan|wing\s*span|span|翼展)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+            r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:wingspan|wing\s*span|span|翼展)",
+        ])
+        width = width or aircraft_length
+        depth = wing_span or depth
     diameter = _number_after(text, [
         r"(?:diameter|dia|直径)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:diameter|dia|直径)",
@@ -454,10 +473,10 @@ def parse_prompt_detailed(
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:side|边长|边)",
     ]) if cube_shape else None
     width_found = width is not None or triplet_found or pair_found
-    width = width or (generic_numbers[0] if len(generic_numbers) >= 3 else 120.0)
+    width = width or (generic_numbers[0] if len(generic_numbers) >= 3 else (160.0 if kind == "airplane" else 120.0))
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
     depth_found = depth is not None or square_base or triplet_found or pair_found
-    depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else width * 0.67))
+    depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else (140.0 if kind == "airplane" else width * 0.67)))
     default_height = (
         40.0 if kind == "angle"
         else 80.0 if kind == "rounded_cube"
@@ -466,6 +485,8 @@ def parse_prompt_detailed(
         else 82.0 if kind == "plant"
         else 95.0 if kind == "pen"
         else 40.0 if kind == "lamp"
+        else 40.0 if kind == "airplane"
+        else 100.0 if kind == "cup"
         else 24.0
     )
     generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
@@ -485,7 +506,7 @@ def parse_prompt_detailed(
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
     ])
     chamfer_found = chamfer_value is not None
-    chamfer_default = 4.0 if kind == "rounded_cube" else (0.0 if cube_shape or kind == "angle" else 2.0)
+    chamfer_default = 4.0 if kind == "rounded_cube" else (0.0 if cube_shape or kind in {"angle", "airplane", "cup"} else 2.0)
     chamfer = chamfer_value if chamfer_value is not None else chamfer_default
     edge_style = "fillet" if kind == "rounded_cube" else "chamfer"
 
@@ -493,7 +514,7 @@ def parse_prompt_detailed(
         r"(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
     ])
     wall_found = wall_value is not None
-    wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer", "angle") else 2.0)
+    wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer", "angle") else (1.6 if kind == "airplane" else 2.0))
     bottom_value = _number_after(text, [
         r"(?:bottom|floor|底厚)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
     ])
@@ -614,7 +635,7 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
         raise RuntimeError("LLM_API_URL must be an absolute HTTP(S) URL")
     schema = {
         "schema_version": "0.1",
-        "kind": "tray|organizer|clip|plant|lamp|pen|angle|rounded_cube|block",
+        "kind": "tray|organizer|clip|plant|lamp|pen|cup|airplane|angle|rounded_cube|block",
         "edge_style": "chamfer|fillet",
         "width": "number in mm", "depth": "number in mm", "height": "number in mm",
         "compartments": "integer 1-12", "wall": "number in mm", "bottom": "number in mm",
@@ -723,6 +744,8 @@ def interpret_prompt(
         "plant_pot": "plant", "plant pot": "plant",
         "lamp_base": "lamp", "lamp base": "lamp",
         "pen_cup": "pen", "pen cup": "pen",
+        "cup": "cup", "mug": "cup", "杯子": "cup", "水杯": "cup", "马克杯": "cup",
+        "airplane": "airplane", "aircraft": "airplane", "model plane": "airplane", "飞机": "airplane", "航模": "airplane",
         "cable_clip": "clip", "cable clip": "clip",
         "rounded_cube": "rounded_cube", "rounded cube": "rounded_cube",
         "filleted_cube": "rounded_cube", "soft cube": "rounded_cube",
@@ -731,7 +754,7 @@ def interpret_prompt(
     kind = aliases.get(raw_kind, raw_kind)
     kind_was_provided = "kind" in candidate
     normalization_assumptions: list[str] = []
-    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "angle", "rounded_cube", "block"}:
+    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "cup", "airplane", "angle", "rounded_cube", "block"}:
         kind = baseline.kind
         if kind_was_provided:
             normalization_assumptions.append("Unsupported model family was replaced with the deterministic baseline.")
@@ -855,6 +878,8 @@ def interpret_prompt(
         "plant": "Parametric plant pot",
         "lamp": "Parametric lamp base",
         "pen": "Parametric pen cup",
+        "cup": "Parametric cup",
+        "airplane": "Parametric airplane model",
         "angle": "Parametric L bracket",
         "rounded_cube": "Parametric rounded cube",
         "block": "Parametric solid",
@@ -902,7 +927,7 @@ def build_design_ir(
 ) -> dict[str, Any]:
     """Create a small semantic CAD IR that is independent of the CadQuery builder."""
     base_operation = (
-        "cylinder" if params.kind in {"plant", "pen"}
+        "cylinder" if params.kind in {"plant", "pen", "cup"}
         else "l_profile_extrusion" if params.kind == "angle"
         else "rounded_box" if params.kind == "rounded_cube"
         else "box"
@@ -921,8 +946,13 @@ def build_design_ir(
             {"id": "shell_cavity", "type": "shell", "operation": "cut_inner_volume", "source": "base_solid", "status": "planned"},
             {"id": "dividers", "type": "divider", "operation": "union", "source": "shell_cavity", "requested_count": params.compartments, "count": max(0, params.compartments - 1), "status": "planned"},
         ])
-    elif params.kind in {"plant", "pen"}:
+    elif params.kind in {"plant", "pen", "cup"}:
         feature_nodes.append({"id": "rotational_cavity", "type": "shell", "operation": "cut_inner_cylinder", "source": "base_solid", "status": "planned"})
+    elif params.kind == "airplane":
+        feature_nodes.extend([
+            {"id": "airframe_fusion", "type": "union", "operation": "fuse_fuselage_wings_tail", "source": "base_solid", "status": "planned"},
+            {"id": "airframe_balance", "type": "inspection", "operation": "check_single_solid", "source": "airframe_fusion", "status": "planned"},
+        ])
     elif params.kind == "clip":
         feature_nodes.append({"id": "cable_relief", "type": "cut", "operation": "cut_relief", "source": "base_solid", "status": "planned"})
     if params.kind == "plant" and params.drainage_holes:
@@ -1150,13 +1180,24 @@ def build_geometry(
         if recorder:
             recorder.emit("building", feature_id, status, operation=operation, **details)
 
-    rotational = params.kind in {"plant", "pen"}
+    rotational = params.kind in {"plant", "pen", "cup"}
     rounded_cube = params.kind == "rounded_cube"
     start("base_solid", kind=params.kind, dimensions_mm=[w, d, h])
     if rotational:
         radius = min(w, d) / 2
         outer = cq.Workplane("XY").circle(radius).extrude(h)
         base_operation = "cylinder"
+    elif params.kind == "airplane":
+        fuselage_radius = max(1.5, min(d, h) * 0.11)
+        fuselage = cq.Workplane("YZ").circle(fuselage_radius).extrude(w).translate((-w / 2, 0, h / 2))
+        wing = cq.Workplane("XY").box(
+            max(w * 0.5, 12.0), d, max(wall, 1.2), centered=(True, True, False)
+        ).translate((0, 0, h / 2 - max(wall, 1.2) / 2))
+        tail = cq.Workplane("XY").box(
+            max(w * 0.2, 8.0), max(d * 0.22, 6.0), max(wall, 1.2), centered=(True, True, False)
+        ).translate((w * 0.3, 0, h / 2 - max(wall, 1.2) / 2))
+        outer = fuselage.union(wing).union(tail)
+        base_operation = "airframe_fusion"
     elif params.kind == "angle":
         leg_a = cq.Workplane("XY").box(
             w, wall, h, centered=(False, False, False)
