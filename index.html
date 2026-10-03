@@ -206,6 +206,9 @@
     .solved { color: var(--green); font-size: 12px; font-weight: 700; }
     .param-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
     .param-card { min-height: 120px; padding: 18px; border-radius: 16px; background: var(--card); }
+    .material-card { display: flex; flex-direction: column; align-items: flex-start; }
+    .material-select { width: 100%; margin-top: 12px; border: 1px solid #d5d8ce; border-radius: 9px; padding: 8px 10px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 800; }
+    .material-select:focus-visible { outline: 2px solid #b9d58d; outline-offset: 2px; }
     .param-card .label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; }
     .param-card strong { display: block; margin-top: 13px; font-size: 16px; }
     .param-card small { display: block; margin-top: 10px; color: #7a7c74; font-size: 12px; }
@@ -373,7 +376,13 @@
           <div class="param-grid">
             <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">3 watertight solids</small></article>
             <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
-            <article class="param-card"><div class="label">MATERIAL PRESET</div><strong>Matte PLA · warm white</strong><small>Print-ready surface</small></article>
+            <article class="param-card material-card"><div class="label" id="materialCardLabel">MATERIAL PRESET</div><select class="material-select" id="materialSelect" aria-label="Material preset">
+              <option value="pla">Matte PLA · warm white</option>
+              <option value="petg">PETG · translucent green</option>
+              <option value="abs">ABS · graphite</option>
+              <option value="resin">Resin · stone grey</option>
+              <option value="aluminum">Aluminum · anodized</option>
+            </select><small id="materialMeta">Print-ready surface</small></article>
           </div>
           <div class="feature-card">
             <div class="feature-head"><span class="section-label" id="featureLabel">FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC</span></div>
@@ -491,6 +500,7 @@
     const featureLabel = document.getElementById('featureLabel');
     const featureMode = document.getElementById('featureMode');
     const featureTree = document.getElementById('featureTree');
+    const materialSelect = document.getElementById('materialSelect');
     const processSelect = document.getElementById('processSelect');
     const unitSelect = document.getElementById('unitSelect');
     const generationMode = document.getElementById('generationMode');
@@ -498,7 +508,15 @@
     const processProfileHint = document.getElementById('processProfileHint');
     const processStorageKey = 'formCadProcess';
     const unitStorageKey = 'formCadUnits';
+    const materialStorageKey = 'formCadMaterial';
     const modeStorageKey = 'formCadGenerationMode';
+    const materialPresets = {
+      pla: { label: { en: 'Matte PLA · warm white', zh: '哑光 PLA · 暖白' }, meta: { en: 'Print-ready surface', zh: '适合打印的表面' }, body: 0xddf79b, side: 0x9fca82, inner: 0x6e9e68, accent: 0xb9d98f, roughness: .62, metalness: .02 },
+      petg: { label: { en: 'PETG · translucent green', zh: 'PETG · 半透明绿' }, meta: { en: 'Tough and slightly translucent', zh: '韧性高，略带透光' }, body: 0x9fd6bb, side: 0x68ae91, inner: 0x477d69, accent: 0xb7e4c7, roughness: .38, metalness: .02 },
+      abs: { label: { en: 'ABS · graphite', zh: 'ABS · 石墨黑' }, meta: { en: 'Impact-resistant engineering plastic', zh: '耐冲击工程塑料' }, body: 0x687078, side: 0x4b535b, inner: 0x30363c, accent: 0x9aa6b1, roughness: .48, metalness: .04 },
+      resin: { label: { en: 'Resin · stone grey', zh: '光敏树脂 · 石灰灰' }, meta: { en: 'Fine surface detail', zh: '适合精细表面' }, body: 0xb8b5ad, side: 0x929089, inner: 0x6b6963, accent: 0xd9d5c9, roughness: .72, metalness: 0 },
+      aluminum: { label: { en: 'Aluminum · anodized', zh: '铝 · 阳极氧化' }, meta: { en: 'Machined metal appearance', zh: '金属加工外观' }, body: 0xb9c2c1, side: 0x899493, inner: 0x606d6d, accent: 0xd8e0df, roughness: .28, metalness: .58 }
+    };
     let selectedMode = (() => { try { return localStorage.getItem(modeStorageKey) || 'standard'; } catch (error) { return 'standard'; } })();
     if (!['standard', 'advanced'].includes(selectedMode)) selectedMode = 'standard';
     let advancedAvailable = false;
@@ -513,8 +531,11 @@
     if (!processProfiles[selectedProcess]) selectedProcess = 'fdm';
     let selectedUnits = (() => { try { return localStorage.getItem(unitStorageKey) || 'mm'; } catch (error) { return 'mm'; } })();
     if (!['mm', 'cm', 'm', 'in'].includes(selectedUnits)) selectedUnits = 'mm';
+    let selectedMaterial = (() => { try { return localStorage.getItem(materialStorageKey) || 'pla'; } catch (error) { return 'pla'; } })();
+    if (!materialPresets[selectedMaterial]) selectedMaterial = 'pla';
     processSelect.value = selectedProcess;
     if (unitSelect) unitSelect.value = selectedUnits;
+    if (materialSelect) materialSelect.value = selectedMaterial;
     if (generationMode) generationMode.value = selectedMode;
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
@@ -537,7 +558,7 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
-    const threeState = { active: false, ready: false, source: '', THREE: null, renderer: null, camera: null, controls: null, scene: null, model: null, helpers: null, grid: null, gridVisible: true, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
+    const threeState = { active: false, ready: false, source: '', THREE: null, RoundedBoxGeometry: null, renderer: null, camera: null, controls: null, scene: null, model: null, helpers: null, grid: null, gridVisible: true, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     let highlightedFeature = null;
@@ -546,6 +567,20 @@
       en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', grid: 'GRID', viewerUnits: 'VIEW UNITS', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', generationProcessLabel: 'BUILD PROCESS', readyStatus: 'READY', runningStatus: 'BUILDING', completedStatus: 'COMPLETE', failedStatus: 'REVIEW', stepPreview: 'VIEW STEP', noProcess: 'Start generation to inspect the build sequence.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
       zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', grid: '网格', viewerUnits: '视图单位', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', generationProcessLabel: '建模过程', readyStatus: '待开始', runningStatus: '建模中', completedStatus: '已完成', failedStatus: '需复核', stepPreview: '查看步骤', noProcess: '开始生成后查看建模步骤。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
+    function updateMaterialOptions() {
+      if (!materialSelect) return;
+      Object.entries(materialPresets).forEach(([key, preset]) => {
+        const option = materialSelect.querySelector('option[value="' + key + '"]');
+        if (option) option.textContent = preset.label[currentLang];
+      });
+    }
+    function updateMaterialCard(spec) {
+      const key = spec && materialPresets[spec.material] ? spec.material : selectedMaterial;
+      const preset = materialPresets[key] || materialPresets.pla;
+      if (materialSelect) materialSelect.value = key;
+      const meta = document.getElementById('materialMeta');
+      if (meta) meta.textContent = preset.meta[currentLang];
+    }
     function translate() {
       const t = copy[currentLang];
       document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
@@ -641,9 +676,9 @@
       document.querySelector('.viewport').setAttribute('aria-label', t.viewportAria);
       document.querySelector('.param-card:nth-child(1) .label').textContent = t.body;
       document.querySelector('.param-card:nth-child(2) .label').textContent = t.size;
-      document.querySelector('.param-card:nth-child(3) .label').textContent = t.material;
-      document.querySelector('.param-card:nth-child(3) strong').textContent = t.materialValue;
-      document.querySelector('.param-card:nth-child(3) small').textContent = t.materialMeta;
+      document.getElementById('materialCardLabel').textContent = t.material;
+      updateMaterialOptions();
+      updateMaterialCard(modelSpec || { material: selectedMaterial });
       document.getElementById('planEyebrow').textContent = t.planEyebrow;
       document.getElementById('planTitle').textContent = t.planTitle;
       document.getElementById('planSubtitle').textContent = t.planSubtitle;
@@ -704,6 +739,7 @@
 
     function titleFor(text) {
       const value = text.toLowerCase();
+      if (/rounded cube|rounded block|filleted cube|soft cube|no sharp edges|no sharp corners|圆角立方体|圆角方块|圆润方块|无棱角|没有棱角|没用棱角|不带棱角/.test(value) || ((value.includes('cube') || value.includes('正方体') || value.includes('方块')) && /round|fillet|圆角|圆润|倒圆|棱角/.test(value))) return 'Rounded cube';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
       if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'Plant pot';
@@ -715,6 +751,7 @@
     }
     function kindForTitle(title) {
       const value = String(title || '').toLowerCase();
+      if (value.includes('rounded cube') || value.includes('rounded block') || value.includes('filleted cube') || value.includes('soft cube') || value.includes('圆角') || value.includes('无棱角') || value.includes('没有棱角') || value.includes('没用棱角') || value.includes('不带棱角')) return 'rounded_cube';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('angle') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯')) return 'angle';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'plant';
       if (value.includes('pen') || value.includes('笔')) return 'pen';
@@ -727,7 +764,7 @@
     function displayTitle(title) {
       const normalized = String(title || '').replace(/^Parametric\s+/i, '');
       if (currentLang !== 'zh') return normalized;
-      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘', 'L bracket': 'L 形支架' })[normalized] || normalized;
+      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Storage tray': '收纳托盘', 'L bracket': 'L 形支架', 'Rounded cube': '圆角正方体' })[normalized] || normalized;
     }
     function canonicalDimensionText(text) {
       const factors = { mm: 1, cm: 10, m: 1000, in: 25.4 };
@@ -750,6 +787,8 @@
       const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
       const angleShape = kindForTitle(titleFor(text)) === 'angle';
+      const roundedCube = kindForTitle(titleFor(text)) === 'rounded_cube';
+      const cubeShape = roundedCube || /cube|正方体|方块/i.test(normalized);
       const pairMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])/i);
       const pair = pairMatch ? pairMatch.slice(1).map(Number) : [];
       const valueFor = (terms) => {
@@ -757,6 +796,7 @@
         const after = normalized.match(new RegExp('(?:' + terms + ')[^\\d]{0,8}(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)', 'i'));
         return before ? Number(before[1]) : (after ? Number(after[1]) : null);
       };
+      const cubeEdge = cubeShape ? valueFor('side|边长|边') : null;
       const diameter = valueFor('diameter|dia|直径');
       const footprint = valueFor('footprint|占地|底面');
       const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
@@ -764,10 +804,16 @@
       const featureValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:cable|wire|线缆|电缆|snap\s*opening|开口|diameter|dia|直径)/gi)).map((match) => Number(match[1]));
       const genericNumbers = unitNumbers.filter((value) => !treatmentValues.concat(leadingTreatmentValues, featureValues).includes(value));
       const positional = triplet.length === 3 ? triplet : (genericNumbers.length >= 3 ? genericNumbers.slice(0, 3) : []);
-      const width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || (angleShape && pair[0]) || 120;
+      let width = valueFor('wide|width|宽') || diameter || footprint || positional[0] || (angleShape && pair[0]) || 120;
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
-      const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || width * 0.67));
-      const height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (angleShape ? 40 : 42));
+      let depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || width * 0.67));
+      let height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (angleShape ? 40 : (roundedCube ? 80 : 42)));
+      if (cubeShape && triplet.length !== 3) {
+        const edge = cubeEdge || pair[0] || genericNumbers[0] || 80;
+        width = valueFor('wide|width|宽') || edge;
+        depth = valueFor('deep|depth|长|深') || pair[1] || width;
+        height = valueFor('tall|height|高') || width;
+      }
       const scale = hasExplicitUnit ? 1 : fallbackFactor;
       return { width: width * scale, depth: depth * scale, height: height * scale };
     }
@@ -779,12 +825,13 @@
       const title = titleFor(text);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (title === 'Desk organizer' ? 3 : 1))), 1, 6);
       const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
-      const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'L bracket' ? 0 : 4);
+      const cubeShape = /cube|正方体|方块/i.test(normalized);
+      const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'Rounded cube' ? 4 : (cubeShape || title === 'L bracket' ? 0 : 4));
       const dimensions = dimensionsFor(text);
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
       const profile = processProfiles[selectedProcess];
-      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance };
+      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance, material: selectedMaterial, edge_style: title === 'Rounded cube' ? 'fillet' : 'chamfer', cube_shape: cubeShape };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
     function renderRotationalIso(spec) {
@@ -970,8 +1017,15 @@
       threeState.rendererPromise = (async () => {
         const THREE = await import('three');
         const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+        let RoundedBoxGeometry = null;
+        try {
+          ({ RoundedBoxGeometry } = await import('three/addons/geometries/RoundedBoxGeometry.js'));
+        } catch (error) {
+          console.warn('RoundedBoxGeometry unavailable; using box fallback.', error);
+        }
         if (threeState.renderer && threeState.THREE) return threeState.THREE;
         threeState.THREE = THREE;
+        threeState.RoundedBoxGeometry = RoundedBoxGeometry;
         threeState.scene = new THREE.Scene();
         threeState.scene.background = new THREE.Color(0x252724);
         const helpers = new THREE.Group();
@@ -1027,6 +1081,23 @@
       return new THREE.MeshStandardMaterial({ color, roughness, metalness });
     }
 
+    function materialPresetFor(spec) {
+      return materialPresets[(spec && spec.material) || selectedMaterial] || materialPresets.pla;
+    }
+    function applyPreviewMaterial(root, spec) {
+      if (!root) return;
+      const preset = materialPresetFor(spec);
+      root.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (material.color) material.color.setHex(preset.body);
+          if ('roughness' in material) material.roughness = preset.roughness;
+          if ('metalness' in material) material.metalness = preset.metalness;
+        });
+      });
+    }
+
     function addModelEdgeLines(THREE, root) {
       if (!root) return;
       root.traverse((node) => {
@@ -1041,11 +1112,12 @@
 
     function buildLocalThreeModel(THREE, spec) {
       const root = new THREE.Group();
-      const body = makeLocalMaterial(THREE, 0xddf79b);
-      const side = makeLocalMaterial(THREE, 0x9fca82);
-      const inner = makeLocalMaterial(THREE, 0x6e9e68);
+      const preset = materialPresetFor(spec);
+      const body = makeLocalMaterial(THREE, preset.body, preset.roughness, preset.metalness);
+      const side = makeLocalMaterial(THREE, preset.side, preset.roughness, preset.metalness);
+      const inner = makeLocalMaterial(THREE, preset.inner, Math.min(.82, preset.roughness + .08), preset.metalness);
       const dark = makeLocalMaterial(THREE, 0x252724, .72);
-      const accent = makeLocalMaterial(THREE, 0xb9d98f, .42);
+      const accent = makeLocalMaterial(THREE, preset.accent, Math.min(.72, preset.roughness), preset.metalness);
       const box = (width, height, depth, x, y, z, material) => {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.max(width, .1), Math.max(height, .1), Math.max(depth, .1)), material);
         mesh.position.set(x, y, z);
@@ -1078,6 +1150,15 @@
             cylinder(holeRadius, .5, x, bottom + .45, z, dark, false);
           });
         }
+      } else if (kind === 'rounded_cube') {
+        const radius = clamp(Number(spec.chamfer) || 4, .5, Math.max(.5, Math.min(width, depth, height) / 2 - .1));
+        const Geometry = threeState.RoundedBoxGeometry;
+        const geometry = Geometry
+          ? new Geometry(width, height, depth, radius, 5)
+          : new THREE.BoxGeometry(width, height, depth);
+        const mesh = new THREE.Mesh(geometry, body);
+        mesh.position.set(0, height / 2, 0);
+        root.add(mesh);
       } else if (kind === 'angle') {
         const extrusion = Math.max(height, 5);
         box(width, extrusion, wall, 0, extrusion / 2, -(depth - wall) / 2, side);
@@ -1130,6 +1211,7 @@
           disposeThreeObject(threeState.model);
         }
         threeState.model = buildLocalThreeModel(THREE, spec);
+        applyPreviewMaterial(threeState.model, spec);
         threeState.scene.add(threeState.model);
         threeState.active = true;
         threeState.source = 'local';
@@ -1177,6 +1259,7 @@
           disposeThreeObject(threeState.model);
         }
         threeState.model = gltf.scene;
+        applyPreviewMaterial(threeState.model, fallbackSpec || { material: selectedMaterial });
         addModelEdgeLines(THREE, threeState.model);
         // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
         // imported root so top/front views and orbit controls match the SVG preview.
@@ -1237,16 +1320,44 @@
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated L bracket front view"><polygon points="' + pointList(profile) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
     }
 
+    function renderRoundedIso(spec) {
+      const w = clamp(spec.width / 80, .75, 1.7) * 220;
+      const d = clamp(spec.depth / 80, .75, 1.7) * 170;
+      const h = clamp(spec.height / 80, .75, 1.7) * 150;
+      const project = (x, y, z) => [165 + (x - y) * .72, 220 + (x + y) * .34 - z];
+      const top = [project(0, 0, h), project(w, 0, h), project(w, d, h), project(0, d, h)];
+      const front = [project(0, d, 0), project(w, d, 0), project(w, d, h), project(0, d, h)];
+      const side = [project(w, 0, 0), project(w, d, 0), project(w, d, h), project(w, 0, h)];
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rounded cube CAD model"><ellipse cx="205" cy="370" rx="150" ry="21" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="4" stroke-linejoin="round"><polygon points="' + pointList(top) + '" fill="#ddf79b"/><polygon points="' + pointList(front) + '" fill="#9fca82"/><polygon points="' + pointList(side) + '" fill="#6e9e68"/></g><text x="260" y="388" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">ROUNDED CUBE / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
+    }
+    function renderRoundedTop(spec) {
+      const size = clamp(Math.max(spec.width, spec.depth) / 80, .75, 1.7) * 220;
+      const radius = clamp(spec.chamfer / 8, 8, 28);
+      const x = (520 - size) / 2;
+      const y = 190;
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rounded cube top view"><rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + size.toFixed(1) + '" height="' + size.toFixed(1) + '" rx="' + radius + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + spec.width + ' mm</text></svg>';
+    }
+    function renderRoundedFront(spec) {
+      const width = clamp(spec.width / 80, .75, 1.7) * 220;
+      const height = clamp(spec.height / 80, .75, 1.7) * 220;
+      const radius = clamp(spec.chamfer / 8, 8, 28);
+      const x = (520 - width) / 2;
+      const y = 175;
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rounded cube front view"><rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + width.toFixed(1) + '" height="' + height.toFixed(1) + '" rx="' + radius + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
       const rotational = spec.kind === 'plant' || spec.kind === 'pen';
+      const roundedCube = spec.kind === 'rounded_cube';
       const angle = spec.kind === 'angle';
       modelWrap.innerHTML = rotational
         ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec)))
-        : angle
-          ? (view === 'top' ? renderAngleTop(spec) : (view === 'front' ? renderAngleFront(spec) : renderAngleIso(spec)))
-          : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
+        : roundedCube
+          ? (view === 'top' ? renderRoundedTop(spec) : (view === 'front' ? renderRoundedFront(spec) : renderRoundedIso(spec)))
+          : angle
+            ? (view === 'top' ? renderAngleTop(spec) : (view === 'front' ? renderAngleFront(spec) : renderAngleIso(spec)))
+            : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
       const svg = modelWrap.querySelector('svg');
       if (svg) svg.setAttribute('aria-label', currentLang === 'zh' ? ('生成的' + (view === 'top' ? '顶视' : (view === 'front' ? '前视' : '等距')) + ' CAD 模型') : ('Generated ' + view + ' CAD model'));
       applyCamera();
@@ -1363,7 +1474,8 @@
     }
     function canonicalPrompt(spec) {
       const title = String(spec.title || '').toLowerCase();
-      const type = title.includes('bracket') || title.includes('angle') || title.includes('l形') || title.includes('折条') ? 'l bracket'
+      const type = title.includes('rounded cube') || title.includes('rounded') || title.includes('圆角') ? 'rounded cube'
+        : title.includes('bracket') || title.includes('angle') || title.includes('l形') || title.includes('折条') ? 'l bracket'
         : title.includes('tray') || title.includes('托盘') ? 'storage tray'
         : title.includes('clip') || title.includes('cable') || title.includes('线缆') ? 'cable clip'
         : title.includes('plant') || title.includes('pot') || title.includes('花盆') ? 'plant pot'
@@ -1434,7 +1546,14 @@
       if (!featureTree || !spec) return;
       setFeatureHighlight(null, false);
       featureTree.innerHTML = '';
-      const features = spec.kind === 'angle'
+      const features = spec.kind === 'rounded_cube'
+        ? [
+            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
+            [currentLang === 'zh' ? '圆角实体' : 'Rounded solid', (spec.chamfer || 4) + ' mm ' + (currentLang === 'zh' ? '圆角半径' : 'fillet radius')],
+            [currentLang === 'zh' ? '边界样式' : 'Edge style', currentLang === 'zh' ? '全边圆角' : 'all-edge fillet'],
+            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '圆角' : 'fillet')]
+          ]
+        : spec.kind === 'angle'
         ? [
             [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
             [currentLang === 'zh' ? 'L 形外轮廓' : 'L profile', (spec.width || 0) + ' × ' + (spec.depth || 0) + ' mm'],
@@ -1483,8 +1602,19 @@
       if (!/(chamfer|radius|倒角|圆角|圆弧|半径)/i.test(normalized)) assumptions.push(currentLang === 'zh' ? '倒角默认' : 'edge default');
       return assumptions;
     }
+    function updateModelParameterCards(spec) {
+      if (!spec) return;
+      if (bodyValue) bodyValue.textContent = displayTitle(spec.title);
+      if (sizeValue) sizeValue.textContent = spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm';
+      const bodyMeta = document.getElementById('bodyMeta');
+      if (bodyMeta) bodyMeta.textContent = currentLang === 'zh' ? ((spec.compartments || 1) + ' 个隔间 · 可制造实体') : ((spec.compartments || 1) + ' compartments · closed volume');
+      if (modelMeta) modelMeta.textContent = currentLang === 'zh' ? ((spec.compartments || 1) + ' 个隔间 · 壁厚 ' + (spec.wall || 3) + ' 毫米 · 倒角 ' + (spec.chamfer || 0) + ' 毫米') : ((spec.compartments || 1) + ' compartments · ' + (spec.wall || 3) + ' mm wall · edge ' + (spec.chamfer || 0) + ' mm');
+      if (parameterFields.width) syncParameterEditor(spec);
+      updateMaterialCard(spec);
+    }
     function updateInterpretation(spec, source) {
       if (!spec) return;
+      updateModelParameterCards(spec);
       const t = copy[currentLang];
       interpretationSource = source;
       const assumptions = assumptionList(prompt.value);
@@ -1711,6 +1841,22 @@
     function updateGenerationProgress(progress) {
       if (!progress) return;
       renderGenerationTrace(progress.events || [], progress.stage === 'complete' ? 'complete' : 'running');
+      applyLiveGenerationProgress(progress);
+    }
+    function applyLiveGenerationProgress(progress) {
+      const events = Array.isArray(progress.events) ? progress.events : [];
+      const interpretation = [...events].reverse().find((event) => event.id === 'interpretation' && event.details && Array.isArray(event.details.dimensions_mm));
+      if (interpretation && modelSpec) {
+        const dimensions = interpretation.details.dimensions_mm.map(Number);
+        if (dimensions.length === 3 && dimensions.every(Number.isFinite) && (dimensions[0] !== modelSpec.width || dimensions[1] !== modelSpec.depth || dimensions[2] !== modelSpec.height)) {
+          modelSpec = Object.assign({}, modelSpec, { width: dimensions[0], depth: dimensions[1], height: dimensions[2] });
+          updateModelParameterCards(modelSpec);
+          renderModel(modelSpec, currentView);
+          if (!threeState.active || threeState.source === 'local') loadLocalThreePreview(modelSpec);
+        }
+      }
+      if (generationStatus && progress.stage) generationStatus.textContent = generationStageLabel(progress.stage);
+      if (solved && progress.stage && progress.stage !== 'complete') solved.textContent = generationStageLabel(progress.stage);
     }
     function localGenerationTrace(finalStage) {
       const now = Date.now();
@@ -1736,7 +1882,7 @@
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, include_steps: true };
+      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, material: selectedMaterial, include_steps: true };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1797,6 +1943,7 @@
         const previousSpec = modelSpec ? Object.assign({}, modelSpec) : null;
         const editing = Boolean(previousSpec && isEditIntent(value));
         const nextSpec = editing ? applyEdit(value, previousSpec) : parseModel(value);
+        modelSpec = Object.assign({}, nextSpec);
         const canonical = canonicalPrompt(nextSpec);
         const backendPrompt = selectedMode === 'advanced'
           ? value.slice(0, 3200) + '\n\nBaseline CAD parameters: ' + canonical
@@ -1805,6 +1952,7 @@
         solved.textContent = copy[currentLang].parsing;
         updateInterpretation(nextSpec, 'draft');
         renderModel(nextSpec, currentView);
+        loadLocalThreePreview(nextSpec);
         renderGenerationTrace(localGenerationTrace('preview'), 'running');
         let remote = null;
         let backendError = null;
@@ -1845,14 +1993,16 @@
           depth: remoteParams.depth ?? nextSpec.depth,
           height: remoteParams.height ?? nextSpec.height,
           compartments: remoteParams.compartments ?? nextSpec.compartments,
-          chamfer: remoteParams.chamfer ?? nextSpec.chamfer,
+          chamfer: nextSpec.cube_shape ? nextSpec.chamfer : (remoteParams.chamfer ?? nextSpec.chamfer),
           wall: remoteParams.wall ?? nextSpec.wall,
           bottom: remoteParams.bottom ?? nextSpec.bottom,
           process: remote.process || selectedProcess,
           tolerance: remoteParams.tolerance ?? processProfiles[selectedProcess].tolerance,
           clearance: remoteParams.clearance ?? processProfiles[selectedProcess].clearance,
           drainage_holes: remoteParams.drainage_holes ?? nextSpec.drainage_holes ?? 0,
-          cable_channel: remoteParams.cable_channel ?? nextSpec.cable_channel ?? false
+          cable_channel: remoteParams.cable_channel ?? nextSpec.cable_channel ?? false,
+          material: remoteParams.material || nextSpec.material || selectedMaterial,
+          edge_style: nextSpec.cube_shape ? nextSpec.edge_style : (remoteParams.edge_style || nextSpec.edge_style || 'chamfer'),
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
         renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
@@ -1932,6 +2082,17 @@
       backendArtifact = null;
       updateExportButtons();
       if (modelSpec) generateModel();
+    });
+    if (materialSelect) materialSelect.addEventListener('change', () => {
+      selectedMaterial = materialSelect.value in materialPresets ? materialSelect.value : 'pla';
+      try { localStorage.setItem(materialStorageKey, selectedMaterial); } catch (error) {}
+      if (modelSpec) {
+        modelSpec = Object.assign({}, modelSpec, { material: selectedMaterial });
+        updateModelParameterCards(modelSpec);
+        if (threeState.model) applyPreviewMaterial(threeState.model, modelSpec);
+        renderModel(modelSpec, currentView);
+        generateModel();
+      }
     });
     if (unitSelect) unitSelect.addEventListener('change', () => {
       selectedUnits = unitSelect.value;
