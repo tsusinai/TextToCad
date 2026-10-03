@@ -127,6 +127,24 @@ def test_unknown_model_family_uses_solid_block_fallback():
     assert title == "Parametric solid"
 
 
+def test_ordinary_cube_stays_sharp_and_cubic():
+    title, params, _ = app.parse_prompt_detailed("a cube 50 mm")
+    assert title == "Parametric solid"
+    assert params.kind == "block"
+    assert (params.width, params.depth, params.height) == (50.0, 50.0, 50.0)
+    assert params.chamfer == 0.0
+    assert params.edge_style == "chamfer"
+
+
+def test_rounded_cube_requires_explicit_rounding_language():
+    title, params, _ = app.parse_prompt_detailed("a cube with no sharp edges, 50 mm side")
+    assert title == "Parametric rounded cube"
+    assert params.kind == "rounded_cube"
+    assert (params.width, params.depth, params.height) == (50.0, 50.0, 50.0)
+    assert params.chamfer == 4.0
+    assert params.edge_style == "fillet"
+
+
 def test_generation_recorder_tracks_real_milestones_in_order():
     recorder = app.GenerationRecorder()
     recorder.emit("parsing", "interpretation", "running")
@@ -139,8 +157,9 @@ def test_generation_recorder_tracks_real_milestones_in_order():
 
 
 def test_generation_request_can_request_step_previews():
-    request = app.GenerateRequest(prompt="a 40 mm block", include_steps=True)
+    request = app.GenerateRequest(prompt="a 40 mm block", include_steps=True, material="petg")
     assert request.include_steps is True
+    assert request.material == "petg"
 
 
 def test_nominal_analysis_never_reports_manufacturing_ready():
@@ -167,6 +186,7 @@ def test_strict_dimensions_reject_ambiguous_input():
         "lamp base 110 mm wide with cable channel",
         "cable clip for a 6 mm cable",
         "solid block 40 mm x 30 mm x 20 mm",
+        "cube with no sharp edges, 50 mm side",
         "L bracket 20x20, plate thickness 3",
     ],
 )
