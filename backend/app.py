@@ -26,9 +26,11 @@ from pydantic import BaseModel, Field
 try:
     from .legacy_adapter import legacy_design_ir_to_v2
     from .ir_validate import IRValidationError, validate_ir
+    from .ir_executor import IRExecutionError, execute_ir, shape_metrics
 except ImportError:  # pragma: no cover - direct backend module execution
     from legacy_adapter import legacy_design_ir_to_v2
     from ir_validate import IRValidationError, validate_ir
+    from ir_executor import IRExecutionError, execute_ir, shape_metrics
 
 try:
     import cadquery as cq
@@ -124,6 +126,10 @@ class GenerateRequest(BaseModel):
 
 
 class IRValidationRequest(BaseModel):
+    ir: dict[str, Any]
+
+
+class IRCompileRequest(BaseModel):
     ir: dict[str, Any]
 
 
@@ -1707,6 +1713,32 @@ def validate_ir_endpoint(request: IRValidationRequest) -> dict[str, Any]:
         "node_count": len(normalized.get("nodes", [])),
         "constraint_count": len(normalized.get("constraints", [])),
         "ir": normalized,
+    }
+
+
+@app.post("/v1/ir/compile")
+def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
+    """Compile a generic v0.2 IR in memory and return kernel metrics."""
+    try:
+        normalized = validate_ir(request.ir)
+    except IRValidationError as exc:
+        raise HTTPException(status_code=422, detail={
+            "valid": False,
+            "schema_version": "0.2",
+            "issues": exc.issues,
+        }) from exc
+    try:
+        execution = execute_ir(normalized)
+        metrics = shape_metrics(execution["shape"])
+    except IRExecutionError as exc:
+        status_code = 503 if cq is None else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return {
+        "valid": True,
+        "schema_version": "0.2",
+        "output_node": execution["output_node"],
+        "metrics": metrics,
+        "trace": execution["trace"],
     }
 
 
