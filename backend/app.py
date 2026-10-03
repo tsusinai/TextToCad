@@ -1207,8 +1207,16 @@ def _write_artifacts(
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
             mesh_info = _mesh_validation(mesh)
+            source_bbox = _shape_metrics(shape)["bbox_mm"]
+            bbox_error = max(
+                abs(mesh_info["bbox_mm"][axis] - source_bbox[axis])
+                for axis in ("x", "y", "z")
+            )
+            bbox_consistent = bbox_error <= 0.05
             mesh_validation = {
-                "status": "pass" if mesh_info["watertight"] else "warning",
+                "status": "pass" if mesh_info["watertight"] and bbox_consistent else "warning",
+                "bbox_max_error_mm": round(bbox_error, 8),
+                "bbox_consistent": bbox_consistent,
                 **mesh_info,
             }
             glb_path = model_dir / "model.glb"
