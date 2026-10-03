@@ -29,7 +29,7 @@ def _resolve(value: Any, parameters: dict[str, Any]) -> Any:
     if isinstance(value, list):
         return [_resolve(item, parameters) for item in value]
     if isinstance(value, tuple):
-        return tuple(_resolve(item, parameters) for item in value]
+        return tuple(_resolve(item, parameters) for item in value)
     if isinstance(value, dict):
         if "value" in value:
             return _resolve(value["value"], parameters)
