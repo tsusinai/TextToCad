@@ -24,7 +24,7 @@
 
 访问 [https://tsusinai.github.io/TextToCad/](https://tsusinai.github.io/TextToCad/)。
 
-没有连接后端时，页面仍会创建真实的 Three.js 参数化预览；如果浏览器不支持 WebGL 或 CDN 加载失败，才退回 SVG 概念图。连接后端后，经过 OCCT 校验的 GLB 会替换本地预览。生成过程中，左侧 **BUILD PROCESS / 建模过程** 会显示后端实际完成的解析、特征构建、几何校验、制造审查和导出事件；当 CadQuery 导出中间快照可用时，可以直接点击 **VIEW STEP / 查看步骤** 在 3D 视图中检查该阶段。
+没有连接后端时，页面仍会创建真实的 Three.js 参数化预览；如果浏览器不支持 WebGL 或 CDN 加载失败，才退回 SVG 概念图。连接后端后，经过 OCCT 校验的 GLB 会替换本地预览。 后端同时提供 `/v1/ir/validate` 静态校验和 `/v1/ir/compile` 通用 IR 编译接口，当前支持原语、布尔、参数表达式、变换、挤出与基础边处理。生成过程中，左侧 **BUILD PROCESS / 建模过程** 会显示后端实际完成的解析、特征构建、几何校验、制造审查和导出事件；当 CadQuery 导出中间快照可用时，可以直接点击 **VIEW STEP / 查看步骤** 在 3D 视图中检查该阶段。
 
 ## 本机启动：Docker + CadQuery + DeepSeek
 
