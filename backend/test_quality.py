@@ -355,3 +355,25 @@ def test_ir_constraints_report_hard_and_soft_violations():
     assert report["valid"] is False
     assert report["hard_violation_count"] == 1
     assert {item["id"] for item in report["violations"]} == {"wall-hard", "wall-soft"}
+
+
+
+def test_ir_selector_is_checked_against_registered_entities():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [{
+            "id": "body", "kind": "primitive", "operation": "box",
+            "parameters": {"size": [20, 20, 20]},
+        }, {
+            "id": "edge", "kind": "feature", "operation": "chamfer",
+            "inputs": ["body"],
+            "parameters": {"radius": 1, "selector": {
+                "entity": "missing", "topology": "face",
+                "where": [{"normal": [0, 0, 1]}],
+            }},
+        }],
+        "outputs": [{"id": "main", "node": "edge"}],
+    }
+    with pytest.raises(app.IRValidationError) as error:
+        app.validate_ir(ir)
+    assert any(issue["code"] == "selector_entity" for issue in error.value.issues)
