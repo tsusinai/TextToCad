@@ -933,6 +933,7 @@
         const grid = new THREE.GridHelper(2000, 200, 0x52624e, 0x354035);
         grid.material.opacity = .28;
         grid.material.transparent = true;
+        grid.visible = threeState.gridVisible;
         grid.position.y = -0.01;
         const axes = new THREE.AxesHelper(80);
         axes.renderOrder = 2;
@@ -1990,6 +1991,8 @@
     renderRevisions();
     updateExportButtons();
     applyCamera();
+    const initialGizmo = document.querySelector('[data-gizmo-view="' + currentView + '"]');
+    if (initialGizmo) initialGizmo.classList.add('active');
     // Start with a real parameterized 3D preview even before the first backend response.
     loadLocalThreePreview(modelSpec);
   </script>
