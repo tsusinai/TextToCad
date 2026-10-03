@@ -500,6 +500,7 @@
     const featureLabel = document.getElementById('featureLabel');
     const featureMode = document.getElementById('featureMode');
     const featureTree = document.getElementById('featureTree');
+    const materialSelect = document.getElementById('materialSelect');
     const processSelect = document.getElementById('processSelect');
     const unitSelect = document.getElementById('unitSelect');
     const generationMode = document.getElementById('generationMode');
@@ -507,7 +508,15 @@
     const processProfileHint = document.getElementById('processProfileHint');
     const processStorageKey = 'formCadProcess';
     const unitStorageKey = 'formCadUnits';
+    const materialStorageKey = 'formCadMaterial';
     const modeStorageKey = 'formCadGenerationMode';
+    const materialPresets = {
+      pla: { label: { en: 'Matte PLA · warm white', zh: '哑光 PLA · 暖白' }, meta: { en: 'Print-ready surface', zh: '适合打印的表面' }, body: 0xddf79b, side: 0x9fca82, inner: 0x6e9e68, accent: 0xb9d98f, roughness: .62, metalness: .02 },
+      petg: { label: { en: 'PETG · translucent green', zh: 'PETG · 半透明绿' }, meta: { en: 'Tough and slightly translucent', zh: '韧性高，略带透光' }, body: 0x9fd6bb, side: 0x68ae91, inner: 0x477d69, accent: 0xb7e4c7, roughness: .38, metalness: .02 },
+      abs: { label: { en: 'ABS · graphite', zh: 'ABS · 石墨黑' }, meta: { en: 'Impact-resistant engineering plastic', zh: '耐冲击工程塑料' }, body: 0x687078, side: 0x4b535b, inner: 0x30363c, accent: 0x9aa6b1, roughness: .48, metalness: .04 },
+      resin: { label: { en: 'Resin · stone grey', zh: '光敏树脂 · 石灰灰' }, meta: { en: 'Fine surface detail', zh: '适合精细表面' }, body: 0xb8b5ad, side: 0x929089, inner: 0x6b6963, accent: 0xd9d5c9, roughness: .72, metalness: 0 },
+      aluminum: { label: { en: 'Aluminum · anodized', zh: '铝 · 阳极氧化' }, meta: { en: 'Machined metal appearance', zh: '金属加工外观' }, body: 0xb9c2c1, side: 0x899493, inner: 0x606d6d, accent: 0xd8e0df, roughness: .28, metalness: .58 }
+    };
     let selectedMode = (() => { try { return localStorage.getItem(modeStorageKey) || 'standard'; } catch (error) { return 'standard'; } })();
     if (!['standard', 'advanced'].includes(selectedMode)) selectedMode = 'standard';
     let advancedAvailable = false;
@@ -522,8 +531,11 @@
     if (!processProfiles[selectedProcess]) selectedProcess = 'fdm';
     let selectedUnits = (() => { try { return localStorage.getItem(unitStorageKey) || 'mm'; } catch (error) { return 'mm'; } })();
     if (!['mm', 'cm', 'm', 'in'].includes(selectedUnits)) selectedUnits = 'mm';
+    let selectedMaterial = (() => { try { return localStorage.getItem(materialStorageKey) || 'pla'; } catch (error) { return 'pla'; } })();
+    if (!materialPresets[selectedMaterial]) selectedMaterial = 'pla';
     processSelect.value = selectedProcess;
     if (unitSelect) unitSelect.value = selectedUnits;
+    if (materialSelect) materialSelect.value = selectedMaterial;
     if (generationMode) generationMode.value = selectedMode;
     let revisions = (() => { try { return JSON.parse(localStorage.getItem(revisionStorageKey) || '[]'); } catch (error) { return []; } })();
     const configuredBackend = window.FORM_CAD_BACKEND_URL || new URLSearchParams(window.location.search).get('backend') || '';
@@ -546,7 +558,7 @@
     let generationSeq = 0;
     const camera = { zoom: 1, rotateX: 0, rotateY: 0, panX: 0, panY: 0 };
     let pointerState = null;
-    const threeState = { active: false, ready: false, source: '', THREE: null, renderer: null, camera: null, controls: null, scene: null, model: null, helpers: null, grid: null, gridVisible: true, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
+    const threeState = { active: false, ready: false, source: '', THREE: null, RoundedBoxGeometry: null, renderer: null, camera: null, controls: null, scene: null, model: null, helpers: null, grid: null, gridVisible: true, resizeObserver: null, resize: null, animationFrame: null, requestController: null, rendererPromise: null, loadSeq: 0 };
     const langToggle = document.getElementById('langToggle');
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     let highlightedFeature = null;
@@ -979,8 +991,15 @@
       threeState.rendererPromise = (async () => {
         const THREE = await import('three');
         const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+        let RoundedBoxGeometry = null;
+        try {
+          ({ RoundedBoxGeometry } = await import('three/addons/geometries/RoundedBoxGeometry.js'));
+        } catch (error) {
+          console.warn('RoundedBoxGeometry unavailable; using box fallback.', error);
+        }
         if (threeState.renderer && threeState.THREE) return threeState.THREE;
         threeState.THREE = THREE;
+        threeState.RoundedBoxGeometry = RoundedBoxGeometry;
         threeState.scene = new THREE.Scene();
         threeState.scene.background = new THREE.Color(0x252724);
         const helpers = new THREE.Group();
