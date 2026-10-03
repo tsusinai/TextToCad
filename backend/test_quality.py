@@ -70,6 +70,14 @@ def test_ir_divider_count_matches_geometry_loop():
     assert divider["count"] == 2
 
 
+def test_unknown_model_family_uses_solid_block_fallback():
+    title, params, _ = app.parse_prompt_detailed(
+        "a custom bird feeder 120 mm wide, 80 mm deep, 42 mm tall",
+    )
+    assert params.kind == "block"
+    assert title == "Parametric solid"
+
+
 def test_generation_recorder_tracks_real_milestones_in_order():
     recorder = app.GenerationRecorder()
     recorder.emit("parsing", "interpretation", "running")
