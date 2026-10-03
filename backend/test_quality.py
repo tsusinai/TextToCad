@@ -316,3 +316,24 @@ def test_generic_ir_executor_builds_boolean_geometry():
     assert metrics["valid_brep"] is True
     assert metrics["volume_mm3"] > 0
     assert metrics["bbox_mm"]["x"] == 40.0
+
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_executor_builds_sketch_extrusion():
+    ir = {
+        "schema_version": "0.2",
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [
+            {"id": "profile", "kind": "sketch", "operation": "sketch",
+             "parameters": {"geometry": [{"type": "rectangle", "width": 24, "height": 12}]},
+             "frame": "xy"},
+            {"id": "solid", "kind": "feature", "operation": "extrude",
+             "inputs": ["profile"], "parameters": {"length": 6}},
+        ],
+        "outputs": [{"id": "main", "node": "solid"}],
+    }
+    execution = app.execute_ir(app.validate_ir(ir))
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["valid_brep"] is True
+    assert metrics["bbox_mm"] == {"x": 24.0, "y": 12.0, "z": 6.0}
