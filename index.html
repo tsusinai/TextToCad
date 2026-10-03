@@ -2767,8 +2767,8 @@
     }
     function applyEdit(text, base) {
       const next = Object.assign({}, base);
-      next.width = editNumber(text, 'width|wide|宽', base.width);
-      next.depth = editNumber(text, 'depth|deep|length|长|深', base.depth);
+      next.width = editNumber(text, 'width|wide|宽|机身长|机身长度|长度', base.width);
+      next.depth = editNumber(text, 'depth|deep|length|长|深|翼展|wingspan|span', base.depth);
       next.height = editNumber(text, 'height|tall|高', base.height);
       next.chamfer = editNumber(text, 'chamfer|radius|倒角|圆角|圆弧|半径', base.chamfer);
       next.wall = editNumber(text, 'wall|壁厚', base.wall || 3);
@@ -2782,6 +2782,8 @@
     function canonicalPrompt(spec) {
       const title = String(spec.title || '').toLowerCase();
       const type = title.includes('rounded cube') || title.includes('rounded') || title.includes('圆角') ? 'rounded cube'
+        : title.includes('airplane') || title.includes('aircraft') || title.includes('飞机') || title.includes('航模') ? 'airplane model'
+        : title.includes('cup') || title.includes('mug') || title.includes('杯') ? 'cup'
         : title.includes('bracket') || title.includes('angle') || title.includes('l形') || title.includes('折条') ? 'l bracket'
         : title.includes('tray') || title.includes('托盘') ? 'storage tray'
         : title.includes('clip') || title.includes('cable') || title.includes('线缆') ? 'cable clip'
