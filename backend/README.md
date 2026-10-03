@@ -20,13 +20,13 @@ curl -X POST http://localhost:8787/v1/models \
   -d '{"prompt":"A desk organizer with three compartments, 120 mm wide, 80 mm deep, 42 mm high, 3 mm wall."}'
 ~~~
 
-The response contains validated STEP and STL download URLs plus optional 3MF and GLB preview URLs. It also returns B-Rep checks, a nominal manufacturing analysis, provenance, and Semantic CAD IR. Set `ARTIFACT_ROOT` to persistent storage in production.
+The response contains validated STEP and STL download URLs plus optional 3MF and GLB preview URLs. It also returns B-Rep/OCCT checks, geometry metrics, export round-trip status, a nominal manufacturing analysis, provenance, and Semantic CAD IR. Input units support `mm`, `cm`, `m`, and `in`; canonical geometry is always millimetres. Set `ARTIFACT_ROOT` to persistent storage in production.
 
 ## API surface
 
 - `GET /health` reports CadQuery/OCCT, preview, LLM, authentication, and queue status. It does not require the API key.
 - `GET /v1/process-profiles` returns FDM, SLA, CNC, and injection molding constraints.
-- `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`.
+- `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`; `strict_dimensions: true` rejects ambiguous unlabeled dimensions instead of applying defaults.
 - `POST /v1/jobs` creates a bounded asynchronous job; `GET /v1/jobs/{job_id}` polls it and `DELETE /v1/jobs/{job_id}` cancels it. A full queue returns HTTP 429. Generation mutations also use a bounded per-client rate limit (configurable with `RATE_LIMIT_WINDOW_SECONDS` and `MAX_MUTATIONS_PER_WINDOW`).
 - `GET /v1/models/{model_id}/manifest` returns parameters, checks, process metadata, exports, and the reproducible manifest.
 - `GET /v1/models/{model_id}/ir` returns Semantic CAD IR v0.1.
@@ -52,4 +52,15 @@ LLM_MODEL=deepseek-chat
 
 The backend keeps both keys server-side, sends only the natural-language intent to the LLM, and validates the returned JSON before any geometry operation. Providers that reject `response_format=json_object` receive one compatibility retry without that field. Missing keys or provider failures fall back to the deterministic parser.
 
-The generated revision includes Semantic CAD IR in `manifest.json` and exposes it at `GET /v1/models/{model_id}/ir`. Manufacturing analysis is nominal: `review_required` stays true for warnings and errors, and face-level measurement remains a future enhancement.
+The generated revision includes Semantic CAD IR in `manifest.json` and exposes it at `GET /v1/models/{model_id}/ir`. Manufacturing analysis is nominal: `review_required` stays true and `manufacturing_ready` stays false until face-level measurement is available. Export manifests record geometry metrics, checksums, axis/unit metadata, and STEP/mesh validation.
+
+## Quality regression tests
+
+Run the parser and IR contract tests without the CAD kernel:
+
+~~~bash
+pip install pytest fastapi pydantic
+pytest -q test_quality.py
+~~~
+
+The Docker image should additionally be used for CadQuery/OCCT export smoke tests. The strict quality gate checks OCCT validity, non-zero faces, single-solid topology, STEP re-import metrics, and mesh watertightness when the optional mesh stack is available.
