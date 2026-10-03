@@ -730,7 +730,7 @@ def interpret_prompt(
         kind = baseline.kind
         if kind_was_provided:
             normalization_assumptions.append("Unsupported model family was replaced with the deterministic baseline.")
-    elif baseline.kind != "block" and kind != baseline.kind:
+    elif (baseline.kind != "block" or any(token in prompt.lower() for token in ("cube", "正方体", "方块"))) and kind != baseline.kind:
         normalization_assumptions.append(
             f"LLM model family '{kind}' conflicted with the explicit '{baseline.kind}' shape; the deterministic family was preserved."
         )
@@ -766,6 +766,10 @@ def interpret_prompt(
     if edge_style not in {"chamfer", "fillet"}:
         edge_style = baseline.edge_style
         normalization_assumptions.append("Unsupported edge style was replaced with the deterministic baseline.")
+    cube_locked = baseline.kind == "block" and any(token in prompt.lower() for token in ("cube", "正方体", "方块"))
+    if cube_locked and kind == "block":
+        chamfer = baseline.chamfer
+        edge_style = baseline.edge_style
 
     try:
         compartments_value = int(float(candidate.get("compartments", baseline.compartments)))
