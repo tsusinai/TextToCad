@@ -648,7 +648,10 @@
       );
     }
     function dimensionsFor(text) {
+      const sourceText = String(text || '').toLowerCase();
       const normalized = canonicalDimensionText(text);
+      const fallbackFactor = { mm: 1, cm: 10, m: 1000, in: 25.4 }[selectedUnits] || 1;
+      const hasExplicitUnit = /(?:mm|毫米|cm|厘米|m|米|inches?|英寸)/i.test(sourceText);
       const unitNumbers = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)).map((match) => Number(match[1]));
       const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
@@ -668,7 +671,8 @@
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
       const depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || width * 0.67));
       const height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : 42);
-      return { width, depth, height };
+      const scale = hasExplicitUnit ? 1 : fallbackFactor;
+      return { width: width * scale, depth: depth * scale, height: height * scale };
     }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
     function parseModel(text) {
