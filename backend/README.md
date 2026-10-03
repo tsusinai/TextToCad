@@ -55,7 +55,7 @@ LLM_MODEL=deepseek-chat
 
 The backend keeps both keys server-side, sends only the natural-language intent to the LLM, and validates the returned JSON before any geometry operation. Providers that reject `response_format=json_object` receive one compatibility retry without that field. Missing keys or provider failures fall back to the deterministic parser.
 
-The generated revision includes Semantic CAD IR in `manifest.json` and exposes it at `GET /v1/models/{model_id}/ir`. Manufacturing analysis is nominal: `review_required` stays true and `manufacturing_ready` stays false until face-level measurement is available. Export manifests record geometry metrics, checksums, axis/unit metadata, and STEP/mesh validation.
+The parser includes an L-bracket family (`angle`) for prompts such as `20x20 L-shaped profile, plate thickness 3`; the deterministic baseline wins when an advanced LLM proposes an unrelated family. The generated revision includes Semantic CAD IR in `manifest.json` and exposes it at `GET /v1/models/{model_id}/ir`. Manufacturing analysis is nominal: `review_required` stays true and `manufacturing_ready` stays false until face-level measurement is available. Export manifests record geometry metrics, checksums, axis/unit metadata, and STEP/mesh validation.
 
 ## Quality regression tests
 
