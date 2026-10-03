@@ -217,3 +217,70 @@ def test_supported_model_families_produce_valid_brep(prompt):
     assert checks["nonzero_faces"] is True
     assert checks["single_solid"] is True
     assert checks["positive_volume"] is True
+
+
+
+def test_legacy_design_ir_is_upgraded_to_v02():
+    _, params, provenance = app.parse_prompt_detailed("a 120 mm organizer with 3 compartments")
+    legacy_ir = app.build_design_ir(
+        "a 120 mm organizer with 3 compartments",
+        params,
+        "standard",
+        False,
+        provenance["assumptions"],
+        provenance,
+    )
+    assert legacy_ir["schema_version"] == "0.2"
+    assert legacy_ir["nodes"]
+    assert legacy_ir["features"]
+    assert legacy_ir["outputs"][0]["node"] == legacy_ir["nodes"][-1]["id"]
+    assert app.validate_ir(legacy_ir)["schema_version"] == "0.2"
+
+
+def test_generic_primitive_ir_is_family_independent():
+    ir = {
+        "schema_version": "0.2",
+        "document": {"id": "cup", "intent": "hollow body"},
+        "parameters": {
+            "radius": {"value": 40, "unit": "mm", "source": "user", "role": "dimension"},
+            "wall": {"value": 2, "unit": "mm", "source": "derived", "role": "manufacturing"},
+        },
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [
+            {"id": "outer", "kind": "primitive", "operation": "cylinder",
+             "parameters": {"radius": "radius", "height": 100}, "frame": "xy"},
+            {"id": "inner", "kind": "primitive", "operation": "cylinder",
+             "parameters": {"radius": "radius - wall", "height": 98}, "frame": "xy"},
+            {"id": "body", "kind": "feature", "operation": "cut", "inputs": ["outer", "inner"]},
+        ],
+        "constraints": [],
+        "outputs": [{"id": "main", "node": "body", "format": ["step"]}],
+    }
+    normalized = app.validate_ir(ir)
+    assert normalized["nodes"][-1]["operation"] == "cut"
+    assert normalized["outputs"][0]["node"] == "body"
+
+
+def test_ir_validation_rejects_dependency_cycles():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "a", "kind": "feature", "operation": "union", "inputs": ["b"]},
+            {"id": "b", "kind": "feature", "operation": "union", "inputs": ["a"]},
+        ],
+        "outputs": [{"id": "main", "node": "a"}],
+    }
+    with pytest.raises(app.IRValidationError) as error:
+        app.validate_ir(ir)
+    assert any(issue["code"] == "cycle" for issue in error.value.issues)
+
+
+def test_ir_validation_rejects_unregistered_operations():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [{"id": "body", "kind": "feature", "operation": "run_python"}],
+        "outputs": [{"id": "main", "node": "body"}],
+    }
+    with pytest.raises(app.IRValidationError) as error:
+        app.validate_ir(ir)
+    assert any(issue["code"] == "operation_not_allowed" for issue in error.value.issues)
