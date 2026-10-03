@@ -645,7 +645,7 @@
 
     function titleFor(text) {
       const value = text.toLowerCase();
-      if (value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
+      if (value.includes('l bracket') || value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
       if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'Plant pot';
       if (value.includes('lamp') || value.includes('灯')) return 'Lamp base';
@@ -686,7 +686,7 @@
       const sourceText = String(text || '').toLowerCase();
       const normalized = canonicalDimensionText(text);
       const fallbackFactor = { mm: 1, cm: 10, m: 1000, in: 25.4 }[selectedUnits] || 1;
-      const hasExplicitUnit = /(?:mm|毫米|cm|厘米|m|米|inches?|英寸)/i.test(sourceText);
+      const hasExplicitUnit = /\d+(?:\.\d+)?\s*(?:mm|毫米|cm|厘米|m|米|inches?|英寸)\b/i.test(sourceText);
       const unitNumbers = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)).map((match) => Number(match[1]));
       const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
@@ -1635,6 +1635,7 @@
         renderGenerationTrace(localGenerationTrace('preview'), 'running');
         let remote = null;
         let backendError = null;
+        let backendMismatch = false;
         try {
           remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal, updateGenerationProgress);
         } catch (error) {
@@ -1649,6 +1650,16 @@
           console.warn('Geometry backend unavailable; using local preview.', error);
         }
         if (sequence !== generationSeq) return;
+        if (remote && nextSpec.kind && nextSpec.kind !== 'block') {
+          const remoteKind = remote.parameters && remote.parameters.kind
+            ? remote.parameters.kind
+            : kindForTitle(remote.title || '');
+          if (remoteKind && remoteKind !== nextSpec.kind) {
+            backendMismatch = true;
+            backendError = new Error('backend model family mismatch: expected ' + nextSpec.kind + ', received ' + remoteKind);
+            remote = null;
+          }
+        }
         modelState.textContent = copy[currentLang].building;
         solved.textContent = copy[currentLang].building;
         await waitWithSignal(remote ? 120 : 720, generationController.signal);
@@ -1687,7 +1698,13 @@
         updateProcessHint(remote && remote.profile);
         updateChecks(modelSpec, remote && remote.checks);
         updateExportButtons();
-        if (backendError && backendUrl) setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+        if (backendMismatch) {
+          setGenerationError(currentLang === 'zh'
+            ? '后端返回的模型类型与输入不一致，已阻止错误模型；请重建后端服务后重试。'
+            : 'The backend returned the wrong model family; the incorrect result was blocked. Rebuild the backend and retry.');
+        } else if (backendError && backendUrl) {
+          setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+        }
         if (selectedMode === 'advanced' && !backendUrl) setGenerationError(copy[currentLang].advancedRequiresBackend);
         saveRevision(value, modelSpec, remote ? 'backend' : 'local', canonical, previousSpec);
       } catch (error) {
