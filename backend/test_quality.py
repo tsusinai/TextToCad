@@ -145,6 +145,21 @@ def test_rounded_cube_requires_explicit_rounding_language():
     assert params.edge_style == "fillet"
 
 
+def test_cup_keyword_maps_to_open_cup_geometry():
+    title, params, _ = app.parse_prompt_detailed("一个杯子，直径 80 mm，高 100 mm")
+    assert title == "Parametric cup"
+    assert params.kind == "cup"
+    assert (params.width, params.depth, params.height) == (80.0, 80.0, 100.0)
+    assert params.chamfer == 0.0
+
+
+def test_airplane_keyword_maps_to_airframe_dimensions():
+    title, params, _ = app.parse_prompt_detailed("一个飞机模型，机身长 160 mm，翼展 140 mm，高 40 mm")
+    assert title == "Parametric airplane model"
+    assert params.kind == "airplane"
+    assert (params.width, params.depth, params.height) == (160.0, 140.0, 40.0)
+
+
 def test_generation_recorder_tracks_real_milestones_in_order():
     recorder = app.GenerationRecorder()
     recorder.emit("parsing", "interpretation", "running")
@@ -187,6 +202,8 @@ def test_strict_dimensions_reject_ambiguous_input():
         "cable clip for a 6 mm cable",
         "solid block 40 mm x 30 mm x 20 mm",
         "cube with no sharp edges, 50 mm side",
+        "一个杯子，直径 80 mm，高 100 mm",
+        "一个飞机模型，160 x 140 x 40 mm",
         "L bracket 20x20, plate thickness 3",
     ],
 )
