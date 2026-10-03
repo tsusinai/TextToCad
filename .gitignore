@@ -5,3 +5,9 @@ backend/artifacts/
 .env.*
 !.env.example
 !backend/.env.example
+.venv/
+backend/.venv/
+__pycache__/
+backend/__pycache__/
+*.pyc
+

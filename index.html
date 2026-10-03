@@ -5,249 +5,1154 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f7f7f5" />
   <title>Text to CAD · FORM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"}}
   </script>
   <style>
     :root {
-      --paper: #f7f7f5;
-      --panel: #efefe9;
-      --ink: #1d1e1a;
-      --muted: #85867f;
-      --line: #e2e3dc;
-      --graphite: #252724;
-      --lime: #ddf79b;
-      --soft-lime: #eaf4d4;
-      --card: #f2f3ee;
-      --green: #5d8155;
-      --shadow: 0 24px 70px rgba(29,30,26,.08);
+      --paper: #f7f8f5;
+      --panel: #eff0eb;
+      --card: #f5f6f2;
+      --card-surface: #ffffff;
+      --ink: #171816;
+      --ink-subtle: #4f534c;
+      --muted: #797d74;
+      --line: #e1e3db;
+      --line-subtle: #eaece4;
+      --graphite: #131517;
+      --graphite-elevated: #1b1e22;
+      --lime: #d4ff4f;
+      --lime-hover: #c4f538;
+      --soft-lime: #edf8d4;
+      --lime-border: #99bf58;
+      --accent-lime-text: #3d5a1f;
+      --green: #487541;
+      --amber: #f59e0b;
+      --coral: #ef4444;
+      --shadow-main: 0 32px 80px rgba(10, 14, 11, 0.14), 0 2px 10px rgba(10, 14, 11, 0.04);
+      --shadow-card: 0 2px 8px rgba(18, 20, 18, 0.04);
+      --shadow-glow: 0 0 25px rgba(212, 255, 79, 0.35);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: #dfe2db; color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { padding: 22px; }
-    button, textarea { font: inherit; }
+    [hidden] { display: none !important; }
+    ::selection { background: rgba(212, 255, 79, 0.55); color: var(--ink); }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background-color: #121517;
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(212, 255, 79, 0.08) 0%, transparent 55%),
+        radial-gradient(circle at 100% 100%, rgba(72, 117, 65, 0.07) 0%, transparent 45%),
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+      color: var(--ink);
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body { padding: 24px; }
+    button, textarea, input, select { font: inherit; }
     button { cursor: pointer; }
-    .app-shell { max-width: 1440px; margin: 0 auto; background: var(--paper); border: 1px solid var(--line); border-radius: 28px; box-shadow: var(--shadow); overflow: hidden; min-height: calc(100vh - 44px); }
-    .topbar { height: 78px; padding: 0 32px; display: flex; align-items: center; gap: 26px; border-bottom: 1px solid var(--line); }
-    .brand { display: flex; align-items: center; gap: 13px; min-width: 208px; }
-    .brand-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; background: var(--ink); color: var(--lime); font-weight: 700; font-size: 18px; }
-    .brand-name { font-size: 13px; font-weight: 700; letter-spacing: .02em; }
-    .nav { display: flex; gap: 26px; align-items: center; font-size: 13px; }
-    .nav button { border: 0; background: transparent; color: #94968f; padding: 8px 0; }
-    .nav button.active { color: var(--ink); font-weight: 700; }
-    .top-actions { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-    .pro-pill, .unit-pill, .view-pill, .state-pill { border: 0; border-radius: 999px; padding: 8px 14px; font-size: 11px; letter-spacing: .04em; font-weight: 700; }
-    .pro-pill { background: var(--lime); color: var(--ink); }
-    .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #d7dad0; font-size: 11px; font-weight: 700; }
-    .language-toggle { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 8px 12px; font-size: 11px; font-weight: 700; }
-    .language-toggle:hover { border-color: #99ad86; background: var(--soft-lime); }
-    .workspace { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 28px; padding: 30px 32px 32px; }
-    .prompt-panel { background: var(--panel); border-radius: 22px; padding: 24px; min-height: 840px; display: flex; flex-direction: column; }
-    .eyebrow, .section-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+
+    .app-shell {
+      max-width: 1480px;
+      margin: 0 auto;
+      background: var(--paper);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 26px;
+      box-shadow: 0 32px 90px rgba(0, 0, 0, 0.4), 0 2px 12px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      min-height: calc(100vh - 48px);
+      position: relative;
+    }
+    .topbar {
+      height: 72px;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(247, 248, 245, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 200px; text-decoration: none; }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--ink);
+      color: var(--lime);
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 6px rgba(0, 0, 0, 0.18);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .brand:hover .brand-mark { transform: rotate(-5deg) scale(1.06); }
+    .brand-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+    .nav { display: flex; gap: 8px; align-items: center; }
+    .nav button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 999px;
+      transition: all 0.16s ease;
+    }
+    .nav button:hover { color: var(--ink); background: rgba(0, 0, 0, 0.04); }
+    .nav button.active {
+      color: var(--ink);
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .top-actions { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+    .pro-pill {
+      background: var(--lime);
+      color: #171816;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 800;
+      font-size: 10.5px;
+      letter-spacing: 0.08em;
+      padding: 6px 12px;
+      border-radius: 999px;
+      box-shadow: 0 0 12px rgba(212, 255, 79, 0.3);
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #d8dbd2 0%, #c4c7bc 100%);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+    }
+    .language-toggle {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: all 0.16s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .language-toggle:hover {
+      border-color: var(--lime-border);
+      background: var(--soft-lime);
+      color: var(--ink);
+      transform: translateY(-1px);
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 380px minmax(0, 1fr);
+      gap: 28px;
+      padding: 28px 32px 32px;
+    }
+    .prompt-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px;
+      align-self: start;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-card);
+    }
+    .eyebrow, .section-label {
+      color: var(--muted);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
     h1, h2, p { margin: 0; }
-    .prompt-panel h1 { margin-top: 13px; font-size: 28px; line-height: 1.05; letter-spacing: -.04em; }
-    .helper { margin-top: 11px; color: #73756e; font-size: 13px; }
-    .prompt-editor { margin-top: 24px; background: #fbfbf8; border: 1px solid #d9dad2; border-radius: 16px; padding: 16px; }
-    .prompt-editor textarea { width: 100%; min-height: 106px; border: 0; outline: 0; resize: none; background: transparent; color: var(--ink); font-size: 15px; line-height: 1.35; }
-    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
-    .chip { padding: 7px 11px; border-radius: 999px; border: 0; background: var(--soft-lime); color: #59714a; font-size: 12px; font-weight: 700; }
-    .chip.neutral { background: #ecece7; color: #70736b; }
-    .interpretation { margin-top: 14px; padding: 14px; border: 1px solid #d9dad2; border-radius: 14px; background: #f8f9f4; }
-    .interpretation-head, .revision-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .interpretation-status { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
-    .interpretation-summary { display: block; margin-top: 8px; font-size: 14px; }
-    .interpretation-details { display: block; margin-top: 6px; color: #7a7c74; font-size: 11px; line-height: 1.4; }
-    .revision-head { margin-top: 20px; }
-    .revision-clear { border: 0; background: transparent; color: #7a7c74; font-size: 11px; padding: 3px 0; }
+    .prompt-panel h1 {
+      margin-top: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 27px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+    }
+    .helper {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .prompt-editor {
+      margin-top: 20px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+      transition: all 0.2s ease;
+    }
+    .prompt-editor:focus-within {
+      border-color: #a8cc60;
+      box-shadow: 0 0 0 3px rgba(212, 255, 79, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+    .prompt-editor textarea {
+      width: 100%;
+      min-height: 110px;
+      border: 0;
+      outline: 0;
+      resize: vertical;
+      background: transparent;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 14.5px;
+      line-height: 1.5;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--line);
+    }
+    .chip {
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(153, 191, 88, 0.3);
+      background: var(--soft-lime);
+      color: var(--accent-lime-text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .chip.neutral {
+      background: #f0f1ec;
+      border-color: #e0e2d9;
+      color: #61645d;
+    }
+    .interpretation {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+    .interpretation-head, .revision-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .interpretation-status {
+      color: var(--green);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      background: #eef7e9;
+      padding: 3px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .interpretation-summary {
+      display: block;
+      margin-top: 8px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .interpretation-details {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .revision-head { margin-top: 18px; }
+    .revision-clear { border: 0; background: transparent; color: var(--muted); font-size: 11px; padding: 2px 0; }
     .revision-clear:hover { color: var(--ink); }
-    .revision-list { display: grid; gap: 8px; margin-top: 10px; }
-    .revision-item { border: 1px solid #e0e2d9; background: #fbfbf8; border-radius: 10px; padding: 9px 10px; text-align: left; }
-    .revision-item:hover { border-color: #99ad86; background: var(--soft-lime); }
+    .revision-list { display: grid; gap: 7px; margin-top: 10px; }
+    .revision-item {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 9px 12px;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    .revision-item:hover {
+      border-color: var(--lime-border);
+      background: var(--soft-lime);
+      transform: translateX(2px);
+    }
     .revision-item strong, .revision-item span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .revision-item strong { font-size: 11px; }
-    .revision-item span, .revision-empty { margin-top: 4px; color: #8a8c84; font-size: 10px; }
+    .revision-item strong { font-size: 11px; font-weight: 700; color: var(--ink); }
+    .revision-item span, .revision-empty { margin-top: 3px; color: var(--muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; }
     .revision-empty { line-height: 1.4; }
     .check.warn { background: #fff0c2; color: #856b2c; }
     .check.fail { background: #ffd9d1; color: #9a4434; }
     .plan-item.warn { background: #fffaf0; }
     .plan-item.fail { background: #fff2ef; }
-    .feature-card { margin-top: 16px; padding: 16px; border-radius: 16px; border: 1px solid #e3e5dc; background: #fbfcf8; }
+    .feature-card {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--card);
+    }
     .feature-head { display: flex; align-items: center; justify-content: space-between; }
-    .feature-mode { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
-    .feature-tree { display: grid; gap: 7px; margin-top: 12px; }
-    .feature-node { display: grid; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: start; padding: 8px 9px; border-radius: 10px; background: #fff; cursor: pointer; transition: background .18s ease, box-shadow .18s ease, transform .18s ease; }
-    .feature-node:hover, .feature-node.is-highlighted { background: #f1f8e5; box-shadow: inset 0 0 0 1px #b7d891; transform: translateX(2px); }
-    .feature-node .node-dot { width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: #9fca82; }
+    .feature-mode {
+      color: var(--green);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      background: #eef7e9;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .feature-tree { position: relative; display: grid; gap: 7px; margin-top: 12px; }
+    .feature-tree::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      top: 18px;
+      bottom: 18px;
+      width: 1px;
+      background: linear-gradient(180deg, #b7d891 0%, rgba(183, 216, 145, 0.25) 100%);
+      pointer-events: none;
+    }
+    .feature-node {
+      position: relative;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      column-gap: 8px;
+      align-items: start;
+      padding: 9px 12px;
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid var(--line-subtle);
+      cursor: pointer;
+      transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .feature-node:hover, .feature-node.is-highlighted {
+      background: #f1f8e5;
+      box-shadow: inset 0 0 0 1px #b7d891;
+      transform: translateX(2px);
+    }
+    .feature-node .node-dot {
+      position: relative;
+      z-index: 1;
+      width: 9px;
+      height: 9px;
+      margin-top: 4px;
+      border-radius: 50%;
+      background: #9fca82;
+      box-shadow: 0 0 0 3px #fff, 0 0 0 4px #d6e8c2;
+    }
     .feature-node strong, .feature-node small { display: block; }
-    .feature-node strong { font-size: 11px; }
-    .feature-node small { margin-top: 3px; color: #7a7c74; font-size: 10px; line-height: 1.3; }
-    .generation-process { margin-top: 16px; padding: 14px 16px; border: 1px solid #e3e5dc; border-radius: 16px; background: #fbfcf8; }
+    .feature-node strong { font-family: 'Space Grotesk', sans-serif; font-size: 11.5px; color: var(--ink); }
+    .feature-node small { margin-top: 2px; color: var(--muted); font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
+    .generation-process {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
     .generation-process-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .generation-process-status { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
-    .generation-progress { height: 5px; margin-top: 11px; overflow: hidden; border-radius: 99px; background: #e5e8df; }
-    .generation-progress-bar { width: 0; height: 100%; border-radius: inherit; background: #9fca82; transition: width .25s ease; }
-    .generation-trace { display: grid; gap: 6px; margin-top: 11px; max-height: 210px; overflow: auto; }
-    .generation-trace-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 9px; background: #fff; }
+    .generation-process-status {
+      color: var(--green);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
+    .generation-progress {
+      height: 6px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #e5e8df;
+    }
+    .generation-progress-bar {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #9fca82 0%, var(--lime) 100%);
+      transition: width .25s ease;
+    }
+    .generation-trace { display: grid; gap: 6px; margin-top: 12px; max-height: 220px; overflow: auto; }
+    .generation-trace-row {
+      display: grid;
+      grid-template-columns: 9px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--panel);
+    }
     .generation-trace-dot { width: 7px; height: 7px; border-radius: 50%; background: #b7bdb2; }
-    .generation-trace-row.running .generation-trace-dot { background: #d3a84e; box-shadow: 0 0 0 3px #fff1ca; }
-    .generation-trace-row.succeeded .generation-trace-dot { background: #7fae66; }
-    .generation-trace-row.warning .generation-trace-dot { background: #d3a84e; }
-    .generation-trace-row.failed .generation-trace-dot { background: #cf765e; }
+    .generation-trace-row.running .generation-trace-dot { background: var(--amber); box-shadow: 0 0 0 3px #fff1ca; }
+    .generation-trace-row.succeeded .generation-trace-dot { background: #63a04a; }
+    .generation-trace-row.warning .generation-trace-dot { background: var(--amber); }
+    .generation-trace-row.failed .generation-trace-dot { background: var(--coral); }
     .generation-trace-copy { min-width: 0; }
     .generation-trace-copy strong, .generation-trace-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .generation-trace-copy strong { font-size: 10px; }
-    .generation-trace-copy small { margin-top: 2px; color: #858a80; font-size: 9px; }
-    .generation-trace-meta { color: #858a80; font-size: 9px; white-space: nowrap; }
-    .generation-trace-view { border: 1px solid #d1d9c9; border-radius: 999px; padding: 4px 7px; background: #f7fbf2; color: #587149; font-size: 9px; font-weight: 800; }
+    .generation-trace-copy strong { font-size: 10.5px; font-weight: 700; color: var(--ink); }
+    .generation-trace-copy small { margin-top: 2px; color: var(--muted); font-size: 9.5px; font-family: 'JetBrains Mono', monospace; }
+    .generation-trace-meta { color: var(--muted); font-size: 9.5px; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+    .generation-trace-view {
+      border: 1px solid #d1d9c9;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #f7fbf2;
+      color: #486837;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 700;
+    }
     .generation-trace-view:hover { border-color: #91ad77; background: #eaf4d4; }
-    .generation-process-empty { color: #858a80; font-size: 10px; line-height: 1.4; }
-    .process-controls { margin-top: 16px; padding: 14px 16px; border: 1px solid #e3e5dc; border-radius: 16px; background: #fbfcf8; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .process-copy { min-width: 0; }
-    .process-copy small { display: block; margin-top: 5px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
-    .process-select { min-width: 156px; border: 1px solid #d1d5c9; border-radius: 10px; padding: 9px 10px; background: white; color: var(--ink); font-size: 12px; font-weight: 700; }
-    .process-select:focus { outline: 2px solid #b9d58d; outline-offset: 2px; }
-    .mode-controls { margin-top: 10px; padding: 12px 16px; border: 1px solid #e3e5dc; border-radius: 14px; background: #f5f7f0; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .mode-copy { min-width: 0; }
-    .mode-copy small { display: block; margin-top: 4px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
-    .mode-select { min-width: 156px; border: 1px solid #d1d5c9; border-radius: 10px; padding: 9px 10px; background: white; color: var(--ink); font-size: 12px; font-weight: 700; }
-    .issue-badge { margin-left: 12px; border-radius: 999px; padding: 6px 9px; background: #30342f; color: #a3aaa0; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
-    .issue-badge.warn { background: #5d4730; color: #ffd98b; }
-    .analysis-strip { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e3e5dc; }
+    .generation-process-empty { color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .process-controls, .mode-controls {
+      margin-top: 14px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+      align-items: center;
+      column-gap: 16px;
+      row-gap: 14px;
+    }
+    .mode-controls { grid-template-columns: minmax(0, 1fr) auto; }
+    .unit-copy { padding-left: 16px; border-left: 1px solid var(--line-subtle); }
+    .process-copy, .mode-copy { min-width: 0; }
+    .process-copy small, .mode-copy small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11.5px;
+      line-height: 1.35;
+    }
+    .process-select, .mode-select {
+      min-width: 160px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: var(--panel);
+      color: var(--ink);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .process-select:hover, .mode-select:hover {
+      border-color: #a8cc60;
+      background: #fff;
+    }
+    .process-select:focus, .mode-select:focus { outline: 2px solid #b9d58d; outline-offset: 2px; }
+    .issue-badge {
+      margin-left: 12px;
+      margin-right: auto;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: rgba(40, 48, 56, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #a8b3c4;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .issue-badge.warn {
+      background: rgba(85, 60, 20, 0.8);
+      border-color: rgba(245, 158, 11, 0.4);
+      color: #fed7aa;
+    }
+    .analysis-strip { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
     .analysis-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .analysis-summary { color: #66805b; font-size: 11px; font-weight: 700; }
-    .wall-map { display: grid; gap: 7px; margin-top: 10px; }
-    .wall-segment { display: grid; grid-template-columns: 76px 1fr 58px; gap: 8px; align-items: center; font-size: 10px; }
-    .wall-segment-label { color: #5f625b; }
+    .analysis-summary { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }
+    .wall-map { display: grid; gap: 8px; margin-top: 12px; }
+    .wall-segment { display: grid; grid-template-columns: 80px 1fr 60px; gap: 10px; align-items: center; font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
+    .wall-segment-label { color: var(--ink-subtle); }
     .wall-segment-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e2e5dd; }
-    .wall-segment-bar { height: 100%; border-radius: inherit; background: #9fca82; }
-    .wall-segment.fail .wall-segment-bar { background: #e8997e; }
-    .wall-segment-value { color: #7a7c74; text-align: right; }
-    .issue-list { display: grid; gap: 7px; margin-top: 10px; }
-    .issue-item { padding: 9px 10px; border-left: 3px solid #9fca82; border-radius: 8px; background: #fff; color: #5f625b; font-size: 11px; line-height: 1.35; }
-    .issue-item.warn, .issue-item.warning { border-left-color: #e6b65c; background: #fffaf0; }
-    .issue-item.error { border-left-color: #e8997e; background: #fff2ef; }
-    .issue-empty { color: #7a7c74; font-size: 11px; }
-    .generate { width: 100%; height: 52px; margin-top: 24px; border: 0; border-radius: 14px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; font-size: 14px; font-weight: 700; transition: transform .2s ease, background .2s ease; }
-    .generate:hover { transform: translateY(-2px); background: #30332c; }
-    .generate.loading { background: #506847; }
-    .cancel-generation { width: 100%; margin-top: 8px; border: 1px solid #c9cbc1; border-radius: 10px; padding: 8px 12px; background: transparent; color: #73756e; font-size: 11px; font-weight: 700; }
-    .cancel-generation:hover { border-color: #9b5d45; color: #9b5d45; }
-    .generation-error { min-height: 18px; margin-top: 9px; color: #9b5d45; font-size: 11px; line-height: 1.4; }
-    .shortcut { color: #afb4a8; font-size: 12px; }
-    .starter { margin-top: 34px; }
-    .starter-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-    .starter-buttons button { border: 1px solid #dbdcd5; background: #fafaf7; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700; color: #363832; }
-    .starter-buttons button:hover { border-color: #99ad86; background: var(--soft-lime); }
-    .recent { margin-top: auto; padding-top: 24px; border-top: 1px solid #d9dad2; }
-    .recent-list { display: grid; gap: 19px; margin-top: 17px; }
-    .recent-item { border: 0; background: none; padding: 0; text-align: left; display: grid; gap: 4px; }
-    .recent-item strong { font-size: 14px; }
-    .recent-item span { color: #8a8c84; font-size: 12px; }
-    .content { min-width: 0; display: grid; grid-template-rows: minmax(520px, 1fr) auto; gap: 20px; }
-    .viewport { min-height: 620px; position: relative; overflow: hidden; background: var(--graphite); border-radius: 22px; color: white; padding: 22px 26px; }
-    .viewport::after { content: ""; position: absolute; inset: 78px 80px 106px; background-image: linear-gradient(rgba(188,211,168,.12) 1px, transparent 1px), linear-gradient(120deg, transparent 49.7%, rgba(188,211,168,.12) 50%, transparent 50.3%), linear-gradient(60deg, transparent 49.7%, rgba(188,211,168,.1) 50%, transparent 50.3%); background-size: 100% 38px, 70px 100%, 70px 100%; opacity: .55; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 86%, transparent); }
-    .viewport.grid-hidden::after { opacity: 0; }
-    .viewport-header, .viewport-footer { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
-    .viewport-footer { flex-wrap: wrap; gap: 10px; }
+    .wall-segment-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #9fca82 0%, var(--lime) 100%); }
+    .wall-segment.fail .wall-segment-bar { background: var(--coral); }
+    .wall-segment-value { color: var(--muted); text-align: right; }
+    .issue-list { display: grid; gap: 8px; margin-top: 12px; }
+    .issue-item {
+      padding: 10px 14px;
+      border-left: 3px solid #9fca82;
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink-subtle);
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+    .issue-item.warn, .issue-item.warning { border-left-color: var(--amber); background: #fefce8; color: #854d0e; }
+    .issue-item.error { border-left-color: var(--coral); background: #fef2f2; color: #991b1b; }
+    .issue-empty { color: var(--muted); font-size: 11px; }
+
+    .generate {
+      width: 100%;
+      height: 50px;
+      margin-top: 18px;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #1d201e 0%, #111311 100%);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .generate:hover {
+      background: linear-gradient(135deg, #2b302c 0%, #171a17 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22), 0 0 16px rgba(212, 255, 79, 0.2);
+    }
+    .generate:active {
+      transform: scale(0.985);
+    }
+    .generate.loading {
+      background: linear-gradient(135deg, #374a32 0%, #243321 100%);
+      box-shadow: 0 0 20px rgba(72, 117, 65, 0.35);
+    }
+    .shortcut {
+      color: rgba(255, 255, 255, 0.6);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .cancel-generation {
+      width: 100%;
+      margin-top: 8px;
+      border: 1px solid #dcdfd6;
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #fff;
+      color: #8b4a3e;
+      font-size: 11px;
+      font-weight: 700;
+      transition: all 0.15s ease;
+    }
+    .cancel-generation:hover {
+      border-color: #d97768;
+      background: #fff4f2;
+    }
+    .generation-error {
+      min-height: 16px;
+      margin-top: 8px;
+      color: #b9382b;
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+
+    .starter { margin-top: 26px; }
+    .starter-buttons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .starter-buttons button {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      border-radius: 999px;
+      padding: 7px 13px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-subtle);
+      transition: all 0.16s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    .starter-buttons button:hover {
+      border-color: var(--lime-border);
+      background: var(--soft-lime);
+      color: var(--ink);
+      transform: translateY(-1px);
+    }
+    .recent { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
+    .recent-list { display: grid; gap: 12px; margin-top: 14px; }
+    .recent-item {
+      border: 1px solid transparent;
+      background: transparent;
+      padding: 8px 10px;
+      border-radius: 10px;
+      text-align: left;
+      display: grid;
+      gap: 3px;
+      transition: all 0.16s ease;
+    }
+    .recent-item:hover {
+      background: #fff;
+      border-color: var(--line);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    }
+    .recent-item strong {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .recent-item span {
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .content { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(560px, 1fr) auto; gap: 24px; }
+    .viewport {
+      min-height: 640px;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 25%, #1d2127 0%, #121417 70%, #0a0c0e 100%);
+      border-radius: 22px;
+      border: 1px solid #282d35;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      color: #fff;
+      padding: 22px 26px;
+    }
+    .viewport::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(212, 255, 79, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(212, 255, 79, 0.04) 1px, transparent 1px),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+      pointer-events: none;
+      opacity: 0.65;
+      transition: opacity .25s ease;
+    }
+    .viewport.grid-hidden::before { opacity: 0; }
+    .viewport-header, .viewport-footer { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; }
+    .viewport-footer { flex-wrap: wrap; gap: 12px; }
     .viewport-footer > div:first-child { min-width: 0; flex: 1 1 260px; }
     .view-pill:focus-visible, .export:focus-visible, .generate:focus-visible, .cancel-generation:focus-visible, .model-stage:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
-    .viewport-header { padding-bottom: 18px; border-bottom: 1px solid #3b3f38; }
-    .viewport-label { color: #abb3a5; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-    .view-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-    .view-pill { background: #30342f; color: #c5d4b7; border: 1px solid transparent; }
-    .view-pill.active { color: var(--lime); border-color: #50604d; }
-    .toolbar-divider { width: 1px; height: 18px; background: #4a5148; margin: 0 2px; }
-    .unit-view-select { border: 1px solid #4b5249; border-radius: 999px; padding: 7px 10px; background: #30342f; color: #d8dfd3; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .viewport-header {
+      flex-wrap: wrap;
+      row-gap: 10px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .viewport-label {
+      font-family: 'Space Grotesk', sans-serif;
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    .view-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+    .view-pill {
+      background: rgba(28, 32, 38, 0.85);
+      backdrop-filter: blur(12px);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 6px 13px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .view-pill:hover {
+      background: rgba(42, 48, 58, 0.95);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+    .view-pill.active {
+      background: rgba(212, 255, 79, 0.15);
+      color: var(--lime);
+      border-color: var(--lime);
+      box-shadow: 0 0 14px rgba(212, 255, 79, 0.25);
+    }
+    .toolbar-divider { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.12); margin: 0 3px; }
+    .unit-view-select {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      padding: 6px 11px;
+      background: rgba(28, 32, 38, 0.85);
+      color: #cbd5e1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .unit-view-select:hover { border-color: rgba(255, 255, 255, 0.25); background: rgba(42, 48, 58, 0.95); }
     .unit-view-select:focus-visible, .viewport-gizmo button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
-    .model-stage { position: relative; z-index: 1; display: grid; place-items: center; height: calc(100% - 87px); min-height: 450px; touch-action: none; cursor: grab; user-select: none; }
-    .model-stage.dragging { cursor: grabbing; }
-    .viewport-gizmo { position: absolute; top: 12px; right: 14px; z-index: 5; display: flex; width: 112px; flex-direction: column; align-items: stretch; gap: 3px; padding: 5px; border: 1px solid rgba(157,182,143,.35); border-radius: 11px; background: rgba(37,39,36,.78); backdrop-filter: blur(8px); }
+    .unit-pill {
+      background: rgba(20, 24, 28, 0.7);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .viewport-gizmo {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      z-index: 5;
+      display: flex;
+      width: 112px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 3px;
+      padding: 6px;
+      border: 1px solid rgba(212, 255, 79, 0.25);
+      border-radius: 12px;
+      background: rgba(20, 24, 28, 0.85);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
     .gizmo-axis { display: block; width: 64px; height: 64px; align-self: flex-end; overflow: visible; }
     .gizmo-axis line { fill: none; stroke-width: 2.4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-    .gizmo-axis line[data-gizmo-axis-line="x"] { stroke: #e98978; }
-    .gizmo-axis line[data-gizmo-axis-line="y"] { stroke: #9fca82; }
-    .gizmo-axis line[data-gizmo-axis-line="z"] { stroke: #8eb9e8; }
-    .gizmo-axis text { fill: #d8dfd3; font-size: 8px; font-weight: 800; font-family: Inter, ui-sans-serif, system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
-    .gizmo-axis-origin { fill: #f3f7ef; stroke: #252724; stroke-width: 1; }
+    .gizmo-axis line[data-gizmo-axis-line="x"] { stroke: #ef4444; }
+    .gizmo-axis line[data-gizmo-axis-line="y"] { stroke: #84cc16; }
+    .gizmo-axis line[data-gizmo-axis-line="z"] { stroke: #38bdf8; }
+    .gizmo-axis text { fill: #e2e8f0; font-size: 8px; font-weight: 800; font-family: 'Space Grotesk', sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    .gizmo-axis-origin { fill: #f8fafc; stroke: #1e293b; stroke-width: 1; }
     .gizmo-buttons { display: flex; justify-content: flex-end; gap: 2px; }
-    .viewport-gizmo button { border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; color: #aebba9; font-size: 8px; font-weight: 800; letter-spacing: .03em; }
-    .viewport-gizmo button:hover, .viewport-gizmo button.active { background: #4a5b47; color: var(--lime); }
-    .viewport-selection { position: absolute; left: 18px; top: 16px; z-index: 5; max-width: 210px; border: 1px solid rgba(221,247,155,.45); border-radius: 999px; padding: 7px 10px; background: rgba(37,39,36,.84); color: var(--lime); font-size: 10px; font-weight: 800; pointer-events: none; }
-    .three-viewport { position: absolute; inset: 0; display: none; z-index: 2; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 50% 35%, #3a4039, #252724 70%); }
+    .viewport-gizmo button { border: 0; border-radius: 6px; padding: 4px 6px; background: transparent; color: #94a3b8; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 700; letter-spacing: .03em; cursor: pointer; transition: all 0.14s ease; }
+    .viewport-gizmo button:hover, .viewport-gizmo button.active { background: rgba(212, 255, 79, 0.2); color: var(--lime); }
+    .viewport-selection {
+      position: absolute;
+      left: 18px;
+      top: 16px;
+      z-index: 5;
+      max-width: 210px;
+      border: 1px solid rgba(212, 255, 79, 0.35);
+      border-radius: 999px;
+      padding: 6px 12px;
+      background: rgba(20, 24, 28, 0.85);
+      color: var(--lime);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .model-stage {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      height: calc(100% - 90px);
+      min-height: 470px;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+    }
+    .model-stage.dragging { cursor: grabbing; }
+    .three-viewport {
+      position: absolute;
+      inset: 0;
+      display: none;
+      z-index: 2;
+      border-radius: 16px;
+      overflow: hidden;
+    }
     .three-viewport.active { display: block; }
-    .three-viewport canvas { width: 100%; height: 100%; display: block; }
-    .model-wrap { width: min(520px, 68%); transform: translate(0, -7px) scale(1) rotateX(0deg) rotateY(0deg); transform-origin: center; will-change: transform; transition: opacity .25s ease; }
-    .interaction-hint { position: absolute; left: 18px; bottom: 15px; color: #82907d; font-size: 10px; letter-spacing: .02em; pointer-events: none; }
-    .model-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)); }
+    .three-viewport canvas { width: 100%; height: 100%; display: block; outline: 0; }
+    .model-wrap {
+      width: min(540px, 70%);
+      transform: translate(0, -7px) scale(1) rotateX(0deg) rotateY(0deg);
+      transform-origin: center;
+      will-change: transform;
+      transition: opacity .25s ease;
+    }
+    .interaction-hint {
+      position: absolute;
+      left: 20px;
+      bottom: 20px;
+      color: #64748b;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.03em;
+      pointer-events: none;
+      z-index: 4;
+      background: rgba(15, 18, 22, 0.6);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .model-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      filter: drop-shadow(0 28px 20px rgba(0, 0, 0, 0.45));
+    }
     .model-svg .solid { transition: fill .3s ease; }
     .model-svg .accent { stroke: var(--lime); }
-    .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 25px 12px rgba(0,0,0,.35)) drop-shadow(0 0 16px rgba(221,247,155,.62)); }
-    .viewport-footer { position: absolute; bottom: 22px; left: 26px; right: 26px; }
-    .state-pill { background: var(--lime); color: #243122; }
-    .viewport-meta { color: #a3aaa0; font-size: 12px; }
-    .export { border: 1px solid #4b5249; background: #30342f; color: #d8dfd3; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700; }
-    .export:hover { border-color: var(--lime); color: var(--lime); }
-    @media (max-width: 760px) {
-      .viewport-footer { left: 16px; right: 16px; bottom: 14px; align-items: flex-end; }
-      .viewport-footer > div:first-child { flex-basis: 100%; }
-      .export { padding: 8px 10px; }
-      .model-stage { min-height: 390px; }
+    .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 28px 20px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 18px rgba(212, 255, 79, 0.6)); }
+    .viewport-footer {
+      position: absolute;
+      bottom: 20px;
+      left: 24px;
+      right: 24px;
+      z-index: 5;
     }
-    .params { border: 1px solid var(--line); border-radius: 22px; background: #fff; padding: 22px 24px 24px; }
-    .params-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .state-pill {
+      background: var(--lime);
+      color: #171816;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      padding: 6px 13px;
+      border-radius: 999px;
+      box-shadow: 0 0 14px rgba(212, 255, 79, 0.35);
+    }
+    .viewport-meta {
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+    }
+    .export {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(26, 30, 36, 0.85);
+      backdrop-filter: blur(12px);
+      color: #e2e8f0;
+      border-radius: 999px;
+      padding: 7px 15px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .export:hover {
+      border-color: var(--lime);
+      color: var(--lime);
+      background: rgba(34, 40, 48, 0.95);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 0 12px rgba(212, 255, 79, 0.25);
+    }
+
+    .params {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+    }
+    .params-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
     .params-tools { display: flex; align-items: center; gap: 10px; }
-    .edit-parameters, .parameter-actions button { border: 1px solid #d5d8ce; border-radius: 999px; background: #fff; color: #66705f; padding: 7px 11px; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
-    .edit-parameters:hover, .parameter-actions button:hover { border-color: #96ae7b; color: #4d6b42; }
-    .parameter-editor { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid #dfe3d8; border-radius: 14px; background: #f8f9f4; }
-    .parameter-editor label { color: #767c70; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
-    .parameter-editor input { display: block; width: 100%; margin-top: 6px; border: 1px solid #d5d8ce; border-radius: 8px; padding: 8px; background: #fff; color: var(--ink); }
+    .edit-parameters, .parameter-actions button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fbfbf9;
+      color: var(--ink-subtle);
+      padding: 6px 13px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .edit-parameters:hover, .parameter-actions button:hover {
+      border-color: var(--lime-border);
+      color: var(--ink);
+      background: var(--soft-lime);
+    }
+    .parameter-editor {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+    .parameter-editor label {
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .parameter-editor input {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--ink);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      box-sizing: border-box;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .parameter-editor input:focus {
+      outline: 0;
+      border-color: #a8cc60;
+      box-shadow: 0 0 0 3px rgba(212, 255, 79, 0.28);
+    }
+    #applyParameters { background: var(--ink); border-color: var(--ink); color: #fff; }
+    #applyParameters:hover { background: #2b302c; color: var(--lime); border-color: #2b302c; }
     .parameter-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
-    @media (max-width: 760px) { .parameter-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .solved { color: var(--green); font-size: 12px; font-weight: 700; }
-    .param-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
-    .param-card { min-height: 120px; padding: 18px; border-radius: 16px; background: var(--card); }
+    .solved {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--green);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+    .solved::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #63a04a;
+      box-shadow: 0 0 0 3px rgba(99, 160, 74, 0.16);
+    }
+    .solved.warn { color: #9a6a12; }
+    .solved.warn::before { background: var(--amber); box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18); }
+    .param-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .param-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 110px;
+      padding: 18px 18px 18px 20px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fafbf8 0%, var(--card) 100%);
+      border: 1px solid var(--line-subtle);
+      transition: all 0.18s ease;
+    }
+    .param-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 18px;
+      bottom: 18px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: linear-gradient(180deg, var(--lime) 0%, #9fca82 100%);
+    }
+    .param-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(20, 30, 15, 0.06);
+      border-color: #d3dcc4;
+    }
     .material-card { display: flex; flex-direction: column; align-items: flex-start; }
-    .material-select { width: 100%; margin-top: 12px; border: 1px solid #d5d8ce; border-radius: 9px; padding: 8px 10px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 800; }
+    .material-select {
+      width: 100%;
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 10px;
+      background: #fff;
+      color: var(--ink);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color .15s ease;
+    }
+    .material-select:hover { border-color: #a8cc60; }
     .material-select:focus-visible { outline: 2px solid #b9d58d; outline-offset: 2px; }
-    .param-card .label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; }
-    .param-card strong { display: block; margin-top: 13px; font-size: 16px; }
-    .param-card small { display: block; margin-top: 10px; color: #7a7c74; font-size: 12px; }
-    .plan-card { margin-top: 18px; padding: 20px; border-radius: 18px; background: #f5f6f1; border: 1px solid #e3e5dc; }
+    .param-card .label {
+      color: var(--muted);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .param-card strong {
+      display: block;
+      margin-top: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+    .param-card small {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .plan-card {
+      margin-top: 20px;
+      padding: 22px;
+      border-radius: 18px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-card);
+    }
     .plan-head { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
-    .plan-head h2 { margin-top: 8px; font-size: 20px; letter-spacing: -.03em; }
-    .plan-subtitle { margin-top: 6px; color: #7a7c74; font-size: 12px; line-height: 1.45; max-width: 560px; }
-    .readiness { flex: 0 0 auto; border-radius: 999px; padding: 8px 11px; background: var(--soft-lime); color: #59714a; font-size: 11px; font-weight: 700; }
-    .plan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
-    .plan-item { display: flex; gap: 9px; align-items: flex-start; padding: 12px; border-radius: 12px; background: #fff; }
-    .check { width: 20px; height: 20px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: var(--soft-lime); color: #59714a; font-size: 12px; font-weight: 800; }
-    .plan-item strong { display: block; font-size: 12px; }
-    .plan-item small { display: block; margin-top: 5px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
-    @media (max-width: 1050px) {
+    .plan-head h2 {
+      margin-top: 8px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    .plan-subtitle { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; max-width: 580px; }
+    .readiness {
+      border-radius: 999px;
+      padding: 6px 14px;
+      background: var(--soft-lime);
+      color: var(--accent-lime-text);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+    }
+    .plan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
+    .plan-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 13px 14px;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line-subtle);
+      transition: border-color .16s ease, background .16s ease;
+    }
+    .plan-item:hover { border-color: var(--line); background: #f4f5f0; }
+    .check {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #e6f3d9;
+      color: var(--green);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: inset 0 0 0 1px rgba(72, 117, 65, 0.18);
+    }
+    .plan-item strong { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700; color: var(--ink); }
+    .plan-item small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .app-shell { animation: shellFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+      .prompt-panel { animation: panelRise 0.55s 0.05s cubic-bezier(0.16, 1, 0.3, 1) both; }
+      .viewport { animation: panelRise 0.55s 0.12s cubic-bezier(0.16, 1, 0.3, 1) both; }
+      .params { animation: panelRise 0.55s 0.18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+      
+      @keyframes shellFade {
+        from { opacity: 0; transform: scale(0.995); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes panelRise {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    }
+
+    @media (max-width: 1080px) {
       body { padding: 0; }
       .app-shell { border-radius: 0; min-height: 100vh; }
-      .workspace { grid-template-columns: 300px minmax(0,1fr); padding: 22px; gap: 18px; }
+      .workspace { grid-template-columns: 320px minmax(0,1fr); padding: 22px; gap: 20px; }
       .prompt-panel { padding: 20px; }
       .topbar { padding: 0 22px; }
-      .brand { min-width: 180px; }
+      .brand { min-width: 170px; }
       .model-wrap { width: min(500px, 82%); }
+      .parameter-editor { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .process-controls { grid-template-columns: minmax(0, 1fr) auto; }
+      .unit-copy { padding-left: 0; border-left: 0; padding-top: 14px; border-top: 1px solid var(--line-subtle); }
     }
-    @media (max-width: 760px) {
-      .topbar { height: auto; min-height: 76px; flex-wrap: wrap; padding: 17px 20px; gap: 14px; }
+    @media (max-width: 768px) {
+      .topbar { height: auto; min-height: 72px; flex-wrap: wrap; padding: 14px 18px; gap: 12px; }
       .brand { min-width: 0; }
-      .nav { order: 3; width: 100%; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 12px; }
+      .nav { order: 3; width: 100%; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px; }
       .top-actions { margin-left: auto; }
-      .workspace { grid-template-columns: 1fr; padding: 20px; }
+      .workspace { grid-template-columns: 1fr; padding: 16px; gap: 20px; }
       .prompt-panel { min-height: auto; }
-      .recent { margin-top: 28px; }
+      .recent { margin-top: 24px; }
       .content { grid-template-rows: auto auto; }
-      .viewport { min-height: 520px; }
+      .viewport { min-height: 500px; padding: 16px; }
+      .viewport-footer { left: 16px; right: 16px; bottom: 14px; }
       .model-stage { min-height: 360px; }
       .param-grid { grid-template-columns: 1fr; }
       .plan-grid { grid-template-columns: repeat(2, 1fr); }
+      .parameter-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    @media (max-width: 420px) {
+    @media (max-width: 480px) {
       .plan-grid { grid-template-columns: 1fr; }
-      .plan-head { flex-direction: column; }
+      .plan-head { flex-direction: column; gap: 10px; }
+      .parameter-editor { grid-template-columns: 1fr; }
+      .process-controls, .mode-controls { grid-template-columns: 1fr; }
+      .process-select, .mode-select { width: 100%; }
+      .view-controls { gap: 4px; }
+      .view-pill { padding: 5px 9px; font-size: 10px; }
     }
   </style>
 </head>
@@ -264,23 +1169,23 @@
     </header>
     <section class="workspace">
       <aside class="prompt-panel">
-        <div class="eyebrow">TEXT-TO-CAD</div>
+        <div class="eyebrow">TEXT-TO-CAD ENGINE</div>
         <h1>Describe your part.</h1>
-        <p class="helper">Start with shape, size, and intent.</p>
+        <p class="helper">Specify parametric geometry, target dimensions, and manufacturing intent.</p>
         <div class="prompt-editor">
           <textarea id="prompt" aria-label="Describe your part">A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.</textarea>
-          <div class="chip-row"><span class="chip">rounded edges</span><span class="chip neutral">120 × 80 mm</span></div>
+          <div class="chip-row"><span class="chip">soft chamfer edges</span><span class="chip neutral">120 × 80 mm</span></div>
         </div>
         <div class="interpretation" id="interpretation" aria-live="polite">
-          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">INTERPRETED SPEC</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
+          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">INTERPRETED SPECIFICATIONS</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
           <strong class="interpretation-summary" id="interpretationSummary">Desk organizer · 120 × 80 × 42 mm</strong>
-          <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · defaults will be shown here</small>
+          <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · ENGINE DEFAULTS applied where unspecified</small>
         </div>
-        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate model</span><span class="shortcut">⌘ ↵</span></button>
+        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut" id="generateShortcut">Ctrl ↵</span></button>
         <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
-        <div class="generation-error id="generationError" role="status" aria-live="polite"></div>
+        <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
         <div class="starter">
-          <div class="section-label">OR TRY A STARTER</div>
+          <div class="section-label">PARAMETRIC PRESETS</div>
           <div class="starter-buttons">
             <button type="button" data-prompt="A shallow storage tray with a 160 mm footprint and 12 mm rounded corners.">Storage tray</button>
             <button type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.">Cable clip</button>
@@ -289,20 +1194,20 @@
           </div>
         </div>
         <div class="recent">
-          <div class="section-label">RECENT PROMPTS</div>
+          <div class="section-label">RECENT SESSIONS</div>
           <div class="recent-list">
             <button class="recent-item" type="button" data-prompt="A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge."><strong>Desk organizer</strong><span>3 bodies · edited 2m ago</span></button>
             <button class="recent-item" type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening."><strong>Cable management clip</strong><span>1 body · edited yesterday</span></button>
             <button class="recent-item" type="button" data-prompt="A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall."><strong>Minimal pen cup</strong><span>2 bodies · edited Sep 28</span></button>
           </div>
-          <div class="revision-head"><span class="section-label" id="revisionLabel">LOCAL REVISIONS</span><button class="revision-clear" id="clearRevisions" type="button">Clear</button></div>
+          <div class="revision-head"><span class="section-label" id="revisionLabel">VERSION HISTORY</span><button class="revision-clear" id="clearRevisions" type="button">Clear</button></div>
           <div class="revision-list" id="revisionList"></div>
         </div>
       </aside>
       <div class="content">
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
-            <span class="viewport-label">LIVE PREVIEW</span><span class="issue-badge" id="issueBadge">READY</span>
+            <span class="viewport-label">3D CAD VIEWPORT</span><span class="issue-badge" id="issueBadge">READY</span>
             <div class="view-controls" aria-label="CAD view tools">
               <button class="view-pill active" type="button" data-view="iso" aria-pressed="true">ISOMETRIC</button>
               <button class="view-pill" type="button" data-view="top" aria-pressed="false">TOP</button>
@@ -337,7 +1242,7 @@
               </div>
             </div>
             <div class="viewport-selection" id="viewportSelection" hidden></div>
-            <div class="interaction-hint" id="interactionHint">Drag to orbit · wheel to zoom · double-click to reset</div>
+            <div class="interaction-hint" id="interactionHint">Left-click drag to orbit · Scroll to zoom · Right-click drag to pan · Double-click to reset</div>
             <div class="model-wrap" id="modelWrap">
               <svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Isometric parametric desk organizer">
                 <g stroke="#243323" stroke-width="3" stroke-linejoin="round">
@@ -358,12 +1263,12 @@
             </div>
           </div>
           <div class="viewport-footer">
-            <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC BODY</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
+            <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC SOLID</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
             <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button>
           </div>
         </section>
         <section class="params">
-          <div class="params-head"><span class="section-label">MODEL PARAMETERS</span><div class="params-tools"><span class="solved" id="solved">All constraints solved</span><button class="edit-parameters" id="editParameters" type="button">EDIT</button></div></div>
+          <div class="params-head"><span class="section-label">PARAMETRIC CONSTRAINTS</span><div class="params-tools"><span class="solved" id="solved">All constraints fully resolved</span><button class="edit-parameters" id="editParameters" type="button">EDIT</button></div></div>
           <div class="parameter-editor" id="parameterEditor" hidden>
             <label><span id="paramWidthLabel">WIDTH</span><input id="paramWidth" type="number" min="10" max="1000" step="0.1"></label>
             <label><span id="paramDepthLabel">DEPTH</span><input id="paramDepth" type="number" min="10" max="1000" step="0.1"></label>
@@ -375,7 +1280,7 @@
           </div>
           <div class="param-grid">
             <article class="param-card"><div class="label">BODY</div><strong id="bodyValue">Desk organizer</strong><small id="bodyMeta">3 watertight solids</small></article>
-            <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Bounding box</small></article>
+            <article class="param-card"><div class="label">SIZE</div><strong id="sizeValue">120 × 80 × 42 mm</strong><small>Outer Bounding Box</small></article>
             <article class="param-card material-card"><div class="label" id="materialCardLabel">MATERIAL PRESET</div><select class="material-select" id="materialSelect" aria-label="Material preset">
               <option value="pla">Matte PLA · warm white</option>
               <option value="petg">PETG · translucent green</option>
@@ -385,22 +1290,22 @@
             </select><small id="materialMeta">Print-ready surface</small></article>
           </div>
           <div class="feature-card">
-            <div class="feature-head"><span class="section-label" id="featureLabel">FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC</span></div>
+            <div class="feature-head"><span class="section-label" id="featureLabel">PARAMETRIC FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC B-REP</span></div>
             <div class="feature-tree" id="featureTree"></div>
           <div class="generation-process" aria-live="polite">
-            <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD PROCESS</span><span class="generation-process-status" id="generationStatus">READY</span></div>
+            <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD SEQUENCE TRACE</span><span class="generation-process-status" id="generationStatus">READY</span></div>
             <div class="generation-progress" aria-hidden="true"><div class="generation-progress-bar" id="generationProgressBar"></div></div>
-            <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Start generation to inspect the build sequence.</div></div>
+            <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Submit a prompt to inspect the OCCT feature pipeline execution.</div></div>
           </div>
           <div class="process-controls">
-            <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
+            <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF (3D Print) · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
             <select class="process-select" id="processSelect" aria-label="Manufacturing process">
               <option value="fdm">FDM / FFF</option>
               <option value="sla">SLA / Resin</option>
               <option value="cnc">CNC Milling</option>
               <option value="injection">Injection Molding</option>
             </select>
-            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">INPUT UNITS</span><small id="unitHint">Unitless values use this unit</small></div>
+            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">SYSTEM UNITS</span><small id="unitHint">Unspecified numeric values automatically assume this unit</small></div>
             <select class="process-select" id="unitSelect" aria-label="Input units">
               <option value="mm">mm</option>
               <option value="cm">cm</option>
@@ -409,7 +1314,7 @@
             </select>
           </div>
           <div class="mode-controls">
-            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION MODE</span><small id="modeHint">Rule parser · deterministic and private</small></div>
+            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION ENGINE</span><small id="modeHint">Parametric rule parser · Deterministic, ultra-fast & private</small></div>
             <select class="mode-select" id="generationMode" aria-label="Generation mode">
               <option value="standard">Standard</option>
               <option value="advanced">Advanced · LLM</option>
@@ -418,17 +1323,17 @@
           </div>
           <div class="plan-card">
             <div class="plan-head">
-              <div><div class="section-label" id="planEyebrow">MANUFACTURING PLAN</div><h2 id="planTitle">Ready for fabrication</h2><p class="plan-subtitle" id="planSubtitle">A quality gate for strong, printable, and export-ready geometry.</p></div>
+              <div><div class="section-label" id="planEyebrow">DFM MANUFACTURING AUDIT</div><h2 id="planTitle">Design for Manufacturability</h2><p class="plan-subtitle" id="planSubtitle">Rule-based DFM gate. Validates wall limits, tooling draft, and export geometry.</p></div>
               <span class="readiness" id="readiness">92% READY</span>
             </div>
             <div class="plan-grid">
-              <div class="plan-item"><span class="check" id="checkWall">✓</span><div><strong id="planWall">Wall thickness</strong><small id="planWallMeta">≥ 2.4 mm · passes</small></div></div>
-              <div class="plan-item"><span class="check" id="checkRadius">✓</span><div><strong id="planRadius">Edge treatment</strong><small id="planRadiusMeta">4 mm chamfer · stable</small></div></div>
-              <div class="plan-item"><span class="check" id="checkDraft">✓</span><div><strong id="planDraft">Print orientation</strong><small id="planDraftMeta">Low support volume</small></div></div>
-              <div class="plan-item"><span class="check" id="checkExport">✓</span><div><strong id="planExport">Export target</strong><small id="planExportMeta">STEP · IGES · GLB</small></div></div>
+              <div class="plan-item"><span class="check" id="checkWall">✓</span><div><strong id="planWall">Wall Thickness</strong><small id="planWallMeta">≥ 2.4 mm · Compliant</small></div></div>
+              <div class="plan-item"><span class="check" id="checkRadius">✓</span><div><strong id="planRadius">Edge Treatment</strong><small id="planRadiusMeta">4 mm chamfer · Stable</small></div></div>
+              <div class="plan-item"><span class="check" id="checkDraft">✓</span><div><strong id="planDraft">Tooling / Draft Angle</strong><small id="planDraftMeta">Minimal support required</small></div></div>
+              <div class="plan-item"><span class="check" id="checkExport">✓</span><div><strong id="planExport">Export Formats</strong><small id="planExportMeta">STEP · STL · 3MF · GLB</small></div></div>
             </div>
             <div class="analysis-strip">
-              <div class="analysis-head"><span class="section-label" id="analysisLabel">WALL THICKNESS MAP</span><span class="analysis-summary" id="analysisSummary">No issues</span></div>
+              <div class="analysis-head"><span class="section-label" id="analysisLabel">NOMINAL WALL THICKNESS DFM</span><span class="analysis-summary" id="analysisSummary">No issues</span></div>
               <div class="wall-map" id="wallMap"></div>
               <div class="issue-list" id="issueList"></div>
             </div>
@@ -444,6 +1349,8 @@
     const modelState = document.getElementById('modelState');
     const modelMeta = document.getElementById('modelMeta');
     const solved = document.getElementById('solved');
+    const generateShortcut = document.getElementById('generateShortcut');
+    if (generateShortcut && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) generateShortcut.textContent = '⌘ ↵';
     const bodyValue = document.getElementById('bodyValue');
     const sizeValue = document.getElementById('sizeValue');
     const modelWrap = document.getElementById('modelWrap');
@@ -564,8 +1471,260 @@
     let highlightedFeature = null;
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', grid: 'GRID', viewerUnits: 'VIEW UNITS', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', generationProcessLabel: 'BUILD PROCESS', readyStatus: 'READY', runningStatus: 'BUILDING', completedStatus: 'COMPLETE', failedStatus: 'REVIEW', stepPreview: 'VIEW STEP', noProcess: 'Start generation to inspect the build sequence.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', grid: '网格', viewerUnits: '视图单位', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', generationProcessLabel: '建模过程', readyStatus: '待开始', runningStatus: '建模中', completedStatus: '已完成', failedStatus: '需复核', stepPreview: '查看步骤', noProcess: '开始生成后查看建模步骤。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: {
+        toggle: '中文',
+        workspace: 'Workspace',
+        templates: 'Templates',
+        history: 'History',
+        eyebrow: 'TEXT-TO-CAD ENGINE',
+        title: 'Describe your part.',
+        helper: 'Specify parametric geometry, target dimensions, and manufacturing intent.',
+        generate: 'Generate Model',
+        regenerate: 'Regenerate Model',
+        generating: 'Generating geometry…',
+        starter: 'PARAMETRIC PRESETS',
+        recent: 'RECENT SESSIONS',
+        live: '3D CAD VIEWPORT',
+        iso: 'ISOMETRIC',
+        top: 'TOP',
+        front: 'FRONT',
+        export: 'Export OBJ',
+        exportStep: 'Export STEP',
+        export3mf: 'Export 3MF',
+        exportGlb: 'Export GLB',
+        fit: 'FIT',
+        grid: 'GRID',
+        viewerUnits: 'Viewport Units',
+        interactionHint: 'Left-click drag to orbit · Scroll to zoom · Right-click drag to pan · Double-click to reset',
+        localThreeHint: 'Interactive parametric preview · Connect backend for validated B-Rep geometry',
+        localConceptHint: 'Concept wireframe preview · Connect backend for full solid model',
+        backendFallbackHint: 'SVG wireframe fallback · GLB preview currently unavailable',
+        analysisLabel: 'NOMINAL WALL THICKNESS DFM',
+        modeLabel: 'GENERATION ENGINE',
+        standardMode: 'Standard (Deterministic)',
+        advancedMode: 'Advanced (LLM + OCCT)',
+        standardModeHint: 'Parametric rule parser · Deterministic, ultra-fast & private',
+        advancedModeHint: 'LLM semantic intent extraction · Solved & validated by OCCT',
+        advancedRequiresBackend: 'Advanced LLM mode requires an active backend connection.',
+        advancedUnavailable: 'Backend connected, but LLM API credentials are not configured.',
+        unitLabel: 'SYSTEM UNITS',
+        unitHint: 'Unspecified numeric values automatically assume this unit',
+        mmOption: 'Millimeters (mm)',
+        cmOption: 'Centimeters (cm)',
+        mOption: 'Meters (m)',
+        inOption: 'Inches (in)',
+        backendAuthRequired: 'Backend authentication required: configure server API token.',
+        generationProcessLabel: 'BUILD SEQUENCE TRACE',
+        readyStatus: 'READY',
+        runningStatus: 'BUILDING',
+        completedStatus: 'SOLVED',
+        failedStatus: 'NEEDS REVIEW',
+        stepPreview: 'INSPECT STEP',
+        noProcess: 'Submit prompt to inspect OCCT feature pipeline execution.',
+        llmAssumptions: 'LLM Assumptions',
+        editParameters: 'EDIT',
+        applyParameters: 'APPLY',
+        resetParameters: 'RESET',
+        cancel: 'Cancel',
+        timeoutError: 'Generation request timed out. Please check backend load and retry.',
+        cancelled: 'Generation aborted by user.',
+        invalidParams: 'Parameter values out of bounds. Please review bounding box and wall thickness.',
+        building: 'Building solid volume…',
+        exporting: 'Exporting CAD artifacts…',
+        unknown: 'REVIEW',
+        estimateSummary: 'Nominal dimension check only',
+        verified: 'VERIFIED',
+        noIssues: 'All DFM constraints satisfied',
+        issueCount: 'DFM warnings detected',
+        interpretation: 'INTERPRETED SPECIFICATIONS',
+        interpretationReady: 'Ready for Generation',
+        assumptions: 'ENGINE DEFAULTS',
+        revision: 'VERSION HISTORY',
+        clear: 'Clear All',
+        emptyRevision: 'No saved revisions in this session',
+        revisionBackend: 'OCCT B-Rep Solid',
+        revisionLocal: 'Client Preview',
+        checksPassed: 'checks passed',
+        checksReview: 'requires inspection',
+        featureTree: 'PARAMETRIC FEATURE TREE',
+        featureMode: 'PARAMETRIC B-REP',
+        processLabel: 'MANUFACTURING PROCESS',
+        processHint: 'Process profile',
+        fdmOption: 'FDM / FFF (3D Print)',
+        slaOption: 'SLA / DLP (Resin)',
+        cncOption: 'CNC Milling (Subtractive)',
+        injectionOption: 'Injection Molding (Tooling)',
+        baseFeature: 'Base Solid Volume',
+        shellFeature: 'Shell / Internal Cavity',
+        dividerFeature: 'Internal Partitions',
+        edgeFeature: 'Chamfer & Fillet Treatment',
+        drainageFeature: 'Drainage Relief Holes',
+        cableFeature: 'Underside Cable Pass-through',
+        editHint: 'Submit follow-up instructions to modify this model',
+        diffInitial: 'Initial Baseline',
+        diffNone: 'No parameter variance',
+        params: 'PARAMETRIC CONSTRAINTS',
+        solved: 'All constraints fully resolved',
+        body: 'SOLID CLASSIFICATION',
+        size: 'BOUNDING BOX',
+        material: 'MATERIAL PRESET',
+        materialValue: 'Matte PLA · Warm White',
+        materialMeta: 'Production-ready surface standard',
+        planEyebrow: 'DFM MANUFACTURING AUDIT',
+        planTitle: 'Design for Manufacturability',
+        planSubtitle: 'Rule-based DFM gate. Validates wall limits, tooling draft, and export geometry.',
+        readiness: 'DFM PASSED',
+        state: 'PARAMETRIC SOLID',
+        backendState: 'OCCT B-REP SOLID',
+        advancedState: 'DEEPSEEK LLM + OCCT B-REP',
+        localState: 'CLIENT PREVIEW',
+        failed: 'Generation Failed',
+        solving: 'SOLVING CONSTRAINTS',
+        parsing: 'PARSING INTENT',
+        defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm',
+        cableMeta: '1 solid · 6 mm cable clip · snap-fit',
+        promptLabel: 'Describe your part or assembly',
+        viewportAria: 'Interactive 3D CAD model preview',
+        rounded: 'soft chamfer edges',
+        dimension: '120 × 80 mm',
+        bodyMeta: 'Watertight solid manifold',
+        bounding: 'Outer Bounding Box',
+        wall: 'Wall Thickness',
+        wallMeta: '≥ 2.4 mm · Compliant',
+        radius: 'Edge Treatment',
+        radiusMeta: '4 mm chamfer · Stable',
+        draft: 'Tooling / Draft Angle',
+        draftMeta: 'Minimal support required',
+        exportTarget: 'Export Formats',
+        exportMeta: 'STEP · STL · 3MF · GLB'
+      },
+      zh: {
+        toggle: 'EN',
+        workspace: '工作台',
+        templates: '设计模板',
+        history: '版本历史',
+        eyebrow: '自然语言 CAD 几何引擎',
+        title: '描述你的零件。',
+        helper: '输入形状特征、尺寸参数和制造用途。',
+        generate: '生成三维模型',
+        regenerate: '重新生成模型',
+        generating: '正在构建几何实体…',
+        starter: '快速设计模板',
+        recent: '最近设计会话',
+        live: '3D 实时视口',
+        iso: '轴测投影 (ISO)',
+        top: '俯视图 (TOP)',
+        front: '主视图 (FRONT)',
+        export: '导出 OBJ',
+        exportStep: '导出工业级 STEP',
+        export3mf: '导出 3MF 打印文件',
+        exportGlb: '导出 GLB 预览',
+        fit: '视角复位',
+        grid: '参考网格',
+        viewerUnits: '视口显示单位',
+        interactionHint: '左键拖拽旋转 · 滚轮缩放 · 右键平移 · 双击视角居中',
+        localThreeHint: '本地交互式参数化预览 · 连接后端生成精确 B-Rep 实体',
+        localConceptHint: '几何概念线框 · 启动后端服务可获得完整 3D 实体',
+        backendFallbackHint: '矢量线框降级显示 · GLB 视口暂未就绪',
+        analysisLabel: '名义壁厚可制造性分析 (DFM)',
+        modeLabel: '几何生成引擎',
+        standardMode: '标准规则解析 (确定性)',
+        advancedMode: '高级智能解析 (大模型 + OCCT)',
+        standardModeHint: '规则解析器 · 确定性、响应极快且本地私有',
+        advancedModeHint: 'DeepSeek 语义解析 · OpenCASCADE 工业内核求解验证',
+        advancedRequiresBackend: '高级模式需要连接几何计算后端服务。',
+        advancedUnavailable: '后端已连接，但尚未配置 LLM API 凭证。',
+        unitLabel: '尺寸基准单位',
+        unitHint: '未标注单位的数值将自动采用该单位计算',
+        mmOption: '毫米 (mm)',
+        cmOption: '厘米 (cm)',
+        mOption: '米 (m)',
+        inOption: '英寸 (in)',
+        backendAuthRequired: '后端服务启用了身份鉴权，请配置访问密钥。',
+        generationProcessLabel: '特征构建追踪',
+        readyStatus: '就绪',
+        runningStatus: '构建中',
+        completedStatus: '已求解',
+        failedStatus: '待复核',
+        stepPreview: '预览步骤',
+        noProcess: '提交提示词后实时查看 OCCT 几何建模流水线。',
+        llmAssumptions: '模型推理假设',
+        editParameters: '精确微调',
+        applyParameters: '应用参数',
+        resetParameters: '重置参数',
+        cancel: '取消生成',
+        timeoutError: '几何求解超时，可稍后重新提交。',
+        cancelled: '已取消当前建模任务。',
+        invalidParams: '输入的尺寸或壁厚超出允许的工艺约束范围。',
+        building: '正在构建几何拓扑…',
+        exporting: '正在输出 CAD 格式文件…',
+        unknown: '待复核',
+        estimateSummary: '名义规则估算',
+        verified: '已通过验证',
+        noIssues: '完全符合当前制造工艺规范',
+        issueCount: '项工艺警告',
+        interpretation: '参数解析结果',
+        interpretationReady: '参数完备 · 可直接生成',
+        assumptions: '引擎缺省推导',
+        revision: '本地版本历史',
+        clear: '清空历史',
+        emptyRevision: '当前会话暂无保存的版本',
+        revisionBackend: 'OCCT B-Rep 精确实体',
+        revisionLocal: '本地参数化预览',
+        checksPassed: '项检查通过',
+        checksReview: '项需要复核',
+        featureTree: '参数化特征树',
+        featureMode: '参数化 B-REP',
+        processLabel: '目标制造工艺',
+        processHint: '工艺配置',
+        fdmOption: 'FDM / FFF 熔融沉积 (3D打印)',
+        slaOption: 'SLA / DLP 光固化成型',
+        cncOption: 'CNC 数控铣削 (减材加工)',
+        injectionOption: '注塑成型 (模具)',
+        baseFeature: '基础外形实体',
+        shellFeature: '抽壳 / 内腔成型',
+        dividerFeature: '内部隔断阵列',
+        edgeFeature: '倒角与圆角过渡',
+        drainageFeature: '底部排水导流孔',
+        cableFeature: '隐藏式理线槽',
+        editHint: '继续输入自然语言指令即可递进修改模型',
+        diffInitial: '初始基准版本',
+        diffNone: '参数无变动',
+        params: '几何约束与参数',
+        solved: '几何约束求解完全收敛',
+        body: '实体拓扑类型',
+        size: '空间外轮廓包围盒',
+        material: '材质与工艺预设',
+        materialValue: '哑光工程 PLA · 暖白',
+        materialMeta: '满足量产打印的标准工件表面',
+        planEyebrow: 'DFM 可制造性评审',
+        planTitle: '可制造性设计分析 (DFM)',
+        planSubtitle: '基于工艺规则的几何审查，确保满足壁厚、拔模斜度及格式导出要求。',
+        readiness: 'DFM 验证通过',
+        state: '参数化实体',
+        backendState: 'OCCT B-REP 实体',
+        advancedState: 'DEEPSEEK + OCCT 实体',
+        localState: '本地几何预览',
+        failed: '几何生成失败',
+        solving: '正在求解几何约束',
+        parsing: '正在解析自然语言语义',
+        defaultMeta: '3 个实体 · 壁厚 12 mm · 倒角 4 mm',
+        cableMeta: '1 个实体 · 6 mm 线缆卡扣 · 弹性装配',
+        promptLabel: '描述你的零件或装配件',
+        viewportAria: '可交互 3D CAD 模型预览视口',
+        rounded: '圆角/倒角边缘',
+        dimension: '120 × 80 mm',
+        bodyMeta: '水密流形实体 (Watertight Manifold)',
+        bounding: '外轮廓空间包围盒',
+        wall: '最小壁厚',
+        wallMeta: '≥ 2.4 mm · 符合工艺要求',
+        radius: '边缘处理',
+        radiusMeta: '4 mm 倒角 · 结构过渡平稳',
+        draft: '成型方向与支撑',
+        draftMeta: '悬垂角度良好 · 支撑量极低',
+        exportTarget: '输出格式支持',
+        exportMeta: 'STEP · STL · 3MF · GLB'
+      }
     };
     function updateMaterialOptions() {
       if (!materialSelect) return;
@@ -590,7 +1749,7 @@
       document.querySelector('.eyebrow').textContent = t.eyebrow;
       document.querySelector('.prompt-panel h1').textContent = t.title;
       document.querySelector('.helper').textContent = t.helper;
-      generateLabel.textContent = generate.classList.contains('loading') ? (currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…') : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
+      generateLabel.textContent = generate.classList.contains('loading') ? t.generating : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
       document.querySelector('.starter .section-label').textContent = t.starter;
       document.querySelector('.recent .section-label').textContent = t.recent;
       const starterLabels = currentLang === 'zh' ? ['收纳托盘', '线缆夹', '花盆', '灯座'] : ['Storage tray', 'Cable clip', 'Plant pot', 'Lamp base'];
@@ -954,6 +2113,19 @@
       const distance = maxDim * 1.8;
       threeState.camera.near = Math.max(maxDim / 1000, 0.01);
       threeState.camera.far = Math.max(maxDim * 20, 1000);
+      threeState.model.traverse((node) => {
+        const materials = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
+        materials.forEach((material) => { material.fog = false; });
+      });
+      if (threeState.grid) {
+        const cell = Math.pow(10, Math.floor(Math.log10(maxDim / 6)));
+        threeState.grid.scale.setScalar(cell / 10);
+        threeState.grid.position.y = -size.y / 2 - maxDim * 0.002;
+      }
+      if (threeState.scene.fog) {
+        threeState.scene.fog.near = distance * 1.6;
+        threeState.scene.fog.far = distance * 4.2;
+      }
       threeState.camera.position.set(distance, distance * .8, distance);
       threeState.controls.target.set(0, 0, 0);
       threeState.controls.update();
@@ -1027,7 +2199,8 @@
         threeState.THREE = THREE;
         threeState.RoundedBoxGeometry = RoundedBoxGeometry;
         threeState.scene = new THREE.Scene();
-        threeState.scene.background = new THREE.Color(0x252724);
+        threeState.scene.background = null;
+        threeState.scene.fog = new THREE.Fog(0x15181c, 400, 1200);
         const helpers = new THREE.Group();
         helpers.name = 'cadHelpers';
         const grid = new THREE.GridHelper(2000, 200, 0x52624e, 0x354035);
@@ -1052,10 +2225,16 @@
         threeState.controls.screenSpacePanning = true;
         threeState.controls.minDistance = .05;
         threeState.controls.maxDistance = 100000;
-        threeState.scene.add(new THREE.HemisphereLight(0xeaf4d4, 0x252724, 1.8));
-        const key = new THREE.DirectionalLight(0xffffff, 2.2);
-        key.position.set(3, 5, 4);
+        threeState.scene.add(new THREE.HemisphereLight(0xe8f0d8, 0x141816, 2.0));
+        const key = new THREE.DirectionalLight(0xffffff, 2.4);
+        key.position.set(4, 7, 5);
         threeState.scene.add(key);
+        const rim = new THREE.DirectionalLight(0xd4ff4f, 0.9);
+        rim.position.set(-5, 4, -4);
+        threeState.scene.add(rim);
+        const fill = new THREE.DirectionalLight(0x7da46d, 0.7);
+        fill.position.set(-3, -2, 4);
+        threeState.scene.add(fill);
         const resize = () => {
           const width = threeViewport.clientWidth || 1;
           const height = threeViewport.clientHeight || 1;
@@ -1077,7 +2256,7 @@
       }
     }
 
-    function makeLocalMaterial(THREE, color, roughness = .55, metalness = .04) {
+    function makeLocalMaterial(THREE, color, roughness = .38, metalness = .08) {
       return new THREE.MeshStandardMaterial({ color, roughness, metalness });
     }
 
@@ -1260,6 +2439,12 @@
         threeState.model = gltf.scene;
         applyPreviewMaterial(threeState.model, fallbackSpec || { material: selectedMaterial });
         addModelEdgeLines(THREE, threeState.model);
+        threeState.model.traverse((node) => {
+          if (node.isMesh && node.material) {
+            node.material.roughness = Math.min(node.material.roughness !== undefined ? node.material.roughness : 0.45, 0.45);
+            node.material.metalness = Math.max(node.material.metalness !== undefined ? node.material.metalness : 0.08, 0.08);
+          }
+        });
         // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
         // imported root so top/front views and orbit controls match the SVG preview.
         threeState.model.rotation.x = -Math.PI / 2;
@@ -1718,6 +2903,7 @@
       Object.entries(checkEls).forEach(([key, element]) => setCheckState(element, checks[key] === true ? true : (checks[key] === 'unknown' ? 'unknown' : 'warn')));
       document.getElementById('readiness').textContent = passed + '/4 ' + (currentLang === 'zh' ? '项已验证' : 'verified');
       solved.textContent = passed === 4 ? (currentLang === 'zh' ? '检查已验证' : 'Checks verified') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
+      solved.classList.toggle('warn', passed !== 4);
       const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
@@ -1779,7 +2965,7 @@
       const values = {};
       for (const [key, field] of Object.entries(parameterFields)) values[key] = Number(field && field.value);
       const valid = Number.isFinite(values.width) && values.width >= 10 && values.width <= 1000 && Number.isFinite(values.depth) && values.depth >= 10 && values.depth <= 1000 && Number.isFinite(values.height) && values.height >= 5 && values.height <= 1000 && Number.isFinite(values.wall) && values.wall >= 1.2 && values.wall <= Math.min(values.width, values.depth) / 3 && Number.isFinite(values.chamfer) && values.chamfer >= 0 && values.chamfer <= Math.min(values.width, values.depth, values.height) / 4 && Number.isFinite(values.bottom) && values.bottom >= 1.2 && values.bottom < values.height;
-      if (!valid) { setGenerationError(currentLang === 'zh' ? '参数范围无效，请检查尺寸和壁厚。' : 'Parameter range is invalid. Check dimensions and wall thickness.'); return; }
+      if (!valid) { setGenerationError(copy[currentLang].invalidParams); return; }
       const next = Object.assign(base, values);
       prompt.value = canonicalPrompt(next);
       parameterEditor.hidden = true;
@@ -1936,7 +3122,7 @@
       llmAssumptions = [];
       hideThreePreview();
       updateExportButtons();
-      generateLabel.textContent = currentLang === 'zh' ? '正在生成几何…' : 'Generating geometry…';
+      generateLabel.textContent = copy[currentLang].generating;
       try {
         const value = prompt.value.trim() || 'A compact desk organizer, 120 mm wide and 80 mm deep.';
         const previousSpec = modelSpec ? Object.assign({}, modelSpec) : null;
@@ -1949,6 +3135,7 @@
           : value.slice(0, 3200) + '\n\nParsed CAD parameters: ' + canonical;
         modelState.textContent = copy[currentLang].solving;
         solved.textContent = copy[currentLang].parsing;
+        solved.classList.remove('warn');
         updateInterpretation(nextSpec, 'draft');
         renderModel(nextSpec, currentView);
         loadLocalThreePreview(nextSpec);
@@ -1982,6 +3169,7 @@
         }
         modelState.textContent = copy[currentLang].building;
         solved.textContent = copy[currentLang].building;
+        solved.classList.remove('warn');
         await waitWithSignal(remote ? 120 : 720, generationController.signal);
         if (sequence !== generationSeq) return;
         const remoteParams = remote && remote.parameters ? remote.parameters : {};

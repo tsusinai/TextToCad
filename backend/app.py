@@ -39,6 +39,11 @@ except ImportError as exc:  # pragma: no cover - optional preview dependency
     trimesh = None
     TRIMESH_ERROR = str(exc)
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except Exception:
+    pass
 
 APP_DIR = Path(__file__).resolve().parent
 ARTIFACT_ROOT = Path(os.getenv("ARTIFACT_ROOT", APP_DIR / "artifacts"))
