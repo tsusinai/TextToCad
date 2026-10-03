@@ -1763,6 +1763,8 @@ def health() -> dict[str, Any]:
             "max_mutations": MAX_MUTATIONS_PER_WINDOW,
         },
         "process_profiles": list(PROCESS_PROFILES),
+        "ir_schema_version": "0.2",
+        "ir_compile_available": cq is not None,
     }
 
 
