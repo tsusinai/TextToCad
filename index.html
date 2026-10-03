@@ -80,6 +80,26 @@
     .feature-node strong, .feature-node small { display: block; }
     .feature-node strong { font-size: 11px; }
     .feature-node small { margin-top: 3px; color: #7a7c74; font-size: 10px; line-height: 1.3; }
+    .generation-process { margin-top: 16px; padding: 14px 16px; border: 1px solid #e3e5dc; border-radius: 16px; background: #fbfcf8; }
+    .generation-process-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .generation-process-status { color: #66805b; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+    .generation-progress { height: 5px; margin-top: 11px; overflow: hidden; border-radius: 99px; background: #e5e8df; }
+    .generation-progress-bar { width: 0; height: 100%; border-radius: inherit; background: #9fca82; transition: width .25s ease; }
+    .generation-trace { display: grid; gap: 6px; margin-top: 11px; max-height: 210px; overflow: auto; }
+    .generation-trace-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 9px; background: #fff; }
+    .generation-trace-dot { width: 7px; height: 7px; border-radius: 50%; background: #b7bdb2; }
+    .generation-trace-row.running .generation-trace-dot { background: #d3a84e; box-shadow: 0 0 0 3px #fff1ca; }
+    .generation-trace-row.succeeded .generation-trace-dot { background: #7fae66; }
+    .generation-trace-row.warning .generation-trace-dot { background: #d3a84e; }
+    .generation-trace-row.failed .generation-trace-dot { background: #cf765e; }
+    .generation-trace-copy { min-width: 0; }
+    .generation-trace-copy strong, .generation-trace-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .generation-trace-copy strong { font-size: 10px; }
+    .generation-trace-copy small { margin-top: 2px; color: #858a80; font-size: 9px; }
+    .generation-trace-meta { color: #858a80; font-size: 9px; white-space: nowrap; }
+    .generation-trace-view { border: 1px solid #d1d9c9; border-radius: 999px; padding: 4px 7px; background: #f7fbf2; color: #587149; font-size: 9px; font-weight: 800; }
+    .generation-trace-view:hover { border-color: #91ad77; background: #eaf4d4; }
+    .generation-process-empty { color: #858a80; font-size: 10px; line-height: 1.4; }
     .process-controls { margin-top: 16px; padding: 14px 16px; border: 1px solid #e3e5dc; border-radius: 16px; background: #fbfcf8; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .process-copy { min-width: 0; }
     .process-copy small { display: block; margin-top: 5px; color: #7a7c74; font-size: 11px; line-height: 1.35; }
@@ -315,6 +335,11 @@
           <div class="feature-card">
             <div class="feature-head"><span class="section-label" id="featureLabel">FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC</span></div>
             <div class="feature-tree" id="featureTree"></div>
+          <div class="generation-process" aria-live="polite">
+            <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD PROCESS</span><span class="generation-process-status" id="generationStatus">READY</span></div>
+            <div class="generation-progress" aria-hidden="true"><div class="generation-progress-bar" id="generationProgressBar"></div></div>
+            <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Start generation to inspect the build sequence.</div></div>
+          </div>
           <div class="process-controls">
             <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
             <select class="process-select" id="processSelect" aria-label="Manufacturing process">
@@ -375,6 +400,11 @@
     const fitView = document.getElementById('fitView');
     const interactionHint = document.getElementById('interactionHint');
     const generationError = document.getElementById('generationError');
+    const generationProcessLabel = document.getElementById('generationProcessLabel');
+    const generationStatus = document.getElementById('generationStatus');
+    const generationProgressBar = document.getElementById('generationProgressBar');
+    const generationTrace = document.getElementById('generationTrace');
+    const generationEmpty = document.getElementById('generationEmpty');
     const cancelGeneration = document.getElementById('cancelGeneration');
     const editParameters = document.getElementById('editParameters');
     const parameterEditor = document.getElementById('parameterEditor');
@@ -464,8 +494,8 @@
     let currentLang = (() => { try { return localStorage.getItem('formCadLang') || 'en'; } catch (error) { return 'en'; } })();
     const defaultPrompt = prompt.value;
     const copy = {
-      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
-      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
+      en: { toggle: '中文', workspace: 'Workspace', templates: 'Templates', history: 'History', eyebrow: 'TEXT-TO-CAD', title: 'Describe your part.', helper: 'Start with shape, size, and intent.', generate: 'Generate model', regenerate: 'Regenerate model', starter: 'OR TRY A STARTER', recent: 'RECENT PROMPTS', live: 'LIVE PREVIEW', iso: 'ISOMETRIC', top: 'TOP', front: 'FRONT', export: 'Export OBJ', exportStep: 'Export STEP', export3mf: 'Export 3MF', exportGlb: 'Export GLB', fit: 'FIT', interactionHint: 'Drag to orbit · wheel to zoom · double-click to reset', localThreeHint: 'Interactive parametric preview · backend GLB adds validated geometry', localConceptHint: 'Concept preview · connect a backend for true 3D', backendFallbackHint: 'SVG fallback · GLB preview unavailable', analysisLabel: 'NOMINAL WALL ESTIMATE', modeLabel: 'GENERATION MODE', standardMode: 'Standard', advancedMode: 'Advanced · LLM', standardModeHint: 'Rule parser · deterministic and private', advancedModeHint: 'LLM intent parser · validated by OCCT', advancedRequiresBackend: 'Advanced mode needs a configured backend API.', advancedUnavailable: 'Backend is connected, but LLM mode is not configured.', unitLabel: 'INPUT UNITS', unitHint: 'Unitless values use this unit', mmOption: 'mm', cmOption: 'cm', mOption: 'm', inOption: 'in', backendAuthRequired: 'Backend authentication is required; configure the deployment key.', generationProcessLabel: 'BUILD PROCESS', readyStatus: 'READY', runningStatus: 'BUILDING', completedStatus: 'COMPLETE', failedStatus: 'REVIEW', stepPreview: 'VIEW STEP', noProcess: 'Start generation to inspect the build sequence.', llmAssumptions: 'LLM assumptions', editParameters: 'EDIT', applyParameters: 'APPLY', resetParameters: 'RESET', cancel: 'Cancel', timeoutError: 'Generation timed out. You can retry.', cancelled: 'Generation cancelled.', building: 'Building solid', exporting: 'Writing exports', unknown: 'review', estimateSummary: 'Nominal estimate only', verified: 'verified', noIssues: 'No manufacturing issues', issueCount: 'issues', interpretation: 'INTERPRETED SPEC', interpretationReady: 'Ready to generate', assumptions: 'ASSUMED', revision: 'LOCAL REVISIONS', clear: 'Clear', emptyRevision: 'No saved revisions yet', revisionBackend: 'OCCT B-Rep', revisionLocal: 'Local preview', checksPassed: 'checks passed', checksReview: 'needs review', featureTree: 'FEATURE TREE', featureMode: 'PARAMETRIC', processLabel: 'MANUFACTURING PROCESS', processHint: 'Process profile', fdmOption: 'FDM / FFF', slaOption: 'SLA / Resin', cncOption: 'CNC Milling', injectionOption: 'Injection Molding', baseFeature: 'Base solid', shellFeature: 'Shell / cavity', dividerFeature: 'Compartments', edgeFeature: 'Edge treatment', drainageFeature: 'Drainage holes', cableFeature: 'Cable channel', editHint: 'Edit current model with a follow-up prompt', diffInitial: 'Initial revision', diffNone: 'No parameter change', params: 'MODEL PARAMETERS', solved: 'All constraints solved', body: 'BODY', size: 'SIZE', material: 'MATERIAL PRESET', materialValue: 'Matte PLA · warm white', materialMeta: 'Print-ready surface', planEyebrow: 'MANUFACTURING REVIEW', planTitle: 'Manufacturing review', planSubtitle: 'Nominal checks are shown here; measured face-level validation is still required.', readiness: '4 CHECKS', state: 'PARAMETRIC BODY', backendState: 'OCCT B-REP SOLID', advancedState: 'LLM + OCCT B-REP', localState: 'LOCAL PREVIEW', failed: 'Generation failed', building: 'Building solid', exporting: 'Writing exports', solving: 'SOLVING CONSTRAINTS', parsing: 'Parsing natural language', defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm', cableMeta: '1 solid · 6 mm cable · snap fit', promptLabel: 'Describe your part', viewportAria: '3D model preview', rounded: 'rounded edges', dimension: '120 × 80 mm', bodyMeta: '3 watertight solids', bounding: 'Bounding box', wall: 'Wall thickness', wallMeta: '≥ 2.4 mm · passes', radius: 'Edge treatment', radiusMeta: '4 mm chamfer · stable', draft: 'Print orientation', draftMeta: 'Low support volume', exportTarget: 'Export target', exportMeta: 'STEP · IGES · GLB' },
+      zh: { toggle: 'EN', workspace: '工作台', templates: '模板', history: '历史记录', eyebrow: '自然语言 CAD', title: '描述你的零件。', helper: '从形状、尺寸和用途开始。', generate: '生成模型', regenerate: '重新生成', starter: '试试一个模板', recent: '最近提示', live: '实时预览', iso: '等距视图', top: '顶视图', front: '前视图', export: '导出 OBJ', exportStep: '导出 STEP', export3mf: '导出 3MF', exportGlb: '导出 GLB', fit: '适配', interactionHint: '拖动旋转 · 滚轮缩放 · 双击复位', localThreeHint: '可交互参数化预览 · 连接后端后显示已校验 GLB', localConceptHint: '概念预览 · 连接后端后显示真实 3D', backendFallbackHint: 'SVG 降级预览 · GLB 暂不可用', analysisLabel: '名义壁厚估算', modeLabel: '生成模式', standardMode: '标准', advancedMode: '高级 · LLM', standardModeHint: '规则解析 · 稳定且私有', advancedModeHint: 'LLM 意图解析 · 由 OCCT 校验', advancedRequiresBackend: '高级模式需要配置后端 API。', advancedUnavailable: '后端已连接，但尚未配置 LLM。', unitLabel: '输入单位', unitHint: '未标注单位的数值将使用此单位', mmOption: '毫米', cmOption: '厘米', mOption: '米', inOption: '英寸', backendAuthRequired: '后端需要鉴权，请配置部署密钥。', generationProcessLabel: '建模过程', readyStatus: '待开始', runningStatus: '建模中', completedStatus: '已完成', failedStatus: '需复核', stepPreview: '查看步骤', noProcess: '开始生成后查看建模步骤。', llmAssumptions: 'LLM 假设', editParameters: '编辑', applyParameters: '应用', resetParameters: '重置', cancel: '取消生成', timeoutError: '生成超时，可以重试。', cancelled: '已取消生成。', building: '正在构建实体', exporting: '正在写入文件', unknown: '需复核', estimateSummary: '仅为名义估算', verified: '已验证', noIssues: '暂无制造问题', issueCount: '项问题', interpretation: '解析结果', interpretationReady: '可以生成', assumptions: '系统默认', revision: '本地版本', clear: '清空', emptyRevision: '暂时没有保存的版本', revisionBackend: 'OCCT B-Rep', revisionLocal: '本地预览', checksPassed: '项检查通过', checksReview: '需要复核', featureTree: '特征树', featureMode: '参数化', processLabel: '制造工艺', processHint: '工艺配置', fdmOption: 'FDM / 熔融沉积', slaOption: 'SLA / 光固化', cncOption: 'CNC 铣削', injectionOption: '注塑成型', baseFeature: '基础实体', shellFeature: '壳体 / 腔体', dividerFeature: '隔间', edgeFeature: '边缘处理', drainageFeature: '排水孔', cableFeature: '走线槽', editHint: '继续输入修改指令即可创建新版本', diffInitial: '初始版本', diffNone: '参数未变化', params: '模型参数', solved: '全部约束已解决', body: '实体', size: '尺寸', material: '材料预设', materialValue: '哑光 PLA · 暖白', materialMeta: '适合打印的表面', planEyebrow: '制造评审', planTitle: '制造评审', planSubtitle: '当前显示名义检查，面级实测仍需在导出前确认。', readiness: '4 项检查', state: '参数化实体', backendState: 'OCCT B-Rep 实体', advancedState: 'LLM + OCCT B-Rep', localState: '本地预览', failed: '生成失败', building: '正在构建实体', exporting: '正在写入文件', solving: '正在解析约束', parsing: '正在解析自然语言', defaultMeta: '3 个实体 · 壁厚 12 毫米 · 倒角 4 毫米', cableMeta: '1 个实体 · 6 毫米线缆 · 卡扣连接', promptLabel: '描述你的零件', viewportAria: '3D 模型预览', rounded: '圆角边缘', dimension: '120 × 80 毫米', bodyMeta: '3 个封闭实体', bounding: '包围盒', wall: '壁厚', wallMeta: '≥ 2.4 mm · 通过', radius: '边缘处理', radiusMeta: '4 mm 倒角 · 稳定', draft: '打印方向', draftMeta: '低支撑体积', exportTarget: '导出目标', exportMeta: 'STEP · IGES · GLB' }
     };
     function translate() {
       const t = copy[currentLang];
@@ -514,6 +544,9 @@
       featureLabel.textContent = t.featureTree;
       featureMode.textContent = t.featureMode;
       document.getElementById('processLabel').textContent = t.processLabel;
+      if (generationProcessLabel) generationProcessLabel.textContent = t.generationProcessLabel;
+      if (generationStatus && !generate.classList.contains('loading')) generationStatus.textContent = t.readyStatus;
+      if (generationEmpty) generationEmpty.textContent = t.noProcess;
       if (document.getElementById('unitLabel')) document.getElementById('unitLabel').textContent = t.unitLabel;
       if (document.getElementById('unitHint')) document.getElementById('unitHint').textContent = t.unitHint;
       if (unitSelect) {
@@ -1401,6 +1434,68 @@
       updateInterpretation(next, 'draft');
       generateModel();
     }
+    function generationStageLabel(stage) {
+      const labels = currentLang === 'zh'
+        ? { queued: '排队', parsing: '解析意图', planning: '规划特征', building: '构建几何', validating: '几何校验', reviewing: '制造审查', exporting: '导出文件', complete: '完成' }
+        : { queued: 'Queued', parsing: 'Parse intent', planning: 'Plan features', building: 'Build geometry', validating: 'Validate geometry', reviewing: 'Manufacturing review', exporting: 'Export artifacts', complete: 'Complete' };
+      return labels[stage] || stage || 'Step';
+    }
+    function generationStatusLabel(status) {
+      const labels = currentLang === 'zh'
+        ? { running: '进行中', succeeded: '完成', warning: '警告', failed: '失败' }
+        : { running: 'Running', succeeded: 'Done', warning: 'Warning', failed: 'Failed' };
+      return labels[status] || status || '';
+    }
+    function renderGenerationTrace(events, overallStatus) {
+      if (!generationTrace) return;
+      const trace = Array.isArray(events) ? events : [];
+      generationTrace.innerHTML = '';
+      if (!trace.length) {
+        const empty = document.createElement('div');
+        empty.className = 'generation-process-empty';
+        empty.textContent = copy[currentLang].noProcess;
+        generationTrace.appendChild(empty);
+      }
+      let completed = 0;
+      trace.forEach((event) => {
+        const row = document.createElement('div');
+        const status = String(event.status || 'running').toLowerCase();
+        row.className = 'generation-trace-row ' + status;
+        const detail = event.details || {};
+        const operation = detail.operation || detail.current_step || detail.step || '';
+        const duration = event.duration_ms != null ? Math.max(0, Math.round(Number(event.duration_ms))) + ' ms' : generationStatusLabel(status);
+        row.innerHTML = '<span class="generation-trace-dot"></span><div class="generation-trace-copy"><strong>' + generationStageLabel(event.stage) + '</strong><small>' + String(operation).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch])) + '</small></div><span class="generation-trace-meta">' + duration + '</span>';
+        if (event.preview) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'generation-trace-view';
+          button.textContent = copy[currentLang].stepPreview;
+          button.addEventListener('click', () => {
+            if (backendUrl && modelSpec) loadThreePreview(backendUrl + event.preview, modelSpec);
+          });
+          row.appendChild(button);
+        }
+        generationTrace.appendChild(row);
+        if (status === 'succeeded' || status === 'warning') completed += 1;
+      });
+      const ratio = trace.length ? Math.round((completed / trace.length) * 100) : 0;
+      if (generationProgressBar) generationProgressBar.style.width = (overallStatus === 'complete' ? 100 : Math.max(8, ratio)) + '%';
+      if (generationStatus) {
+        const t = copy[currentLang];
+        generationStatus.textContent = overallStatus === 'failed' ? t.failedStatus : overallStatus === 'complete' ? t.completedStatus : trace.length ? t.runningStatus : t.readyStatus;
+      }
+    }
+    function updateGenerationProgress(progress) {
+      if (!progress) return;
+      renderGenerationTrace(progress.events || [], progress.stage === 'complete' ? 'complete' : 'running');
+    }
+    function localGenerationTrace(finalStage) {
+      const now = Date.now();
+      const steps = [
+        ['parsing', 'interpretation'], ['planning', 'feature_plan'], ['building', 'parametric_preview'], ['validating', 'local_checks'], ['complete', finalStage || 'ready']
+      ];
+      return steps.map((item, index) => ({ id: item[1], stage: item[0], status: 'succeeded', started_ms: now + index, duration_ms: 0, details: { operation: item[1] } }));
+    }
     function setGenerationError(message) {
       if (!generationError) return;
       generationError.textContent = message || '';
@@ -1416,9 +1511,9 @@
         button.setAttribute('aria-disabled', String(!available));
       });
     }
-    async function requestBackend(value, process, signal) {
+    async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode };
+      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, include_steps: true };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1433,6 +1528,7 @@
       if (!jobResponse.ok) throw new Error('geometry job endpoint returned ' + jobResponse.status);
       const job = await jobResponse.json();
       const jobId = job.job_id;
+      if (onProgress) onProgress({ stage: 'queued', current_step: null, elapsed_ms: 0, events: [] });
       const cancelRemoteJob = () => { backendFetch(backendUrl + '/v1/jobs/' + jobId, { method: 'DELETE', keepalive: true }).catch(() => {}); };
       if (signal) signal.addEventListener('abort', cancelRemoteJob, { once: true });
       try {
@@ -1440,6 +1536,7 @@
           const statusResponse = await backendFetch(backendUrl + '/v1/jobs/' + jobId, { signal });
           if (!statusResponse.ok) throw new Error('geometry job status returned ' + statusResponse.status);
           const status = await statusResponse.json();
+          if (status.progress && onProgress) onProgress(status.progress);
           if (status.status === 'succeeded') return status.result;
           if (status.status === 'cancelled') throw Object.assign(new Error('job cancelled'), { name: 'AbortError' });
           if (status.status === 'failed') throw new Error((status.error && status.error.detail) || 'geometry job failed');
@@ -1485,10 +1582,11 @@
         solved.textContent = copy[currentLang].parsing;
         updateInterpretation(nextSpec, 'draft');
         renderModel(nextSpec, currentView);
+        renderGenerationTrace(localGenerationTrace('preview'), 'running');
         let remote = null;
         let backendError = null;
         try {
-          remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal);
+          remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal, updateGenerationProgress);
         } catch (error) {
           if (error.name === 'AbortError') {
             if (sequence === generationSeq) {
@@ -1523,6 +1621,7 @@
           cable_channel: remoteParams.cable_channel ?? nextSpec.cable_channel ?? false
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
         if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(backendUrl + backendArtifact.glb, modelSpec);
         else loadLocalThreePreview(modelSpec);
         modelState.textContent = remote ? copy[currentLang].exporting : copy[currentLang].state;
@@ -1553,6 +1652,7 @@
         if (sequence === generationSeq) {
           setGenerationError(currentLang === 'zh' ? '生成失败，请检查描述后重试。' : 'Generation failed. Check the description and retry.');
           modelState.textContent = copy[currentLang].failed;
+          renderGenerationTrace([{ id: 'failed', stage: 'complete', status: 'failed', details: { operation: error.message || 'generation_failed' } }], 'failed');
         }
       } finally {
         clearTimeout(timeoutId);
