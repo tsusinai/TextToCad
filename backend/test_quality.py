@@ -284,3 +284,35 @@ def test_ir_validation_rejects_unregistered_operations():
     with pytest.raises(app.IRValidationError) as error:
         app.validate_ir(ir)
     assert any(issue["code"] == "operation_not_allowed" for issue in error.value.issues)
+
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_executor_builds_boolean_geometry():
+    ir = {
+        "schema_version": "0.2",
+        "document": {"id": "boolean-demo"},
+        "parameters": {
+            "width": {"value": 40, "unit": "mm", "source": "user"},
+            "depth": {"value": 40, "unit": "mm", "source": "user"},
+            "height": {"value": 20, "unit": "mm", "source": "user"},
+            "radius": {"value": 8, "unit": "mm", "source": "user"},
+        },
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [
+            {"id": "outer", "kind": "primitive", "operation": "box",
+             "parameters": {"size": ["width", "depth", "height"]}, "frame": "xy"},
+            {"id": "tool", "kind": "primitive", "operation": "cylinder",
+             "parameters": {"radius": "radius", "height": "height + 2"}, "frame": "xy"},
+            {"id": "body", "kind": "feature", "operation": "cut",
+             "inputs": ["outer", "tool"]},
+        ],
+        "outputs": [{"id": "main", "node": "body", "format": ["step"]}],
+    }
+    normalized = app.validate_ir(ir)
+    execution = app.execute_ir(normalized)
+    metrics = app.shape_metrics(execution["shape"])
+    assert execution["output_node"] == "body"
+    assert metrics["valid_brep"] is True
+    assert metrics["volume_mm3"] > 0
+    assert metrics["bbox_mm"]["x"] == 40.0
