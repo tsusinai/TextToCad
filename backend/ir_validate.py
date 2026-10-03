@@ -93,6 +93,27 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
     known_datums = set(datum_ids)
     known_parameters = set(parameter_ids)
     adjacency: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
+    def validate_selector(selector: Any, path: str) -> None:
+        if not isinstance(selector, dict):
+            issues.append(_issue("selector_type", "selector must be an object", path))
+            return
+        entity = selector.get("entity")
+        if not isinstance(entity, str) or entity not in known_nodes:
+            issues.append(_issue("selector_entity", "selector entity must reference an existing node", f"{path}.entity"))
+        topology = selector.get("topology", "face")
+        if topology not in {"solid", "shell", "face", "edge", "vertex"}:
+            issues.append(_issue("selector_topology", f"topology '{topology}' is not registered", f"{path}.topology"))
+        where = selector.get("where", [])
+        if not isinstance(where, list):
+            issues.append(_issue("selector_where", "selector where must be a list", f"{path}.where"))
+        for where_index, clause in enumerate(where if isinstance(where, list) else []):
+            if not isinstance(clause, dict) or len(clause) != 1:
+                issues.append(_issue("selector_clause", "selector clauses must contain one property", f"{path}.where[{where_index}]"))
+                continue
+            property_name = next(iter(clause))
+            if property_name not in {"normal", "position", "area", "parallel_to", "perpendicular_to", "axis", "index"}:
+                issues.append(_issue("selector_property", f"selector property '{property_name}' is not registered", f"{path}.where[{where_index}]"))
+
     for index, node in enumerate(document.nodes):
         path = f"nodes[{index}]"
         if node.kind not in ALLOWED_KINDS:
@@ -107,6 +128,10 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
         if node.frame and node.frame not in known_datums:
             issues.append(_issue("missing_datum", f"frame '{node.frame}' does not exist", f"{path}.frame"))
         for name, value in node.parameters.items():
+            if name in {"selector", "face_selector", "edge_selector"}:
+                validate_selector(value, f"{path}.parameters.{name}")
+            if isinstance(value, dict) and "selector" in value:
+                validate_selector(value["selector"], f"{path}.parameters.{name}.selector")
             if name == "expression" and isinstance(value, str):
                 if not EXPRESSION_RE.fullmatch(value.strip()):
                     issues.append(_issue("unsafe_expression", "parameter expression contains unsupported syntax", f"{path}.parameters.{name}"))
