@@ -70,6 +70,18 @@ def test_ir_divider_count_matches_geometry_loop():
     assert divider["count"] == 2
 
 
+def test_l_bracket_prompt_preserves_angle_family_and_pair_dimensions():
+    title, params, provenance = app.parse_prompt_detailed(
+        "20x20 是L形的外轮廓，板厚是3，细折条",
+    )
+    assert title == "Parametric L bracket"
+    assert params.kind == "angle"
+    assert (params.width, params.depth) == (20.0, 20.0)
+    assert params.wall == 3.0
+    assert params.chamfer == 0.0
+    assert provenance["units"]["dimension_pair"] == [20.0, 20.0]
+
+
 def test_unknown_model_family_uses_solid_block_fallback():
     title, params, _ = app.parse_prompt_detailed(
         "a custom bird feeder 120 mm wide, 80 mm deep, 42 mm tall",
