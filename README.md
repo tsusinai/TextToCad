@@ -17,12 +17,13 @@
 | 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
 | 高级模式 | OpenAI-compatible LLM、DeepSeek 示例、受限 JSON、失败回退 |
 | 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |
+| 建模过程 | 异步 job 实时阶段、真实 CAD 特征事件、导出校验状态、中间 GLB 步骤预览 |
 
 ## Live 预览
 
 访问 [https://tsusinai.github.io/TextToCad/](https://tsusinai.github.io/TextToCad/)。
 
-没有连接后端时，页面仍会创建真实的 Three.js 参数化预览；如果浏览器不支持 WebGL 或 CDN 加载失败，才退回 SVG 概念图。连接后端后，经过 OCCT 校验的 GLB 会替换本地预览。
+没有连接后端时，页面仍会创建真实的 Three.js 参数化预览；如果浏览器不支持 WebGL 或 CDN 加载失败，才退回 SVG 概念图。连接后端后，经过 OCCT 校验的 GLB 会替换本地预览。生成过程中，左侧 **BUILD PROCESS / 建模过程** 会显示后端实际完成的解析、特征构建、几何校验、制造审查和导出事件；当 CadQuery 导出中间快照可用时，可以直接点击 **VIEW STEP / 查看步骤** 在 3D 视图中检查该阶段。
 
 ## 本机启动：Docker + CadQuery + DeepSeek
 
@@ -100,10 +101,13 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 | POST | /v1/models | 同步生成一个模型 |
 | POST | /v1/jobs | 创建可轮询、可取消的生成任务 |
 | GET/DELETE | /v1/jobs/{job_id} | 查询或取消任务 |
+| GET | /v1/models/{id}/steps/{step_id} | 查看 `include_steps=true` 生成的中间 GLB |
 | GET | /v1/models/{id}/manifest | 参数、检查、导出和 provenance |
 | GET | /v1/models/{id}/ir | Semantic CAD IR |
 | GET | /v1/models/{id}/analysis | 壁厚采样和制造问题 |
 | GET | /v1/models/{id}/download?format=step | 下载 STEP、STL、3MF 或 GLB |
+
+异步任务的 `GET /v1/jobs/{job_id}` 响应会返回 `progress.stage`、`current_step`、`elapsed_ms` 和有序 `events`；最终 response 与 `manifest.json` 也会保存 `generation_trace`。前端因此展示真实后端阶段，而不是按时间猜测进度。请求加入 `include_steps: true` 后，后端会保存有限数量的中间 GLB 快照。
 
 严格尺寸请求示例（遇到无标签尺寸时返回 422）：
 
