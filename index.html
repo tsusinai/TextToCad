@@ -1265,12 +1265,19 @@
     function renderFeatureTree(spec) {
       if (!featureTree || !spec) return;
       featureTree.innerHTML = '';
-      const features = [
-        [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-        [copy[currentLang].shellFeature, (spec.wall || 3) + ' mm ' + (currentLang === 'zh' ? '壁厚' : 'wall')],
-        [copy[currentLang].dividerFeature, spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments')],
-        [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
-      ];
+      const features = spec.kind === 'angle'
+        ? [
+            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
+            [currentLang === 'zh' ? 'L 形外轮廓' : 'L profile', (spec.width || 0) + ' × ' + (spec.depth || 0) + ' mm'],
+            [currentLang === 'zh' ? '板厚' : 'Plate thickness', (spec.wall || 3) + ' mm'],
+            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
+          ]
+        : [
+            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
+            [copy[currentLang].shellFeature, (spec.wall || 3) + ' mm ' + (currentLang === 'zh' ? '壁厚' : 'wall')],
+            [copy[currentLang].dividerFeature, spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments')],
+            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
+          ];
       if (spec.kind === 'plant' && Number(spec.drainage_holes || 0) > 0) {
         features.push([copy[currentLang].drainageFeature, spec.drainage_holes + (currentLang === 'zh' ? ' 个' : ' ')]);
       }
