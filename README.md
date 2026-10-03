@@ -5,18 +5,19 @@
 <p align="center">
   <a href="https://tsusinai.github.io/TextToCad/">打开 Live 工作台</a> ·
   <a href="https://github.com/tsusinai/TextToCad/tree/main/backend">查看几何后端</a> ·
-  <a href="PLAN.md">查看路线图</a>
+  <a href="PLAN.md">查看路线图</a> ·
+  <a href="docs/SEMANTIC_CAD_IR.md">查看通用 CAD IR 方案</a>
 </p>
 
 | 能力 | 当前实现 |
 | --- | --- |
-| 自然语言 | 中文/英文尺寸、mm/cm/m/in 单位换算、模型族、隔间、壁厚、倒角、排水孔、走线槽 |
+| 自然语言 | 中文/英文尺寸、单位换算、通用 Semantic CAD IR 规划、隔间、壁厚、倒角、排水孔、走线槽 |
 | 3D 预览 | Three.js 参数化预览、GLB/OrbitControls、等距/顶视/前视、旋转/缩放/平移 |
 | 几何内核 | CadQuery/OCCT 参数化 B-Rep |
 | 导出 | STEP、STL，条件支持 3MF、GLB；前端保留 OBJ 概念导出 |
 | 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
 | 高级模式 | OpenAI-compatible LLM、DeepSeek 示例、受限 JSON、失败回退 |
-| 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |
+| 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |\n| 通用建模路线 | 原语 + 特征 + 约束 + 基准的族型无关 IR（方案见 docs/SEMANTIC_CAD_IR.md） |
 | 建模过程 | 异步 job 实时阶段、真实 CAD 特征事件、导出校验状态、中间 GLB 步骤预览 |
 
 ## Live 预览
