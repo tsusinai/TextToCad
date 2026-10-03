@@ -788,6 +788,7 @@
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
       const angleShape = kindForTitle(titleFor(text)) === 'angle';
       const roundedCube = kindForTitle(titleFor(text)) === 'rounded_cube';
+      const cubeShape = roundedCube || /cube|正方体|方块/i.test(normalized);
       const pairMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])/i);
       const pair = pairMatch ? pairMatch.slice(1).map(Number) : [];
       const valueFor = (terms) => {
@@ -795,7 +796,7 @@
         const after = normalized.match(new RegExp('(?:' + terms + ')[^\\d]{0,8}(\\d+(?:\\.\\d+)?)\\s*(?:mm|毫米)', 'i'));
         return before ? Number(before[1]) : (after ? Number(after[1]) : null);
       };
-      const cubeEdge = roundedCube ? valueFor('side|边长|边') : null;
+      const cubeEdge = cubeShape ? valueFor('side|边长|边') : null;
       const diameter = valueFor('diameter|dia|直径');
       const footprint = valueFor('footprint|占地|底面');
       const treatmentValues = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)\s*(?:chamfer|radius|倒角|圆角|圆弧|半径|wall|壁厚|bottom|floor|底厚)/gi)).map((match) => Number(match[1]));
@@ -807,7 +808,7 @@
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
       let depth = valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || width * 0.67));
       let height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (angleShape ? 40 : (roundedCube ? 80 : 42)));
-      if (roundedCube && triplet.length !== 3) {
+      if (cubeShape && triplet.length !== 3) {
         const edge = cubeEdge || pair[0] || genericNumbers[0] || 80;
         width = valueFor('wide|width|宽') || edge;
         depth = valueFor('deep|depth|长|深') || pair[1] || width;
@@ -824,7 +825,8 @@
       const title = titleFor(text);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (title === 'Desk organizer' ? 3 : 1))), 1, 6);
       const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
-      const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'L bracket' ? 0 : 4);
+      const cubeShape = /cube|正方体|方块/i.test(normalized);
+      const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'Rounded cube' ? 4 : (cubeShape || title === 'L bracket' ? 0 : 4));
       const dimensions = dimensionsFor(text);
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : 3;
