@@ -686,7 +686,7 @@
       const sourceText = String(text || '').toLowerCase();
       const normalized = canonicalDimensionText(text);
       const fallbackFactor = { mm: 1, cm: 10, m: 1000, in: 25.4 }[selectedUnits] || 1;
-      const hasExplicitUnit = /\d+(?:\.\d+)?\s*(?:mm|毫米|cm|厘米|m|米|inches?|英寸)\b/i.test(sourceText);
+      const hasExplicitUnit = /\d+(?:\.\d+)?\s*(?:mm|毫米|cm|厘米|m|米|inches?|英寸)(?![a-z])/i.test(sourceText);
       const unitNumbers = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)).map((match) => Number(match[1]));
       const tripletMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/i);
       const triplet = tripletMatch ? tripletMatch.slice(1).map(Number) : [];
