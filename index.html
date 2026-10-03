@@ -161,11 +161,17 @@
     .unit-view-select:focus-visible, .viewport-gizmo button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
     .model-stage { position: relative; z-index: 1; display: grid; place-items: center; height: calc(100% - 87px); min-height: 450px; touch-action: none; cursor: grab; user-select: none; }
     .model-stage.dragging { cursor: grabbing; }
-    .viewport-gizmo { position: absolute; top: 16px; right: 18px; z-index: 5; display: grid; grid-template-columns: repeat(3, auto); align-items: center; gap: 4px; padding: 6px; border: 1px solid rgba(157,182,143,.35); border-radius: 12px; background: rgba(37,39,36,.82); backdrop-filter: blur(8px); }
-    .viewport-gizmo button { border: 0; border-radius: 7px; padding: 6px 7px; background: transparent; color: #aebba9; font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+    .viewport-gizmo { position: absolute; top: 12px; right: 14px; z-index: 5; display: flex; width: 112px; flex-direction: column; align-items: stretch; gap: 3px; padding: 5px; border: 1px solid rgba(157,182,143,.35); border-radius: 11px; background: rgba(37,39,36,.78); backdrop-filter: blur(8px); }
+    .gizmo-axis { display: block; width: 64px; height: 64px; align-self: flex-end; overflow: visible; }
+    .gizmo-axis line { fill: none; stroke-width: 2.4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+    .gizmo-axis line[data-gizmo-axis-line="x"] { stroke: #e98978; }
+    .gizmo-axis line[data-gizmo-axis-line="y"] { stroke: #9fca82; }
+    .gizmo-axis line[data-gizmo-axis-line="z"] { stroke: #8eb9e8; }
+    .gizmo-axis text { fill: #d8dfd3; font-size: 8px; font-weight: 800; font-family: Inter, ui-sans-serif, system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    .gizmo-axis-origin { fill: #f3f7ef; stroke: #252724; stroke-width: 1; }
+    .gizmo-buttons { display: flex; justify-content: flex-end; gap: 2px; }
+    .viewport-gizmo button { border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; color: #aebba9; font-size: 8px; font-weight: 800; letter-spacing: .03em; }
     .viewport-gizmo button:hover, .viewport-gizmo button.active { background: #4a5b47; color: var(--lime); }
-    .axis-readout { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 7px; padding: 2px 4px 0; font-size: 9px; letter-spacing: .05em; }
-    .axis-x { color: #e98978; } .axis-y { color: #9fca82; } .axis-z { color: #8eb9e8; }
     .viewport-selection { position: absolute; left: 18px; top: 16px; z-index: 5; max-width: 210px; border: 1px solid rgba(221,247,155,.45); border-radius: 999px; padding: 7px 10px; background: rgba(37,39,36,.84); color: var(--lime); font-size: 10px; font-weight: 800; pointer-events: none; }
     .three-viewport { position: absolute; inset: 0; display: none; z-index: 2; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 50% 35%, #3a4039, #252724 70%); }
     .three-viewport.active { display: block; }
@@ -311,11 +317,21 @@
           </div>
           <div class="model-stage" id="modelStage" tabindex="0" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
             <div class="three-viewport" id="threeViewport" aria-hidden="true"></div>
-            <div class="viewport-gizmo" id="viewGizmo" aria-label="View cube">
-              <button type="button" data-gizmo-view="iso" aria-label="Isometric view">ISO</button>
-              <button type="button" data-gizmo-view="top" aria-label="Top view">TOP</button>
-              <button type="button" data-gizmo-view="front" aria-label="Front view">FRONT</button>
-              <span class="axis-readout"><b class="axis-x">X</b><b class="axis-y">Y</b><b class="axis-z">Z</b></span>
+            <div class="viewport-gizmo" id="viewGizmo" aria-label="View orientation">
+              <svg class="gizmo-axis" viewBox="0 0 64 64" role="img" aria-label="XYZ orientation">
+                <line data-gizmo-axis-line="x" x1="32" y1="32" x2="54" y2="32" />
+                <line data-gizmo-axis-line="y" x1="32" y1="32" x2="32" y2="10" />
+                <line data-gizmo-axis-line="z" x1="32" y1="32" x2="17" y2="47" />
+                <circle class="gizmo-axis-origin" cx="32" cy="32" r="3" />
+                <text data-gizmo-axis-label="x" x="56" y="34">X</text>
+                <text data-gizmo-axis-label="y" x="32" y="8">Y</text>
+                <text data-gizmo-axis-label="z" x="14" y="51">Z</text>
+              </svg>
+              <div class="gizmo-buttons">
+                <button type="button" data-gizmo-view="iso" aria-label="Isometric view">ISO</button>
+                <button type="button" data-gizmo-view="top" aria-label="Top view">TOP</button>
+                <button type="button" data-gizmo-view="front" aria-label="Front view">FRONT</button>
+              </div>
             </div>
             <div class="viewport-selection" id="viewportSelection" hidden></div>
             <div class="interaction-hint" id="interactionHint">Drag to orbit · wheel to zoom · double-click to reset</div>
@@ -907,6 +923,7 @@
       else threeState.camera.position.set(distance, distance * .8, distance);
       threeState.controls.target.set(0, 0, 0);
       threeState.controls.update();
+      updateViewportGizmo();
     }
     function setGridVisible(visible) {
       threeState.gridVisible = Boolean(visible);
@@ -916,6 +933,35 @@
         toggleGrid.setAttribute('aria-pressed', String(threeState.gridVisible));
         toggleGrid.classList.toggle('active', threeState.gridVisible);
       }
+    }
+    function updateViewportGizmo() {
+      if (!viewGizmo || !threeState.camera || !threeState.THREE) return;
+      const THREE = threeState.THREE;
+      const inverse = threeState.camera.quaternion.clone().invert();
+      const axes = [
+        { key: 'x', direction: new THREE.Vector3(1, 0, 0) },
+        { key: 'y', direction: new THREE.Vector3(0, 1, 0) },
+        { key: 'z', direction: new THREE.Vector3(0, 0, 1) }
+      ];
+      axes.forEach(({ key, direction }) => {
+        const projected = direction.applyQuaternion(inverse);
+        const line = viewGizmo.querySelector('[data-gizmo-axis-line="' + key + '"]');
+        const label = viewGizmo.querySelector('[data-gizmo-axis-label="' + key + '"]');
+        if (!line || !label) return;
+        const cx = 32;
+        const cy = 32;
+        const length = 23;
+        const x = cx + projected.x * length;
+        const y = cy - projected.y * length;
+        line.setAttribute('x1', String(cx));
+        line.setAttribute('y1', String(cy));
+        line.setAttribute('x2', x.toFixed(1));
+        line.setAttribute('y2', y.toFixed(1));
+        line.setAttribute('opacity', String(Math.max(.35, Math.min(1, .45 + Math.abs(projected.z) * .55))));
+        label.setAttribute('x', (cx + projected.x * (length + 7)).toFixed(1));
+        label.setAttribute('y', (cy - projected.y * (length + 7)).toFixed(1));
+        label.setAttribute('opacity', String(Math.max(.55, Math.min(1, .55 + Math.abs(projected.z) * .45))));
+      });
     }
     function resetThreeCamera() { fitThreeModel(); setThreeView(currentView); }
     async function ensureThreeRenderer() {
@@ -935,10 +981,7 @@
         grid.material.transparent = true;
         grid.visible = threeState.gridVisible;
         grid.position.y = -0.01;
-        const axes = new THREE.AxesHelper(80);
-        axes.renderOrder = 2;
         helpers.add(grid);
-        helpers.add(axes);
         threeState.helpers = helpers;
         threeState.grid = grid;
         threeState.scene.add(helpers);
@@ -949,6 +992,7 @@
         if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
         threeViewport.appendChild(threeState.renderer.domElement);
         threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
+        threeState.controls.addEventListener('change', updateViewportGizmo);
         threeState.controls.enableDamping = true;
         threeState.controls.dampingFactor = .08;
         threeState.controls.screenSpacePanning = true;
