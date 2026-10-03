@@ -24,6 +24,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 try:
+    from .legacy_adapter import legacy_design_ir_to_v2
+    from .ir_validate import IRValidationError, validate_ir
+except ImportError:  # pragma: no cover - direct backend module execution
+    from legacy_adapter import legacy_design_ir_to_v2
+    from ir_validate import IRValidationError, validate_ir
+
+try:
     import cadquery as cq
     from cadquery import exporters
     CADQUERY_ERROR = ""
@@ -114,6 +121,10 @@ class GenerateRequest(BaseModel):
     strict_dimensions: bool = False
     include_steps: bool = False
     material: Literal["pla", "petg", "abs", "resin", "aluminum"] = "pla"
+
+
+class IRValidationRequest(BaseModel):
+    ir: dict[str, Any]
 
 
 class ModelParameters(BaseModel):
@@ -998,7 +1009,7 @@ def build_design_ir(
         source = field_provenance.get(key, {})
         parameter["source"] = source.get("source", parameter["source"])
         parameter["status"] = source.get("status", "resolved")
-    return {
+    return legacy_design_ir_to_v2({
         "schema_version": "0.1",
         "design": {
             "id": params.kind,
@@ -1015,7 +1026,7 @@ def build_design_ir(
         "constraints": constraints,
         "builder": "CadQuery/OCCT",
         "provenance": provenance or {},
-    }
+    })
 
 
 def analyze_manufacturability(params: ModelParameters) -> dict[str, Any]:
@@ -1677,6 +1688,26 @@ async def require_backend_key(request: Request, call_next: Any) -> Any:
                     if not timestamps or now - timestamps[-1] >= RATE_LIMIT_WINDOW_SECONDS:
                         REQUEST_BUCKETS.pop(bucket_ip, None)
     return await call_next(request)
+
+
+@app.post("/v1/ir/validate")
+def validate_ir_endpoint(request: IRValidationRequest) -> dict[str, Any]:
+    """Validate a v0.2 IR without starting CadQuery or writing artifacts."""
+    try:
+        normalized = validate_ir(request.ir)
+    except IRValidationError as exc:
+        raise HTTPException(status_code=422, detail={
+            "valid": False,
+            "schema_version": "0.2",
+            "issues": exc.issues,
+        }) from exc
+    return {
+        "valid": True,
+        "schema_version": "0.2",
+        "node_count": len(normalized.get("nodes", [])),
+        "constraint_count": len(normalized.get("constraints", [])),
+        "ir": normalized,
+    }
 
 
 @app.get("/health")
