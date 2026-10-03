@@ -455,7 +455,7 @@ def parse_prompt_detailed(
     chamfer = chamfer_value if chamfer_value is not None else (0.0 if kind == "angle" else 2.0)
 
     wall_value = _number_after(text, [
-        r"(?:wall|壁厚|板厚|厚度|plate\\s*thickness|thickness)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
     ])
     wall_found = wall_value is not None
     wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer", "angle") else 2.0)
