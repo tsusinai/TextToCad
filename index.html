@@ -1065,6 +1065,23 @@
       return new THREE.MeshStandardMaterial({ color, roughness, metalness });
     }
 
+    function materialPresetFor(spec) {
+      return materialPresets[(spec && spec.material) || selectedMaterial] || materialPresets.pla;
+    }
+    function applyPreviewMaterial(root, spec) {
+      if (!root) return;
+      const preset = materialPresetFor(spec);
+      root.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (material.color) material.color.setHex(preset.body);
+          if ('roughness' in material) material.roughness = preset.roughness;
+          if ('metalness' in material) material.metalness = preset.metalness;
+        });
+      });
+    }
+
     function addModelEdgeLines(THREE, root) {
       if (!root) return;
       root.traverse((node) => {
@@ -1079,11 +1096,12 @@
 
     function buildLocalThreeModel(THREE, spec) {
       const root = new THREE.Group();
-      const body = makeLocalMaterial(THREE, 0xddf79b);
-      const side = makeLocalMaterial(THREE, 0x9fca82);
-      const inner = makeLocalMaterial(THREE, 0x6e9e68);
+      const preset = materialPresetFor(spec);
+      const body = makeLocalMaterial(THREE, preset.body, preset.roughness, preset.metalness);
+      const side = makeLocalMaterial(THREE, preset.side, preset.roughness, preset.metalness);
+      const inner = makeLocalMaterial(THREE, preset.inner, Math.min(.82, preset.roughness + .08), preset.metalness);
       const dark = makeLocalMaterial(THREE, 0x252724, .72);
-      const accent = makeLocalMaterial(THREE, 0xb9d98f, .42);
+      const accent = makeLocalMaterial(THREE, preset.accent, Math.min(.72, preset.roughness), preset.metalness);
       const box = (width, height, depth, x, y, z, material) => {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.max(width, .1), Math.max(height, .1), Math.max(depth, .1)), material);
         mesh.position.set(x, y, z);
@@ -1116,6 +1134,15 @@
             cylinder(holeRadius, .5, x, bottom + .45, z, dark, false);
           });
         }
+      } else if (kind === 'rounded_cube') {
+        const radius = clamp(Number(spec.chamfer) || 4, .5, Math.max(.5, Math.min(width, depth, height) / 2 - .1));
+        const Geometry = threeState.RoundedBoxGeometry;
+        const geometry = Geometry
+          ? new Geometry(width, height, depth, radius, 5)
+          : new THREE.BoxGeometry(width, height, depth);
+        const mesh = new THREE.Mesh(geometry, body);
+        mesh.position.set(0, height / 2, 0);
+        root.add(mesh);
       } else if (kind === 'angle') {
         const extrusion = Math.max(height, 5);
         box(width, extrusion, wall, 0, extrusion / 2, -(depth - wall) / 2, side);
@@ -1168,6 +1195,7 @@
           disposeThreeObject(threeState.model);
         }
         threeState.model = buildLocalThreeModel(THREE, spec);
+        applyPreviewMaterial(threeState.model, spec);
         threeState.scene.add(threeState.model);
         threeState.active = true;
         threeState.source = 'local';
@@ -1215,6 +1243,7 @@
           disposeThreeObject(threeState.model);
         }
         threeState.model = gltf.scene;
+        applyPreviewMaterial(threeState.model, fallbackSpec || { material: selectedMaterial });
         addModelEdgeLines(THREE, threeState.model);
         // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
         // imported root so top/front views and orbit controls match the SVG preview.
@@ -1275,16 +1304,44 @@
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated L bracket front view"><polygon points="' + pointList(profile) + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
     }
 
+    function renderRoundedIso(spec) {
+      const w = clamp(spec.width / 80, .75, 1.7) * 220;
+      const d = clamp(spec.depth / 80, .75, 1.7) * 170;
+      const h = clamp(spec.height / 80, .75, 1.7) * 150;
+      const project = (x, y, z) => [165 + (x - y) * .72, 220 + (x + y) * .34 - z];
+      const top = [project(0, 0, h), project(w, 0, h), project(w, d, h), project(0, d, h)];
+      const front = [project(0, d, 0), project(w, d, 0), project(w, d, h), project(0, d, h)];
+      const side = [project(w, 0, 0), project(w, d, 0), project(w, d, h), project(w, 0, h)];
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rounded cube CAD model"><ellipse cx="205" cy="370" rx="150" ry="21" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="4" stroke-linejoin="round"><polygon points="' + pointList(top) + '" fill="#ddf79b"/><polygon points="' + pointList(front) + '" fill="#9fca82"/><polygon points="' + pointList(side) + '" fill="#6e9e68"/></g><text x="260" y="388" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">ROUNDED CUBE / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
+    }
+    function renderRoundedTop(spec) {
+      const size = clamp(Math.max(spec.width, spec.depth) / 80, .75, 1.7) * 220;
+      const radius = clamp(spec.chamfer / 8, 8, 28);
+      const x = (520 - size) / 2;
+      const y = 190;
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rounded cube top view"><rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + size.toFixed(1) + '" height="' + size.toFixed(1) + '" rx="' + radius + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + spec.width + ' mm</text></svg>';
+    }
+    function renderRoundedFront(spec) {
+      const width = clamp(spec.width / 80, .75, 1.7) * 220;
+      const height = clamp(spec.height / 80, .75, 1.7) * 220;
+      const radius = clamp(spec.chamfer / 8, 8, 28);
+      const x = (520 - width) / 2;
+      const y = 175;
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated rounded cube front view"><rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + width.toFixed(1) + '" height="' + height.toFixed(1) + '" rx="' + radius + '" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / ' + spec.width + ' × ' + spec.height + ' mm</text></svg>';
+    }
     function renderModel(spec, view) {
       if (!spec) return;
       modelWrap.className = 'model-wrap ' + view + '-view';
       const rotational = spec.kind === 'plant' || spec.kind === 'pen';
+      const roundedCube = spec.kind === 'rounded_cube';
       const angle = spec.kind === 'angle';
       modelWrap.innerHTML = rotational
         ? (view === 'top' ? renderRotationalTop(spec) : (view === 'front' ? renderRotationalFront(spec) : renderRotationalIso(spec)))
-        : angle
-          ? (view === 'top' ? renderAngleTop(spec) : (view === 'front' ? renderAngleFront(spec) : renderAngleIso(spec)))
-          : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
+        : roundedCube
+          ? (view === 'top' ? renderRoundedTop(spec) : (view === 'front' ? renderRoundedFront(spec) : renderRoundedIso(spec)))
+          : angle
+            ? (view === 'top' ? renderAngleTop(spec) : (view === 'front' ? renderAngleFront(spec) : renderAngleIso(spec)))
+            : (view === 'top' ? renderTop(spec) : (view === 'front' ? renderFront(spec) : renderIso(spec)));
       const svg = modelWrap.querySelector('svg');
       if (svg) svg.setAttribute('aria-label', currentLang === 'zh' ? ('生成的' + (view === 'top' ? '顶视' : (view === 'front' ? '前视' : '等距')) + ' CAD 模型') : ('Generated ' + view + ' CAD model'));
       applyCamera();
