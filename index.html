@@ -1266,7 +1266,7 @@
           </div>
           <div class="viewport-footer">
             <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC SOLID</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
-            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button>
+            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button><button class="export" id="exportGlbEntities" type="button" style="display:none">Export Entities GLB</button>
           </div>
         </section>
         <section class="params">
@@ -1396,6 +1396,7 @@
     const exportStep = document.getElementById('exportStep');
     const export3mf = document.getElementById('export3mf');
     const exportGlb = document.getElementById('exportGlb');
+    const exportGlbEntities = document.getElementById('exportGlbEntities');
     const issueBadge = document.getElementById('issueBadge');
     const analysisLabel = document.getElementById('analysisLabel');
     const analysisSummary = document.getElementById('analysisSummary');
@@ -1526,6 +1527,7 @@
         exportStep: 'Export STEP',
         export3mf: 'Export 3MF',
         exportGlb: 'Export GLB',
+        exportGlbEntities: 'Export Entities GLB',
         fit: 'FIT',
         grid: 'GRID',
         viewerUnits: 'Viewport Units',
@@ -1663,6 +1665,7 @@
         exportStep: '导出工业级 STEP',
         export3mf: '导出 3MF 打印文件',
         exportGlb: '导出 GLB 预览',
+        exportGlbEntities: '导出多实体 GLB',
         fit: '视角复位',
         grid: '参考网格',
         viewerUnits: '视口显示单位',
@@ -1822,6 +1825,7 @@
       if (exportStep) exportStep.textContent = t.exportStep;
       if (export3mf) export3mf.textContent = t.export3mf;
       if (exportGlb) exportGlb.textContent = t.exportGlb;
+      if (exportGlbEntities) exportGlbEntities.textContent = t.exportGlbEntities;
       if (fitView) fitView.textContent = t.fit;
       if (toggleGrid) toggleGrid.textContent = t.grid;
       if (viewerUnitSelect) {
@@ -3336,7 +3340,7 @@
     }
     function updateExportButtons() {
       const artifactFormats = backendArtifact || {};
-      [[exportStep, 'step'], [export3mf, '3mf'], [exportGlb, 'glb']].forEach(([button, format]) => {
+      [[exportStep, 'step'], [export3mf, '3mf'], [exportGlb, 'glb'], [exportGlbEntities, 'glb_entities']].forEach(([button, format]) => {
         if (!button) return;
         const available = Boolean(backendUrl && artifactFormats[format]);
         button.style.display = available ? 'inline-flex' : 'none';
