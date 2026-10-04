@@ -28,7 +28,7 @@ class IRValidationError(ValueError):
 # executor. New operations must be registered here before they can reach a
 # kernel adapter.
 ALLOWED_OPERATIONS = {
-    "box", "cylinder", "sphere", "cone", "torus", "polygon_prism", "profile",
+    "box", "cylinder", "sphere", "cone", "torus", "polygon_prism", "regular_polygon", "profile",
     "sketch", "component",
     "rounded_box", "l_profile_extrusion", "airframe_fusion",
     "extrude", "revolve", "sweep", "loft", "shell",
