@@ -3019,6 +3019,16 @@ def _generate_ir_model(
         elif request.prompt.strip():
             title = request.prompt.strip()[:120]
 
+        # In generic IR execution, sync model parameters with the actual generated shape metrics
+        # so arbitrary freeform geometry reports its real bounding box without being constrained to templates.
+        actual_bbox = checks.get("bbox_mm") or shape_metrics(shape).get("bbox_mm", {})
+        if actual_bbox and all(actual_bbox.get(axis, 0) > 0 for axis in ("x", "y", "z")):
+            params = params.model_copy(update={
+                "width": round(float(actual_bbox["x"]), 2),
+                "depth": round(float(actual_bbox["y"]), 2),
+                "height": round(float(actual_bbox["z"]), 2),
+            })
+
         provenance = copy.deepcopy(provenance)
         provenance["ir_strategy"] = "llm_generic_v0.2"
         provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
