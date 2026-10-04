@@ -3207,7 +3207,7 @@
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, material: selectedMaterial, include_steps: true };
+      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, material: selectedMaterial, include_steps: true, generation_strategy: selectedMode === 'advanced' ? 'auto' : 'legacy' };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
