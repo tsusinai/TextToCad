@@ -2919,7 +2919,9 @@
       entries.forEach((entry) => {
         const matches = entry && entry.matches;
         if (!matches) return;
-        const values = (matches.mapping_status === 'final_output' || matches.mapping_status === 'partial') && Array.isArray(matches.output_indices)
+        const values = matches.target_topology === 'face'
+          && (matches.mapping_status === 'final_output' || matches.mapping_status === 'partial')
+          && Array.isArray(matches.output_indices)
           ? matches.output_indices
           : [];
         values.forEach((value) => {
