@@ -544,3 +544,16 @@ def test_injection_draft_measurement_reports_face_level_warning():
     assert invalid["draft_pull_direction"] == [0.0, 0.0, 1.0]
     assert invalid["draft_pull_direction_source"] == "invalid_defaulted"
     assert invalid["draft_status"] == "warning"
+
+
+def test_shape_distance_prefers_kernel_method():
+    class Shape:
+        def __init__(self, distance):
+            self.distance_value = distance
+
+        def distToShape(self, other):
+            return (self.distance_value, None, None)
+
+    distance, method = app._shape_distance(Shape(4.5), Shape(4.5))
+    assert distance == 4.5
+    assert method == "brep_shape_distance"
