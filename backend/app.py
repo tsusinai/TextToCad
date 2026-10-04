@@ -966,6 +966,8 @@ def _normalize_ir_draft(
     candidate = copy.deepcopy(payload)
     if isinstance(candidate.get("ir"), dict):
         candidate = copy.deepcopy(candidate["ir"])
+    if candidate.get("schema_version") not in {None, "0.2"}:
+        candidate["schema_version"] = "0.2"
     candidate.setdefault("schema_version", "0.2")
     document = candidate.setdefault("document", {})
     if not isinstance(document, dict):
