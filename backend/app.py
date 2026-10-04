@@ -1170,6 +1170,22 @@ def _deterministic_ir_plan(
             "parameters": {"size": ["width", "depth", "height"], "centered": [True, True, False]},
             "frame": "xy",
         }]
+
+    explicit_edge_treatment = bool(re.search(
+        r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\\s*edge|no\\s*sharp|无棱角)",
+        text,
+        flags=re.IGNORECASE,
+    ))
+    if explicit_edge_treatment and params.chamfer > 0:
+        edge_operation = "fillet" if params.edge_style == "fillet" else "chamfer"
+        nodes.append({
+            "id": "edge_treatment",
+            "kind": "feature",
+            "operation": edge_operation,
+            "inputs": ["body"],
+            "parameters": {"radius": params.chamfer},
+        })
+    output_node = nodes[-1]["id"]
     return {
         "schema_version": "0.2",
         "document": {
@@ -1188,7 +1204,7 @@ def _deterministic_ir_plan(
             {"id": "depth_positive", "type": "range", "parameter": "depth", "minimum_mm": 0.001, "hard": True},
             {"id": "height_positive", "type": "range", "parameter": "height", "minimum_mm": 0.001, "hard": True},
         ],
-        "outputs": [{"id": "main", "node": "body", "format": ["step", "stl", "glb"]}],
+        "outputs": [{"id": "main", "node": output_node, "format": ["step", "stl", "glb"]}],
         "provenance": {
             "planner": "deterministic_primitive",
             "assumptions": ["LLM unavailable; explicit primitive vocabulary compiled without a model-family template."],
