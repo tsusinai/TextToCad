@@ -820,6 +820,8 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
         content = str(content).strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\\s*|\\s*```$", "", content, flags=re.IGNORECASE | re.DOTALL).strip()
         parsed = json.loads(content)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError, ValueError) as exc:
         raise RuntimeError("LLM provider returned invalid Semantic CAD IR JSON") from exc
