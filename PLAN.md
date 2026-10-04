@@ -211,3 +211,15 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 
 - 在 Docker 中接入真实 DeepSeek Flash/兼容 API，采集 IR 成功率、回退率、内核耗时和 B-Rep 失败原因。
 - 用真实模型样本扩充 primitive/feature/constraint 覆盖，并将约束修复循环接入 auto 的有限重试。
+
+
+## P5 实现进度（2026-10-04）
+
+- 自动 IR 路径在 CadQuery/OCCT 执行前接入已有约束修复器，最多尝试两轮受限参数 patch；每轮都重新验证 IR 与工艺约束。
+- 修复事件进入 generation trace，patch、最终约束报告进入 checks、provenance 和 manifest；修复失败仍会由 auto 策略回退 legacy。
+- 通用 IR 的节点 ID 会转换为安全的步骤预览 ID，避免自然语言生成的短横线、数字或特殊字符破坏步骤 GLB 路径。
+
+下一步：
+
+- 将 IR 编译错误按节点和操作分类，形成可观测指标并用于提示词反馈。
+- 扩充 sweep、loft、pattern、面级选择器的 CadQuery 执行覆盖，并建立真实 LLM 语料回归集。
