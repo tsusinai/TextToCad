@@ -141,7 +141,7 @@ class GenerateRequest(BaseModel):
     # Optional mold pull direction used by injection draft analysis; defaults to +Z.
     mold_pull_direction: list[float] | None = None
     # legacy keeps existing behavior; ir uses generic Semantic CAD IR; auto tries IR then falls back safely.
-    generation_strategy: Literal["legacy", "ir", "auto"] = "legacy"
+    generation_strategy: Literal["legacy", "ir", "auto"] = "ir"
 
 
 class IRValidationRequest(BaseModel):
@@ -201,12 +201,14 @@ class GenerateResponse(BaseModel):
     analysis: dict[str, Any]
     step_schema: str
     mode: str = "standard"
-    generation_strategy: str = "legacy"
+    generation_strategy: str = "ir"
     llm_used: bool = False
     assumptions: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
     design_ir: dict[str, Any] = Field(default_factory=dict)
     generation_trace: list[dict[str, Any]] = Field(default_factory=list)
+    needs_clarification: bool = False
+    clarification_questions: list[str] = Field(default_factory=list)
 
 
 CACHE_LOCK = Lock()
@@ -948,6 +950,134 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise RuntimeError("LLM provider returned a non-object Semantic CAD IR")
     return parsed
+
+
+
+def _deterministic_ir_plan(
+    prompt: str,
+    process: str,
+    units: str,
+    params: ModelParameters,
+) -> dict[str, Any]:
+    """Build a conservative primitive IR when no LLM provider is configured.
+
+    This is deliberately shape-agnostic: it only handles explicit primitive
+    vocabulary and never maps an unknown object to a named model family.
+    Free-form descriptions still require an LLM planner.
+    """
+    text = " ".join(str(prompt).strip().lower().split())
+    primitive_tokens = (
+        "cube", "block", "box", "方块", "正方体", "立方体",
+        "sphere", "ball", "球", "cylinder", "圆柱", "圆柱体",
+        "cone", "圆锥", "圆锥体", "polygon", "多边形", "triangle", "三角",
+        "square", "正方形", "pentagon", "五边形", "hexagon", "六边形",
+        "octagon", "八边形", "gon", "边形",
+    )
+    if not any(token in text for token in primitive_tokens):
+        raise RuntimeError(
+            "LLM API is required for free-form CAD descriptions; "
+            "set LLM_API_KEY/OPENAI_API_KEY or use an explicit primitive description"
+        )
+
+    width = max(1.0, float(params.width))
+    depth = max(1.0, float(params.depth))
+    height = max(1.0, float(params.height))
+    parameters: dict[str, Any] = {
+        "width": {"value": width, "unit": "mm", "source": "parser", "role": "dimension"},
+        "depth": {"value": depth, "unit": "mm", "source": "parser", "role": "dimension"},
+        "height": {"value": height, "unit": "mm", "source": "parser", "role": "dimension"},
+    }
+    datums = [{"id": "xy", "type": "plane", "origin": [0, 0, 0], "normal": [0, 0, 1]}]
+    nodes: list[dict[str, Any]]
+    if any(token in text for token in ("sphere", "ball", "球")):
+        parameters["radius"] = {
+            "value": min(width, depth) / 2,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "sphere",
+            "parameters": {"radius": "radius"},
+            "frame": "xy",
+        }]
+    elif any(token in text for token in ("cylinder", "圆柱", "圆柱体")):
+        parameters["radius"] = {
+            "value": min(width, depth) / 2,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "cylinder",
+            "parameters": {"radius": "radius", "height": "height"},
+            "frame": "xy",
+        }]
+    elif any(token in text for token in ("cone", "圆锥", "圆锥体")):
+        parameters["radius"] = {
+            "value": min(width, depth) / 2,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "cone",
+            "parameters": {"radius1": "radius", "radius2": 0.01, "height": "height"},
+            "frame": "xy",
+        }]
+    elif _polygon_side_count(text) is not None:
+        sides = _polygon_side_count(text) or len(params.profile_points) or 3
+        profile = params.profile_points or _polygon_profile_points(sides, width, depth)
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "regular_polygon",
+            "parameters": {
+                "sides": sides,
+                "points": profile,
+                "height": "height",
+            },
+            "frame": "xy",
+        }]
+    else:
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "box",
+            "parameters": {"size": ["width", "depth", "height"], "centered": [True, True, False]},
+            "frame": "xy",
+        }]
+    return {
+        "schema_version": "0.2",
+        "document": {
+            "id": "deterministic-primitive",
+            "intent": prompt[:400],
+            "units": "mm",
+            "language": "zh-CN" if re.search(r"[一-龥]", prompt) else "en",
+        },
+        "units": "mm",
+        "process": process,
+        "parameters": parameters,
+        "datums": datums,
+        "nodes": nodes,
+        "constraints": [
+            {"id": "width_positive", "type": "range", "parameter": "width", "minimum_mm": 0.001, "hard": True},
+            {"id": "depth_positive", "type": "range", "parameter": "depth", "minimum_mm": 0.001, "hard": True},
+            {"id": "height_positive", "type": "range", "parameter": "height", "minimum_mm": 0.001, "hard": True},
+        ],
+        "outputs": [{"id": "main", "node": "body", "format": ["step", "stl", "glb"]}],
+        "provenance": {
+            "planner": "deterministic_primitive",
+            "assumptions": ["LLM unavailable; explicit primitive vocabulary compiled without a model-family template."],
+        },
+        "builder": "CadQuery/OCCT",
+    }
 
 
 def interpret_prompt(
@@ -2850,7 +2980,14 @@ def _generate_ir_model(
                       llm_used=False, dimensions_mm=[params.width, params.depth, params.height],
                       assumptions_count=len(baseline_assumptions))
         recorder.emit("planning", "ir_plan", "running", schema_version="0.2")
-        raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
+        llm_used = True
+        try:
+            raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
+        except RuntimeError as exc:
+            llm_used = False
+            raw_ir = _deterministic_ir_plan(request.prompt, request.process, request.units, params)
+            baseline_assumptions.append(str(exc)[:180])
+            recorder.emit("planning", "llm_fallback", "warning", reason=str(exc)[:240], planner="deterministic_primitive")
         normalized_ir = validate_ir(raw_ir)
         normalized_ir, polygon_profile_enforced = _enforce_explicit_polygon_profile(
             normalized_ir,
@@ -3033,7 +3170,7 @@ def _generate_ir_model(
             })
 
         provenance = copy.deepcopy(provenance)
-        provenance["ir_strategy"] = "llm_generic_v0.2"
+        provenance["ir_strategy"] = "llm_generic_v0.2" if llm_used else "deterministic_primitive_v0.2"
         provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
         provenance["ir_constraint_report"] = constraint_report
         provenance["ir_repair_attempts"] = repair_attempts
@@ -3054,7 +3191,7 @@ def _generate_ir_model(
             {
                 "mode": request.mode,
                 "strategy": "ir",
-                "llm_used": True,
+                "llm_used": llm_used,
                 "assumptions": assumptions,
                 "constraint_report": constraint_report,
                 "repair_attempts": repair_attempts,
@@ -3077,7 +3214,7 @@ def _generate_ir_model(
             step_schema=step_schema,
             mode=request.mode,
             generation_strategy="ir",
-            llm_used=True,
+            llm_used=llm_used,
             assumptions=assumptions,
             provenance=provenance,
             design_ir=normalized_ir,
