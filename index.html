@@ -3542,9 +3542,9 @@
         const nextSpec = editing ? applyEdit(value, previousSpec) : parseModel(value);
         modelSpec = Object.assign({}, nextSpec);
         const canonical = canonicalPrompt(nextSpec);
-        const backendPrompt = selectedMode === 'advanced'
-          ? value.slice(0, 3200) + '\n\nBaseline CAD parameters: ' + canonical
-          : value.slice(0, 3200) + '\n\nParsed CAD parameters: ' + canonical;
+        // The backend receives the user's natural language verbatim. Local parsing
+        // remains an offline preview only and is never injected as a model-family hint.
+        const backendPrompt = value.slice(0, 3200);
         modelState.textContent = copy[currentLang].solving;
         solved.textContent = copy[currentLang].parsing;
         solved.classList.remove('warn');
