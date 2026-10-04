@@ -526,4 +526,10 @@ def test_injection_draft_measurement_reports_face_level_warning():
     report = app._face_level_dfm(Shape(), "injection")
     assert report["draft_status"] == "warning"
     assert report["draft_measurements"][0]["status"] == "warning"
+    assert report["draft_pull_direction"] == [0.0, 0.0, 1.0]
+    assert report["draft_pull_direction_source"] == "default"
     assert report["clearance_status"] == "unknown"
+
+    configured = app._face_level_dfm(Shape(), "injection", [0, 1, 0])
+    assert configured["draft_pull_direction"] == [0.0, 1.0, 0.0]
+    assert configured["draft_pull_direction_source"] == "request"
