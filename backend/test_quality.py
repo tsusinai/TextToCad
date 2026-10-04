@@ -700,6 +700,8 @@ def test_regular_octagon_prompt_uses_eight_sided_profile():
     assert (params.width, params.depth, params.height) == (120.0, 120.0, 42.0)
     assert len(params.profile_points) == 8
     assert all(len(point) == 2 for point in params.profile_points)
+    assert max(point[0] for point in params.profile_points) - min(point[0] for point in params.profile_points) == 120.0
+    assert max(point[1] for point in params.profile_points) - min(point[1] for point in params.profile_points) == 120.0
     assert params.chamfer == 0.0
     ir = app.build_design_ir("正八边形", params, "standard", False, provenance["assumptions"], provenance)
     assert ir["nodes"][0]["operation"] == "polygon_prism"
