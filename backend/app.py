@@ -53,6 +53,17 @@ except ImportError as exc:  # pragma: no cover - optional preview dependency
     TRIMESH_ERROR = str(exc)
 
 try:
+    from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
+    from OCP.gp import gp_Dir, gp_Lin, gp_Pnt
+    OCCT_RAY_AVAILABLE = True
+    OCCT_RAY_ERROR = ""
+except ImportError as exc:  # pragma: no cover - optional OCCT ray API
+    BRepIntCurveSurface_Inter = None
+    gp_Dir = gp_Lin = gp_Pnt = None
+    OCCT_RAY_AVAILABLE = False
+    OCCT_RAY_ERROR = str(exc)
+
+try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).resolve().parent / ".env")
 except Exception:
@@ -1492,6 +1503,36 @@ def _shape_distance(
     return None, None
 
 
+def _normal_ray_thickness(
+    shape: Any,
+    origin: tuple[float, float, float],
+    normal: tuple[float, float, float],
+) -> float | None:
+    """Sample the first forward OCCT ray hit from a face center."""
+    if not OCCT_RAY_AVAILABLE or BRepIntCurveSurface_Inter is None:
+        return None
+    try:
+        solid = shape.val()
+        wrapped = getattr(solid, "wrapped", solid)
+        line = gp_Lin(gp_Pnt(*origin), gp_Dir(*normal))
+        intersector = BRepIntCurveSurface_Inter()
+        intersector.Init(wrapped, line, 1e-7)
+        distances: list[float] = []
+        for point_index in range(1, int(intersector.NbPoints()) + 1):
+            point = intersector.Pnt(point_index)
+            delta = (
+                float(point.X()) - origin[0],
+                float(point.Y()) - origin[1],
+                float(point.Z()) - origin[2],
+            )
+            distance = sum(delta[axis] * normal[axis] for axis in range(3))
+            if math.isfinite(distance) and distance > 1e-4:
+                distances.append(distance)
+        return min(distances) if distances else None
+    except Exception:
+        return None
+
+
 def _shape_intersection_volume(
     first: Any,
     second: Any,
@@ -1650,6 +1691,7 @@ def _face_level_dfm(
     overhang_faces = 0
     side_faces = 0
     samples: list[dict[str, Any]] = []
+    ray_thickness_values: list[float] = []
     face_records: list[dict[str, Any]] = []
     threshold = math.cos(math.radians(float(profile["max_overhang"])))
     for index, face in enumerate(faces):
@@ -1678,6 +1720,11 @@ def _face_level_dfm(
             "center_mm": [round(value, 4) for value in center] if center is not None else None,
         }
         unit_normal = _unit(normal) if normal is not None else None
+        if unit_normal is not None and center is not None:
+            ray_thickness = _normal_ray_thickness(shape, center, tuple(-component for component in unit_normal))
+            if ray_thickness is not None:
+                sample["normal_ray_thickness_mm"] = round(ray_thickness, 6)
+                ray_thickness_values.append(ray_thickness)
         if unit_normal is not None:
             normal_z = max(-1.0, min(1.0, unit_normal[2]))
             sample["normal"] = [round(component, 5) for component in unit_normal]
@@ -1758,6 +1805,7 @@ def _face_level_dfm(
 
     wall_method = (wall_candidate or {}).get("method")
     wall_analysis_status = "measured" if wall_candidate is not None else "unavailable"
+    ray_status = "available" if ray_thickness_values else ("unavailable" if not OCCT_RAY_AVAILABLE else "no_hit")
     return {
         "status": "partial",
         "face_count": len(faces),
@@ -1771,11 +1819,13 @@ def _face_level_dfm(
         "wall_thickness_proxy_status": wall_proxy_status,
         "wall_thickness_measurement": wall_candidate,
         "wall_thickness_analysis": {
-            "status": wall_analysis_status,
-            "method": wall_method or "opposing_face_center_proxy",
-            "normal_ray_sampling": "not_available",
-            "confidence": "medium" if wall_method == "brep_face_distance" else "low",
-            "reason": "OCCT face distance is used when available; a normal ray solver is not enabled in this runtime",
+            "status": "ray_sampled" if ray_thickness_values else wall_analysis_status,
+            "method": "occt_normal_ray" if ray_thickness_values else (wall_method or "opposing_face_center_proxy"),
+            "normal_ray_sampling": ray_status,
+            "normal_ray_min_mm": round(min(ray_thickness_values), 6) if ray_thickness_values else None,
+            "normal_ray_sample_count": len(ray_thickness_values),
+            "confidence": "high" if ray_thickness_values else ("medium" if wall_method == "brep_face_distance" else "low"),
+            "reason": "OCCT normal rays sampled from face centers when available; otherwise a conservative B-Rep proxy is reported",
         },
         "overhang_status": "warning" if overhang_faces else "pass",
         "draft_status": draft_status,
@@ -1789,7 +1839,7 @@ def _face_level_dfm(
         "samples": samples[:64],
         "limitations": [
             "wall thickness uses B-Rep face distance when available and otherwise opposing-face center distance",
-            "normal ray thickness sampling is not enabled; treat this result as a conservative proxy",
+            "normal ray sampling is optional and only trusted when normal_ray_sampling=available",
             "clearance is unknown without a mating part or explicit clearance faces",
             "overhang uses face-normal screening, not support simulation",
             "draft uses the configured pull direction but does not solve mold split or undercuts",
