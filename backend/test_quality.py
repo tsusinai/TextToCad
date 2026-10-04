@@ -669,3 +669,24 @@ def test_ir_validation_accepts_multiple_semantic_outputs():
     }
     normalized = app.validate_ir(ir)
     assert [item["node"] for item in normalized["outputs"]] == ["left", "right"]
+
+
+def test_triangle_prompt_compiles_to_generic_polygon_prism():
+    title, params, provenance = app.parse_prompt_detailed(
+        "三角形方块，底面 60 x 40 mm，厚度 30 mm",
+    )
+    assert title == "Parametric polygon prism"
+    assert params.kind == "polygon_prism"
+    assert params.profile_points == [[-30.0, -20.0], [30.0, -20.0], [0.0, 20.0]]
+    assert provenance["fields"]["profile_points"]["status"] == "derived"
+    ir = app.build_design_ir(
+        "三角形方块，底面 60 x 40 mm，厚度 30 mm",
+        params,
+        "standard",
+        False,
+        provenance["assumptions"],
+        provenance,
+    )
+    assert ir["nodes"][0]["operation"] == "polygon_prism"
+    assert len(ir["nodes"][0]["parameters"]["points"]) == 3
+    assert app.validate_ir(ir)["nodes"][0]["operation"] == "polygon_prism"
