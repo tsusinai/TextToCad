@@ -3085,46 +3085,13 @@
           return [op + (id ? ' · ' + id : ''), summary];
         });
       } else {
-        features = spec.kind === 'airplane'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? '机身' : 'Fuselage', spec.width + ' mm'],
-            [currentLang === 'zh' ? '机翼' : 'Wings', spec.depth + ' mm span'],
-            [currentLang === 'zh' ? '尾翼' : 'Tailplane', Math.round(spec.depth * .22) + ' mm']
-          ]
-        : spec.kind === 'cup'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? '杯壁' : 'Cup wall', (spec.wall || 2) + ' mm'],
-            [currentLang === 'zh' ? '开口' : 'Opening', 'Ø' + Math.min(spec.width, spec.depth) + ' mm'],
-            [currentLang === 'zh' ? '握柄' : 'Handle', currentLang === 'zh' ? '环形握柄' : 'loop handle']
-          ]
-        : spec.kind === 'rounded_cube'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? '圆角实体' : 'Rounded solid', (spec.chamfer || 4) + ' mm ' + (currentLang === 'zh' ? '圆角半径' : 'fillet radius')],
-            [currentLang === 'zh' ? '边界样式' : 'Edge style', currentLang === 'zh' ? '全边圆角' : 'all-edge fillet'],
-            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '圆角' : 'fillet')]
-          ]
-        : spec.kind === 'angle'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? 'L 形外轮廓' : 'L profile', (spec.width || 0) + ' × ' + (spec.depth || 0) + ' mm'],
-            [currentLang === 'zh' ? '板厚' : 'Plate thickness', (spec.wall || 3) + ' mm'],
-            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
-          ]
-        : [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [copy[currentLang].shellFeature, (spec.wall || 3) + ' mm ' + (currentLang === 'zh' ? '壁厚' : 'wall')],
-            [copy[currentLang].dividerFeature, spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments')],
-            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
-          ];
-        if (spec.kind === 'plant' && Number(spec.drainage_holes || 0) > 0) {
-          features.push([copy[currentLang].drainageFeature, spec.drainage_holes + (currentLang === 'zh' ? ' 个' : ' ')]);
-        }
-        if (spec.kind === 'lamp' && spec.cable_channel) {
-          features.push([copy[currentLang].cableFeature, currentLang === 'zh' ? '底部隐藏通道' : 'underside recess']);
-        }
+        const profileCount = Array.isArray(spec.profile_points) ? spec.profile_points.length : 0;
+        features = [
+          [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
+          [currentLang === 'zh' ? '自然语言意图' : 'Natural-language intent', spec.title || (currentLang === 'zh' ? '未命名实体' : 'Untitled solid')],
+          [currentLang === 'zh' ? '轮廓与特征' : 'Profile and features', profileCount >= 3 ? profileCount + (currentLang === 'zh' ? ' 个轮廓顶点' : ' profile vertices') : (currentLang === 'zh' ? '由 IR 规划' : 'planned by IR')],
+          [currentLang === 'zh' ? '制造参数' : 'Manufacturing parameters', (spec.process || selectedProcess).toUpperCase() + ' · ' + (spec.chamfer || 0) + ' mm edge treatment']
+        ];
       }
       features.forEach((feature, index) => {
         const node = document.createElement('div');
