@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app
+import ir_executor
 
 
 def test_explicit_units_are_normalized_to_mm():
@@ -578,7 +579,7 @@ def test_selector_returns_match_metadata_without_kernel():
             return selected
 
     metadata = {}
-    result = app._topology_selection(
+    result = ir_executor._topology_selection(
         Shape(),
         {"topology": "edge", "where": [{"index": 1}]},
         "edge",
