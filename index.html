@@ -2071,8 +2071,7 @@
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
       let depth = airplaneShape ? (wingSpan || positional[1] || 140) : (valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || (cupShape ? width : width * 0.67))));
       let height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (cupShape ? 100 : (airplaneShape ? 40 : (angleShape ? 40 : (roundedCube ? 80 : 42)))));
-      if (polygonShape && !triplet.length && !pair.length && !footprint && !diameter && !valueFor('wide|width|宽|deep|depth|长|深') && !genericNumbers.length) depth = width;
-      if (polygonShape && !triplet.length && !pair.length && !footprint && !diameter && !genericNumbers.length && valueFor('wide|width|宽') === null) width = depth = width;
+      if (polygonShape && polygonSides !== 3 && !triplet.length && !pair.length && !footprint && !diameter && !valueFor('wide|width|宽|deep|depth|长|深') && !genericNumbers.length) depth = width;
       if (cubeShape && triplet.length !== 3) {
         const edge = cubeEdge || pair[0] || genericNumbers[0] || 80;
         width = valueFor('wide|width|宽') || edge;
