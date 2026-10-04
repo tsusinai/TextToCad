@@ -1830,6 +1830,66 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _export_face_mapped_glb(shape: Any, glb_path: Path) -> dict[str, Any] | None:
+    """Export one GLB node per OCCT face so selector indices survive the preview boundary."""
+    if trimesh is None:
+        return None
+    try:
+        faces = list(shape.val().Faces())
+    except Exception:
+        return None
+    scene = trimesh.Scene()
+    mapping: list[dict[str, Any]] = []
+    for face_index, face in enumerate(faces):
+        tessellate = getattr(face, "tessellate", None)
+        if not callable(tessellate):
+            return None
+        try:
+            vertices, triangles = tessellate(0.1)
+            coords: list[tuple[float, float, float]] = []
+            for vertex in vertices:
+                if hasattr(vertex, "toTuple") and callable(vertex.toTuple):
+                    value = vertex.toTuple()
+                else:
+                    value = (vertex.x, vertex.y, vertex.z)
+                if len(value) != 3:
+                    raise ValueError("face tessellation vertex is not 3D")
+                coords.append(tuple(float(component) for component in value))
+            triangle_indices = [
+                tuple(int(component) for component in triangle)
+                for triangle in triangles
+            ]
+            if not coords or not triangle_indices:
+                continue
+            mesh = trimesh.Trimesh(
+                vertices=coords,
+                faces=triangle_indices,
+                process=False,
+            )
+            node_name = f"occt_face_{face_index}"
+            mesh.metadata["occt_face_index"] = face_index
+            scene.add_geometry(mesh, node_name=node_name, geom_name=node_name)
+            mapping.append({
+                "face_index": face_index,
+                "node_name": node_name,
+                "vertex_count": len(coords),
+                "triangle_count": len(triangle_indices),
+            })
+        except Exception:
+            return None
+    if not mapping:
+        return None
+    scene.export(str(glb_path), file_type="glb")
+    if not glb_path.exists() or glb_path.stat().st_size == 0:
+        return None
+    return {
+        "version": "occt-face-glb-v1",
+        "coordinate_system": "Z-up",
+        "mapped_face_count": len(mapping),
+        "faces": mapping,
+    }
+
+
 def _write_artifacts(
     model_id: str,
     shape: Any,
