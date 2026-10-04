@@ -1444,6 +1444,82 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
     }
 
 
+def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
+    """Collect conservative face-level samples without claiming full DFM coverage."""
+    profile = PROCESS_PROFILES[process]
+    try:
+        faces = list(shape.val().Faces())
+    except Exception as exc:
+        return {
+            "status": "skipped",
+            "reason": str(exc)[:180],
+            "limitations": ["face enumeration unavailable"],
+        }
+    areas: list[float] = []
+    downward_faces = 0
+    overhang_faces = 0
+    side_faces = 0
+    samples: list[dict[str, Any]] = []
+    threshold = math.cos(math.radians(float(profile["max_overhang"])))
+    for index, face in enumerate(faces):
+        try:
+            area = float(face.Area())
+        except Exception:
+            continue
+        areas.append(area)
+        normal = None
+        try:
+            vector = face.normalAt()
+            normal = (float(vector.x), float(vector.y), float(vector.z))
+        except Exception:
+            pass
+        center = None
+        try:
+            point = face.Center()
+            center = [round(float(point.x), 4), round(float(point.y), 4), round(float(point.z), 4)]
+        except Exception:
+            pass
+        sample: dict[str, Any] = {
+            "index": index,
+            "area_mm2": round(area, 6),
+            "center_mm": center,
+        }
+        if normal is not None:
+            normal_z = max(-1.0, min(1.0, normal[2]))
+            sample["normal"] = [round(component, 5) for component in normal]
+            if normal_z < -0.05:
+                downward_faces += 1
+            if normal_z < -threshold:
+                overhang_faces += 1
+            if abs(normal_z) < 0.15:
+                side_faces += 1
+        samples.append(sample)
+    if process == "injection":
+        draft_status = "review"
+        draft_reason = "face normals are sampled, but datum and draft angle are not solved"
+    else:
+        draft_status = "not_applicable"
+        draft_reason = "draft is only required for injection molding"
+    return {
+        "status": "partial",
+        "face_count": len(faces),
+        "sample_count": len(samples),
+        "min_face_area_mm2": round(min(areas), 6) if areas else None,
+        "max_face_area_mm2": round(max(areas), 6) if areas else None,
+        "downward_face_count": downward_faces,
+        "overhang_face_count": overhang_faces,
+        "side_face_count": side_faces,
+        "overhang_status": "warning" if overhang_faces else "pass",
+        "draft_status": draft_status,
+        "draft_reason": draft_reason,
+        "samples": samples[:64],
+        "limitations": [
+            "wall thickness and clearance are still nominal",
+            "overhang uses face-normal screening, not support simulation",
+        ],
+    }
+
+
 def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any]) -> dict[str, Any]:
     metrics = _shape_metrics(shape)
     bbox = metrics["bbox_mm"]
@@ -1469,9 +1545,10 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
         "dimension_tolerance_mm": round(tolerance_limit, 6),
         "wall_thickness": "wall_thickness" not in issue_codes,
         "edge_treatment": "edge_treatment" not in issue_codes,
-        "overhang": "unknown",
-        "draft_angle": "unknown",
+        "overhang": (analysis.get("face_measurements") or {}).get("overhang_status", "unknown"),
+        "draft_angle": (analysis.get("face_measurements") or {}).get("draft_status", "unknown"),
         "clearance": "unknown",
+        "face_measurement_quality": (analysis.get("face_measurements") or {}).get("status", "unknown"),
         "export_ready": False,
         "measurement_quality": "nominal_with_bbox",
     }
@@ -2106,6 +2183,7 @@ def _generate_ir_model(
 
         recorder.emit("validating", "geometry_validation", "running")
         analysis = analyze_manufacturability(params)
+        analysis["face_measurements"] = _face_level_dfm(shape, params.process)
         checks = _validate_shape(shape, params, analysis)
         checks["ir_constraints"] = constraint_report
         checks["ir_repair_attempts"] = repair_attempts
@@ -2278,6 +2356,7 @@ def _generate_model(
         shape = build_geometry(params, recorder, design_ir, snapshots)
         recorder.emit("validating", "geometry_validation", "running")
         analysis = analyze_manufacturability(params)
+        analysis["face_measurements"] = _face_level_dfm(shape, params.process)
         edge_feature = next((node for node in design_ir["features"] if node["id"] == "edge_treatment"), None)
         if edge_feature and edge_feature["status"] == "degraded":
             analysis["issues"].append({
