@@ -254,6 +254,9 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
     if operation in {"fillet", "chamfer"}:
         if len(inputs) != 1:
             raise IRExecutionError(f"{operation} requires exactly one input")
+        structured_selector = values.get("selector") or values.get("face_selector") or values.get("edge_selector")
+        if isinstance(structured_selector, dict):
+            raise IRExecutionError("selector resolution requires the P6 topology adapter")
         radius = _number(parameters, values.get("radius", values.get("distance")), f"{operation}.radius")
         selection = values.get("selection")
         edges = inputs[0].edges(selection) if selection else inputs[0].edges()
