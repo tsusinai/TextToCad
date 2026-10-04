@@ -2,8 +2,7 @@
 
 This first solver pass is deterministic and intentionally small: it resolves
 numeric parameter expressions and evaluates range/manufacturing constraints.
-Topology and geometric constraints are returned as deferred checks until the
-OCCT selector/measurement layer is available.
+Topology and geometric constraints remain deferred in the scalar solver; the executor now resolves basic OCCT selectors, while full geometric relation solving is still reported for review.
 """
 from __future__ import annotations
 
