@@ -1429,6 +1429,7 @@
     const processStorageKey = 'formCadProcess';
     const unitStorageKey = 'formCadUnits';
     const materialStorageKey = 'formCadMaterial';
+    const pullDirectionStorageKey = 'formCadPullDirection';
     const modeStorageKey = 'formCadGenerationMode';
     const materialPresets = {
       pla: { label: { en: 'Matte PLA · warm white', zh: '哑光 PLA · 暖白' }, meta: { en: 'Print-ready surface', zh: '适合打印的表面' }, body: 0xddf79b, side: 0x9fca82, inner: 0x6e9e68, accent: 0xb9d98f, roughness: .62, metalness: .02 },
@@ -1453,7 +1454,13 @@
     if (!['mm', 'cm', 'm', 'in'].includes(selectedUnits)) selectedUnits = 'mm';
     let selectedMaterial = (() => { try { return localStorage.getItem(materialStorageKey) || 'pla'; } catch (error) { return 'pla'; } })();
     if (!materialPresets[selectedMaterial]) selectedMaterial = 'pla';
+    let selectedPullDirection = (() => {
+      try { return localStorage.getItem(pullDirectionStorageKey) || '0,0,1'; } catch (error) { return '0,0,1'; }
+    })();
+    const validPullDirections = new Set(['0,0,1', '0,0,-1', '1,0,0', '-1,0,0', '0,1,0', '0,-1,0']);
+    if (!validPullDirections.has(selectedPullDirection)) selectedPullDirection = '0,0,1';
     processSelect.value = selectedProcess;
+    if (pullDirectionSelect) pullDirectionSelect.value = selectedPullDirection;
     if (unitSelect) unitSelect.value = selectedUnits;
     if (materialSelect) materialSelect.value = selectedMaterial;
     if (generationMode) generationMode.value = selectedMode;
@@ -1866,6 +1873,14 @@
       processSelect.options[1].textContent = t.slaOption;
       processSelect.options[2].textContent = t.cncOption;
       processSelect.options[3].textContent = t.injectionOption;
+      if (pullDirectionLabel) pullDirectionLabel.textContent = t.pullLabel;
+      if (pullDirectionHint) pullDirectionHint.textContent = t.pullHint;
+      if (pullDirectionSelect) {
+        pullDirectionSelect.setAttribute('aria-label', t.pullLabel);
+        const pullLabels = [t.pullOptionZ, t.pullOptionNegZ, t.pullOptionX, t.pullOptionNegX, t.pullOptionY, t.pullOptionNegY];
+        pullLabels.forEach((label, index) => { if (pullDirectionSelect.options[index]) pullDirectionSelect.options[index].textContent = label; });
+      }
+      updatePullDirectionControl();
       updateProcessHint();
       document.querySelector('.params-head .section-label').textContent = t.params;
       solved.textContent = t.solved;
@@ -2770,6 +2785,14 @@
         resetCamera();
       });
     }
+    function updatePullDirectionControl() {
+      const visible = selectedProcess === 'injection';
+      if (pullDirectionWrap) pullDirectionWrap.hidden = !visible;
+      if (pullDirectionSelect) {
+        pullDirectionSelect.hidden = !visible;
+        pullDirectionSelect.value = selectedPullDirection;
+      }
+    }
     function updateProcessHint(profileOverride) {
       const profile = profileOverride || processProfiles[selectedProcess];
       if (!profile || !processProfileHint) return;
@@ -3246,7 +3269,17 @@
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, material: selectedMaterial, include_steps: true, generation_strategy: selectedMode === 'advanced' ? 'auto' : 'legacy' };
+      const activeProcess = process || selectedProcess;
+      const payload = {
+        prompt: value,
+        units: selectedUnits,
+        process: activeProcess,
+        mode: selectedMode,
+        material: selectedMaterial,
+        include_steps: true,
+        generation_strategy: selectedMode === 'advanced' ? 'auto' : 'legacy',
+        mold_pull_direction: activeProcess === 'injection' ? selectedPullDirection.split(',').map(Number) : undefined
+      };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -3481,9 +3514,17 @@
       updateExportButtons();
       if (modelSpec) generateModel();
     });
+    if (pullDirectionSelect) pullDirectionSelect.addEventListener('change', () => {
+      selectedPullDirection = validPullDirections.has(pullDirectionSelect.value) ? pullDirectionSelect.value : '0,0,1';
+      try { localStorage.setItem(pullDirectionStorageKey, selectedPullDirection); } catch (error) {}
+      updatePullDirectionControl();
+      backendArtifact = null;
+      if (modelSpec) generateModel();
+    });
     processSelect.addEventListener('change', () => {
       selectedProcess = processSelect.value;
       try { localStorage.setItem(processStorageKey, selectedProcess); } catch (error) {}
+      updatePullDirectionControl();
       backendArtifact = null;
       updateExportButtons();
       updateProcessHint();
