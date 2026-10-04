@@ -573,7 +573,7 @@ def parse_prompt_detailed(
     generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
     height_found = height is not None or triplet_found or generic_height is not None or polygon_extrusion is not None
     height = height or polygon_extrusion or (generic_height if generic_height is not None else default_height)
-    if cube_shape and not triplet_found and not diameter_found and not any((width_found, depth_found, height_found)):
+    if cube_shape and kind != "polygon_prism" and not triplet_found and not diameter_found and not any((width_found, depth_found, height_found)):
         edge = cube_edge or (generic_numbers[0] if generic_numbers else 80.0)
         width = depth = height = edge
         width_found = depth_found = height_found = True
