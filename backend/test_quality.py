@@ -433,3 +433,9 @@ def test_ir_validator_accepts_path_and_pattern_features():
     }
     normalized = app.validate_ir(ir)
     assert [node["operation"] for node in normalized["nodes"]][-2:] == ["sweep", "linear_pattern"]
+
+
+def test_ir_fallback_error_codes_are_stable():
+    assert app._ir_error_code(RuntimeError("operation 'sweep' is not implemented")) == "unsupported_operation"
+    assert app._ir_error_code(RuntimeError("CadQuery is not installed")) == "cadquery_unavailable"
+    assert app._ir_error_code(ValueError("geometry validation failed")) == "kernel_validation"
