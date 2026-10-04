@@ -691,3 +691,12 @@ def test_triangle_prompt_compiles_to_generic_polygon_prism():
     assert ir["nodes"][0]["operation"] == "polygon_prism"
     assert len(ir["nodes"][0]["parameters"]["points"]) == 3
     assert app.validate_ir(ir)["nodes"][0]["operation"] == "polygon_prism"
+
+
+def test_triangle_without_dimensions_stays_generic_polygon_prism():
+    title, params, provenance = app.parse_prompt_detailed("一个三角形方块")
+    assert title == "Parametric polygon prism"
+    assert params.kind == "polygon_prism"
+    assert params.profile_points == [[-60.0, -40.2], [60.0, -40.2], [0.0, 40.2]]
+    assert params.height == 42.0
+    assert provenance["fields"]["profile_points"]["status"] == "derived"
