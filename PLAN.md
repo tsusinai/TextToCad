@@ -238,7 +238,7 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - `/v1/ir/compile` 支持可选 `reference_ir` 与 `clearance_target_mm`，对两个独立 IR 实体执行 B-Rep 距离测量；缺少参考实体或内核距离 API 时返回 unknown，不伪造装配通过。
 - 前端质量摘要已显示采样面数、壁厚测量、拔模状态和间隙状态；现有 selector 仍保持无匹配即失败。
 - 执行 trace 与 analysis 现在返回 selector 的源/目标拓扑、命中索引和数量；前端对可见预览提供命中提示和保守整体 glow。
-- GLB 导出优先按 OCCT 面拆分为稳定命名的 `occt_face_<index>` 节点，并在 `analysis.glb_face_mapping` 保存版本、坐标系、面索引、顶点数和三角形数；Three.js 按这些节点做真正的面级高亮，映射不可用时安全回退整体提示。
+- GLB 导出优先按最终 OCCT 面拆分为稳定命名的 `occt_face_<index>` 节点，并在 `analysis.glb_face_mapping` 保存版本、坐标系、面索引、顶点数和三角形数；只有 selector 输入实体在最终输出中通过 OCCT 拓扑身份校验时，Three.js 才做真正的面级高亮，否则安全回退整体提示。
 
 P6 阶段目标已完成。下一阶段：
 
