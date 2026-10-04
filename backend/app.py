@@ -1451,7 +1451,12 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
     }
 
 
-def _shape_distance(first: Any, second: Any) -> tuple[float | None, str | None]:
+def _shape_distance(
+    first: Any,
+    second: Any,
+    *,
+    allow_unwrap: bool = True,
+) -> tuple[float | None, str | None]:
     """Measure the minimum distance between two B-Rep shapes when the kernel exposes it."""
     candidates: list[Any] = [first, second]
     for owner in candidates:
@@ -1472,13 +1477,18 @@ def _shape_distance(first: Any, second: Any) -> tuple[float | None, str | None]:
             except Exception:
                 continue
     # CadQuery Workplane wrappers expose the underlying solid through val().
-    for owner, other in ((first, second), (second, first)):
-        try:
-            value, method = _shape_distance(owner.val(), other.val())
-            if value is not None:
-                return value, method
-        except Exception:
-            continue
+    if allow_unwrap:
+        for owner, other in ((first, second), (second, first)):
+            try:
+                first_value = owner.val()
+                second_value = other.val()
+                if first_value is owner or second_value is other:
+                    continue
+                value, method = _shape_distance(first_value, second_value, allow_unwrap=False)
+                if value is not None:
+                    return value, method
+            except Exception:
+                continue
     return None, None
 
 
