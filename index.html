@@ -1990,7 +1990,7 @@
     function titleFor(text) {
       const value = text.toLowerCase();
       if (/rounded cube|rounded block|filleted cube|soft cube|no sharp edges|no sharp corners|圆角立方体|圆角方块|圆润方块|无棱角|没有棱角|没用棱角|不带棱角/.test(value) || ((value.includes('cube') || value.includes('正方体') || value.includes('方块')) && /round|fillet|圆角|圆润|倒圆|棱角/.test(value))) return 'Rounded cube';
-      if (polygonSideCount(value)) return 'Polygon prism';
+      if (polygonSideCount(value) || /polygon\\s*(?:prism|block)?|多边形|多边柱/.test(value)) return 'Polygon prism';
       if (/airplane|aircraft|model plane|plane model|飞机|航模|机翼|机身/.test(value)) return 'Airplane model';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
       if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
