@@ -1492,10 +1492,54 @@ def _shape_distance(
     return None, None
 
 
+def _shape_intersection_volume(
+    first: Any,
+    second: Any,
+    *,
+    allow_unwrap: bool = True,
+) -> tuple[float | None, str | None]:
+    """Return common B-Rep volume when the kernel exposes a boolean intersection."""
+    for owner, other in ((first, second), (second, first)):
+        method = getattr(owner, "intersect", None)
+        if not callable(method):
+            continue
+        try:
+            result = method(other)
+            value = result
+            if hasattr(result, "val") and callable(result.val):
+                value = result.val()
+            volume_method = getattr(value, "Volume", None)
+            if not callable(volume_method):
+                continue
+            volume = float(volume_method())
+            if math.isfinite(volume) and volume >= 0:
+                return volume, "brep_boolean_intersection"
+        except Exception:
+            continue
+    if allow_unwrap:
+        for owner, other in ((first, second), (second, first)):
+            try:
+                first_value = owner.val()
+                second_value = other.val()
+                if first_value is owner or second_value is other:
+                    continue
+                volume, method = _shape_intersection_volume(
+                    first_value,
+                    second_value,
+                    allow_unwrap=False,
+                )
+                if volume is not None:
+                    return volume, method
+            except Exception:
+                continue
+    return None, None
+
+
 def _classify_clearance(
     distance_mm: float | None,
     required_mm: float,
     contact_tolerance_mm: float,
+    intersection_volume_mm3: float | None = None,
 ) -> dict[str, Any]:
     """Classify measured mating distance without hiding contact or interference."""
     required = max(0.0, float(required_mm))
@@ -1510,9 +1554,14 @@ def _classify_clearance(
         }
     distance = max(0.0, float(distance_mm))
     if distance <= 1e-6:
-        status = "interference"
-        state = "interference"
-        reason = "entities overlap or are coincident within kernel tolerance"
+        if intersection_volume_mm3 is not None and intersection_volume_mm3 <= max(1e-6, required * 1e-6):
+            status = "contact"
+            state = "contact"
+            reason = "entities touch within kernel tolerance without measurable common volume"
+        else:
+            status = "interference"
+            state = "interference"
+            reason = "entities overlap or are coincident within kernel tolerance"
     elif distance <= tolerance:
         status = "contact"
         state = "contact"
@@ -1532,6 +1581,11 @@ def _classify_clearance(
         "required_mm": round(required, 6),
         "contact_tolerance_mm": round(tolerance, 6),
         "interference": status == "interference",
+        "intersection_volume_mm3": (
+            round(float(intersection_volume_mm3), 6)
+            if intersection_volume_mm3 is not None and math.isfinite(float(intersection_volume_mm3))
+            else None
+        ),
         "reason": reason,
     }
 
@@ -2334,6 +2388,10 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
             ]
             reference_output_node = reference_execution["output_node"]
             distance_mm, method = _shape_distance(execution["shape"], reference_execution["shape"])
+            intersection_volume_mm3, intersection_method = _shape_intersection_volume(
+                execution["shape"],
+                reference_execution["shape"],
+            )
         except IRExecutionError as exc:
             status_code = 503 if cq is None else 422
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
@@ -2350,8 +2408,11 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
                 distance_mm,
                 required_clearance,
                 float(profile.get("tolerance", 0.1)),
+                intersection_volume_mm3,
             )
             clearance["method"] = method or "brep_shape_distance"
+            if intersection_method:
+                clearance["intersection_method"] = intersection_method
             clearance["reference_output_node"] = reference_output_node
     return {
         "valid": True,
