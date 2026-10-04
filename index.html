@@ -838,6 +838,8 @@
     .model-svg .solid { transition: fill .3s ease; }
     .model-svg .accent { stroke: var(--lime); }
     .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 28px 20px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 18px rgba(212, 255, 79, 0.6)); }
+    .model-wrap.selector-matched .model-svg,
+    .model-stage.selector-matched .three-viewport canvas { filter: drop-shadow(0 0 16px rgba(212, 255, 79, 0.34)); }
     .viewport-footer {
       position: absolute;
       bottom: 20px;
@@ -1264,7 +1266,7 @@
           </div>
           <div class="viewport-footer">
             <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC SOLID</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
-            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button>
+            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button><button class="export" id="exportGlbEntities" type="button" style="display:none">Export Entities GLB</button>
           </div>
         </section>
         <section class="params">
@@ -1304,6 +1306,15 @@
               <option value="sla">SLA / Resin</option>
               <option value="cnc">CNC Milling</option>
               <option value="injection">Injection Molding</option>
+            </select>
+            <div class="process-copy pull-copy" id="pullDirectionWrap" hidden><span class="section-label" id="pullDirectionLabel">MOLD PULL</span><small id="pullDirectionHint">Used for injection draft review</small></div>
+            <select class="process-select" id="pullDirectionSelect" aria-label="Mold pull direction" hidden>
+              <option value="0,0,1">+Z</option>
+              <option value="0,0,-1">−Z</option>
+              <option value="1,0,0">+X</option>
+              <option value="-1,0,0">−X</option>
+              <option value="0,1,0">+Y</option>
+              <option value="0,-1,0">−Y</option>
             </select>
             <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">SYSTEM UNITS</span><small id="unitHint">Unspecified numeric values automatically assume this unit</small></div>
             <select class="process-select" id="unitSelect" aria-label="Input units">
@@ -1385,6 +1396,7 @@
     const exportStep = document.getElementById('exportStep');
     const export3mf = document.getElementById('export3mf');
     const exportGlb = document.getElementById('exportGlb');
+    const exportGlbEntities = document.getElementById('exportGlbEntities');
     const issueBadge = document.getElementById('issueBadge');
     const analysisLabel = document.getElementById('analysisLabel');
     const analysisSummary = document.getElementById('analysisSummary');
@@ -1409,6 +1421,10 @@
     const featureTree = document.getElementById('featureTree');
     const materialSelect = document.getElementById('materialSelect');
     const processSelect = document.getElementById('processSelect');
+    const pullDirectionWrap = document.getElementById('pullDirectionWrap');
+    const pullDirectionLabel = document.getElementById('pullDirectionLabel');
+    const pullDirectionHint = document.getElementById('pullDirectionHint');
+    const pullDirectionSelect = document.getElementById('pullDirectionSelect');
     const unitSelect = document.getElementById('unitSelect');
     const generationMode = document.getElementById('generationMode');
     const modeHint = document.getElementById('modeHint');
@@ -1416,6 +1432,7 @@
     const processStorageKey = 'formCadProcess';
     const unitStorageKey = 'formCadUnits';
     const materialStorageKey = 'formCadMaterial';
+    const pullDirectionStorageKey = 'formCadPullDirection';
     const modeStorageKey = 'formCadGenerationMode';
     const materialPresets = {
       pla: { label: { en: 'Matte PLA · warm white', zh: '哑光 PLA · 暖白' }, meta: { en: 'Print-ready surface', zh: '适合打印的表面' }, body: 0xddf79b, side: 0x9fca82, inner: 0x6e9e68, accent: 0xb9d98f, roughness: .62, metalness: .02 },
@@ -1440,7 +1457,13 @@
     if (!['mm', 'cm', 'm', 'in'].includes(selectedUnits)) selectedUnits = 'mm';
     let selectedMaterial = (() => { try { return localStorage.getItem(materialStorageKey) || 'pla'; } catch (error) { return 'pla'; } })();
     if (!materialPresets[selectedMaterial]) selectedMaterial = 'pla';
+    let selectedPullDirection = (() => {
+      try { return localStorage.getItem(pullDirectionStorageKey) || '0,0,1'; } catch (error) { return '0,0,1'; }
+    })();
+    const validPullDirections = new Set(['0,0,1', '0,0,-1', '1,0,0', '-1,0,0', '0,1,0', '0,-1,0']);
+    if (!validPullDirections.has(selectedPullDirection)) selectedPullDirection = '0,0,1';
     processSelect.value = selectedProcess;
+    if (pullDirectionSelect) pullDirectionSelect.value = selectedPullDirection;
     if (unitSelect) unitSelect.value = selectedUnits;
     if (materialSelect) materialSelect.value = selectedMaterial;
     if (generationMode) generationMode.value = selectedMode;
@@ -1504,6 +1527,7 @@
         exportStep: 'Export STEP',
         export3mf: 'Export 3MF',
         exportGlb: 'Export GLB',
+        exportGlbEntities: 'Export Entities GLB',
         fit: 'FIT',
         grid: 'GRID',
         viewerUnits: 'Viewport Units',
@@ -1561,6 +1585,14 @@
         featureTree: 'PARAMETRIC FEATURE TREE',
         featureMode: 'PARAMETRIC B-REP',
         processLabel: 'MANUFACTURING PROCESS',
+        pullLabel: 'MOLD PULL DIRECTION',
+        pullHint: 'Used for injection draft review',
+        pullOptionZ: '+Z (default)',
+        pullOptionNegZ: '−Z',
+        pullOptionX: '+X',
+        pullOptionNegX: '−X',
+        pullOptionY: '+Y',
+        pullOptionNegY: '−Y',
         processHint: 'Process profile',
         fdmOption: 'FDM / FFF (3D Print)',
         slaOption: 'SLA / DLP (Resin)',
@@ -1588,7 +1620,9 @@
         readiness: 'DFM PASSED',
         state: 'PARAMETRIC SOLID',
         backendState: 'OCCT B-REP SOLID',
-        advancedState: 'DEEPSEEK LLM + OCCT B-REP',
+        advancedState: 'GENERIC LLM IR + OCCT B-REP',
+        irState: 'GENERIC CAD IR + OCCT',
+        fallbackState: 'LEGACY BUILDER FALLBACK',
         localState: 'CLIENT PREVIEW',
         failed: 'Generation Failed',
         solving: 'SOLVING CONSTRAINTS',
@@ -1631,6 +1665,7 @@
         exportStep: '导出工业级 STEP',
         export3mf: '导出 3MF 打印文件',
         exportGlb: '导出 GLB 预览',
+        exportGlbEntities: '导出多实体 GLB',
         fit: '视角复位',
         grid: '参考网格',
         viewerUnits: '视口显示单位',
@@ -1688,6 +1723,14 @@
         featureTree: '参数化特征树',
         featureMode: '参数化 B-REP',
         processLabel: '目标制造工艺',
+        pullLabel: '注塑拉模方向',
+        pullHint: '用于注塑拔模复核',
+        pullOptionZ: '+Z（默认）',
+        pullOptionNegZ: '−Z',
+        pullOptionX: '+X',
+        pullOptionNegX: '−X',
+        pullOptionY: '+Y',
+        pullOptionNegY: '−Y',
         processHint: '工艺配置',
         fdmOption: 'FDM / FFF 熔融沉积 (3D打印)',
         slaOption: 'SLA / DLP 光固化成型',
@@ -1715,7 +1758,9 @@
         readiness: 'DFM 验证通过',
         state: '参数化实体',
         backendState: 'OCCT B-REP 实体',
-        advancedState: 'DEEPSEEK + OCCT 实体',
+        advancedState: '通用 LLM IR + OCCT 实体',
+        irState: '通用 CAD IR + OCCT',
+        fallbackState: '已回退确定性构建器',
         localState: '本地几何预览',
         failed: '几何生成失败',
         solving: '正在求解几何约束',
@@ -1780,6 +1825,7 @@
       if (exportStep) exportStep.textContent = t.exportStep;
       if (export3mf) export3mf.textContent = t.export3mf;
       if (exportGlb) exportGlb.textContent = t.exportGlb;
+      if (exportGlbEntities) exportGlbEntities.textContent = t.exportGlbEntities;
       if (fitView) fitView.textContent = t.fit;
       if (toggleGrid) toggleGrid.textContent = t.grid;
       if (viewerUnitSelect) {
@@ -1833,6 +1879,14 @@
       processSelect.options[1].textContent = t.slaOption;
       processSelect.options[2].textContent = t.cncOption;
       processSelect.options[3].textContent = t.injectionOption;
+      if (pullDirectionLabel) pullDirectionLabel.textContent = t.pullLabel;
+      if (pullDirectionHint) pullDirectionHint.textContent = t.pullHint;
+      if (pullDirectionSelect) {
+        pullDirectionSelect.setAttribute('aria-label', t.pullLabel);
+        const pullLabels = [t.pullOptionZ, t.pullOptionNegZ, t.pullOptionX, t.pullOptionNegX, t.pullOptionY, t.pullOptionNegY];
+        pullLabels.forEach((label, index) => { if (pullDirectionSelect.options[index]) pullDirectionSelect.options[index].textContent = label; });
+      }
+      updatePullDirectionControl();
       updateProcessHint();
       document.querySelector('.params-head .section-label').textContent = t.params;
       solved.textContent = t.solved;
@@ -2429,6 +2483,7 @@
         }
         threeState.model = buildLocalThreeModel(THREE, spec);
         threeState.scene.add(threeState.model);
+        highlightSelectorFaces(threeState.model, backendArtifact && backendArtifact.analysis);
         threeState.active = true;
         threeState.source = 'local';
         threeViewport.classList.add('active');
@@ -2737,6 +2792,14 @@
         resetCamera();
       });
     }
+    function updatePullDirectionControl() {
+      const visible = selectedProcess === 'injection';
+      if (pullDirectionWrap) pullDirectionWrap.hidden = !visible;
+      if (pullDirectionSelect) {
+        pullDirectionSelect.hidden = !visible;
+        pullDirectionSelect.value = selectedPullDirection;
+      }
+    }
     function updateProcessHint(profileOverride) {
       const profile = profileOverride || processProfiles[selectedProcess];
       if (!profile || !processProfileHint) return;
@@ -2828,7 +2891,10 @@
         }
       }
       if (modelWrap) modelWrap.classList.toggle('feature-highlighted', selected !== null);
-      if (threeState.model) highlightThreeModel(threeState.model, selected !== null);
+      if (threeState.model) {
+        highlightThreeModel(threeState.model, selected !== null);
+        highlightSelectorFaces(threeState.model, backendArtifact && backendArtifact.analysis);
+      }
     }
     function highlightThreeModel(root, active) {
       if (!root) return;
@@ -2850,6 +2916,52 @@
           }
         });
       });
+    }
+    function selectorFaceIndices(analysis) {
+      const indices = new Set();
+      const entries = analysis && Array.isArray(analysis.selector_matches) ? analysis.selector_matches : [];
+      entries.forEach((entry) => {
+        const matches = entry && entry.matches;
+        if (!matches) return;
+        const values = matches.target_topology === 'face'
+          && (matches.mapping_status === 'final_output' || matches.mapping_status === 'partial')
+          && Array.isArray(matches.output_indices)
+          ? matches.output_indices
+          : [];
+        values.forEach((value) => {
+          const index = Number(value);
+          if (Number.isInteger(index) && index >= 0) indices.add(index);
+        });
+      });
+      return indices;
+    }
+    function highlightSelectorFaces(root, analysis) {
+      if (!root) return 0;
+      const indices = selectorFaceIndices(analysis);
+      let mapped = 0;
+      root.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+        const match = String(node.name || '').match(/^occt_face_(\d+)$/);
+        if (!match) return;
+        const selected = indices.has(Number(match[1]));
+        if (selected) mapped += 1;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (!material.emissive) return;
+          if (material.userData._selectorBaseEmissive === undefined) {
+            material.userData._selectorBaseEmissive = material.emissive.getHex();
+            material.userData._selectorBaseIntensity = material.emissiveIntensity || 0;
+          }
+          if (selected) {
+            material.emissive.setHex(0xc9ff4d);
+            material.emissiveIntensity = .9;
+          } else {
+            material.emissive.setHex(material.userData._selectorBaseEmissive);
+            material.emissiveIntensity = material.userData._selectorBaseIntensity;
+          }
+        });
+      });
+      return mapped;
     }
     function renderFeatureTree(spec) {
       if (!featureTree || !spec) return;
@@ -3006,7 +3118,13 @@
       const nominalOnly = !data.face_samples && !data.measured_wall_map;
       issueBadge.classList.toggle('warn', issues.length > 0 || nominalOnly);
       issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : (nominalOnly ? copy[currentLang].unknown : (currentLang === 'zh' ? '已验证' : 'VERIFIED'));
-      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : (nominalOnly ? copy[currentLang].estimateSummary : copy[currentLang].noIssues);
+      const outputCount = Array.isArray(data.output_nodes)
+        ? data.output_nodes.length
+        : (Array.isArray(data.output_metrics) ? data.output_metrics.length : 0);
+      const outputNote = outputCount > 1
+        ? (currentLang === 'zh' ? ' · ' + outputCount + ' 个输出实体' : ' · ' + outputCount + ' output entities')
+        : '';
+      analysisSummary.textContent = (issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : (nominalOnly ? copy[currentLang].estimateSummary : copy[currentLang].noIssues)) + outputNote;
       if (!issues.length) {
         const empty = document.createElement('div');
         empty.className = 'issue-empty';
@@ -3025,7 +3143,8 @@
       if (!spec) return;
       const profile = (backendArtifact && backendArtifact.profile) || processProfiles[selectedProcess];
       const analysis = backendArtifact && backendArtifact.analysis;
-      const measured = Boolean(analysis && (analysis.face_samples || analysis.measured_wall_map));
+      const faceMeasurementForChecks = analysis && analysis.face_measurements;
+      const measured = Boolean(analysis && (analysis.face_samples || analysis.measured_wall_map || (faceMeasurementForChecks && faceMeasurementForChecks.face_count)));
       const checks = remoteChecks ? {
         wall: remoteChecks.wall_thickness,
         radius: remoteChecks.edge_treatment,
@@ -3044,9 +3163,33 @@
       solved.textContent = passed === 4 ? (currentLang === 'zh' ? '检查已验证' : 'Checks verified') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
       solved.classList.toggle('warn', passed !== 4);
       const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
+      const faceMeasurement = analysis && analysis.face_measurements;
+      const outputNodes = analysis && Array.isArray(analysis.output_nodes) ? analysis.output_nodes : [];
+      const outputCount = outputNodes.length || (analysis && Array.isArray(analysis.output_metrics) ? analysis.output_metrics.length : 0);
+      const selectorMatches = analysis && Array.isArray(analysis.selector_matches) ? analysis.selector_matches : [];
+      const selectorCount = selectorMatches.reduce((total, item) => total + Number((item.matches && item.matches.matched_count) || 0), 0);
+      const outputSummary = outputCount > 1
+        ? (currentLang === 'zh' ? ' · 输出实体 ' + outputCount : ' · ' + outputCount + ' output entities')
+        : '';
+      const faceSummary = faceMeasurement && faceMeasurement.face_count
+        ? (currentLang === 'zh'
+          ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚 ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · 拔模 ' + (faceMeasurement.draft_status || '未知') + ' · 间隙 ' + (faceMeasurement.clearance_status || '未知') + (selectorCount ? ' · selector 命中 ' + selectorCount : '') + outputSummary
+          : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · draft ' + (faceMeasurement.draft_status || 'unknown') + ' · clearance ' + (faceMeasurement.clearance_status || 'unknown') + (selectorCount ? ' · selector matches ' + selectorCount : '') + outputSummary)
+        : null;
+      if (modelWrap) modelWrap.classList.toggle('selector-matched', selectorCount > 0);
+      if (modelStage) modelStage.classList.toggle('selector-matched', selectorCount > 0);
+      const mappedFaces = threeState.model ? highlightSelectorFaces(threeState.model, analysis) : 0;
+      if (viewportSelection && selectorCount > 0) {
+        viewportSelection.textContent = currentLang === 'zh'
+          ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体' + (mappedFaces ? ' · 已高亮 ' + mappedFaces + ' 面节点' : ' · 等待面映射')
+          : 'OCCT selector matched ' + selectorCount + ' topology entities' + (mappedFaces ? ' · ' + mappedFaces + ' mapped face nodes highlighted' : ' · waiting for face mapping');
+        viewportSelection.hidden = false;
+      } else if (viewportSelection && highlightedFeature === null) {
+        viewportSelection.hidden = true;
+      }
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
-      document.getElementById('planDraftMeta').textContent = statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
+      document.getElementById('planDraftMeta').textContent = faceSummary || statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
       document.getElementById('planExportMeta').textContent = checks.export ? (remoteChecks ? profile.label + ' · STEP · STL' : 'OBJ preview · backend offline') : (currentLang === 'zh' ? '导出未就绪' : 'export not ready');
       updateAnalysis(analysis || localAnalysis(spec));
       Object.entries(checkEls).forEach(([key, element]) => {
@@ -3197,7 +3340,7 @@
     }
     function updateExportButtons() {
       const artifactFormats = backendArtifact || {};
-      [[exportStep, 'step'], [export3mf, '3mf'], [exportGlb, 'glb']].forEach(([button, format]) => {
+      [[exportStep, 'step'], [export3mf, '3mf'], [exportGlb, 'glb'], [exportGlbEntities, 'glb_entities']].forEach(([button, format]) => {
         if (!button) return;
         const available = Boolean(backendUrl && artifactFormats[format]);
         button.style.display = available ? 'inline-flex' : 'none';
@@ -3207,7 +3350,17 @@
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
-      const payload = { prompt: value, units: selectedUnits, process: process || selectedProcess, mode: selectedMode, material: selectedMaterial, include_steps: true };
+      const activeProcess = process || selectedProcess;
+      const payload = {
+        prompt: value,
+        units: selectedUnits,
+        process: activeProcess,
+        mode: selectedMode,
+        material: selectedMaterial,
+        include_steps: true,
+        generation_strategy: selectedMode === 'advanced' ? 'auto' : 'legacy',
+        mold_pull_direction: activeProcess === 'injection' ? selectedPullDirection.split(',').map(Number) : undefined
+      };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -3342,7 +3495,11 @@
         sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
         bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
         modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
-        modelState.textContent = remote ? (remote.llm_used ? copy[currentLang].advancedState : copy[currentLang].backendState) : copy[currentLang].state;
+        const effectiveStrategy = remote && remote.generation_strategy;
+        const irFallback = remote && remote.provenance && remote.provenance.requested_strategy === 'auto' && effectiveStrategy === 'legacy';
+        modelState.textContent = remote
+          ? (irFallback ? copy[currentLang].fallbackState : effectiveStrategy === 'ir' ? copy[currentLang].irState : remote.llm_used ? copy[currentLang].advancedState : copy[currentLang].backendState)
+          : copy[currentLang].state;
         llmAssumptions = remote && remote.assumptions ? remote.assumptions.slice(0, 6) : [];
         updateInterpretation(modelSpec, remote ? (remote.llm_used ? 'advanced' : 'backend') : 'local');
         updateProcessHint(remote && remote.profile);
@@ -3438,9 +3595,17 @@
       updateExportButtons();
       if (modelSpec) generateModel();
     });
+    if (pullDirectionSelect) pullDirectionSelect.addEventListener('change', () => {
+      selectedPullDirection = validPullDirections.has(pullDirectionSelect.value) ? pullDirectionSelect.value : '0,0,1';
+      try { localStorage.setItem(pullDirectionStorageKey, selectedPullDirection); } catch (error) {}
+      updatePullDirectionControl();
+      backendArtifact = null;
+      if (modelSpec) generateModel();
+    });
     processSelect.addEventListener('change', () => {
       selectedProcess = processSelect.value;
       try { localStorage.setItem(processStorageKey, selectedProcess); } catch (error) {}
+      updatePullDirectionControl();
       backendArtifact = null;
       updateExportButtons();
       updateProcessHint();
@@ -3511,6 +3676,7 @@
     }
     bindArtifactExport(export3mf, '3mf');
     bindArtifactExport(exportGlb, 'glb');
+    bindArtifactExport(exportGlbEntities, 'glb_entities');
     if (exportStep) exportStep.addEventListener('click', () => {
       if (!backendArtifact || !backendArtifact.step) return;
       downloadBackendArtifact(backendArtifact.step, 'step').catch(() => setGenerationError(currentLang === 'zh' ? '导出失败，请检查后端连接。' : 'Export failed; check the backend connection.'));
