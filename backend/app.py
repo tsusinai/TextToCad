@@ -1973,7 +1973,7 @@ def _generate_ir_model(
             flags=re.IGNORECASE,
         ))
         explicit_edge_treatment = bool(re.search(
-            r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\\s*edge)",
+            r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\s*edge)",
             request.prompt,
             flags=re.IGNORECASE,
         ))
