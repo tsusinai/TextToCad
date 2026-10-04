@@ -455,6 +455,13 @@ def test_generic_ir_executor_builds_regular_polygon():
     assert metrics["bbox_mm"] == {"x": 60.0, "y": 40.0, "z": 12.0}
 
 
+def test_frontend_requests_ir_without_family_prompt_injection():
+    index_source = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    assert "generation_strategy: 'ir'" in index_source
+    assert "Parsed CAD parameters: " not in index_source
+    assert "Baseline CAD parameters: " not in index_source
+
+
 def test_cache_key_separates_generation_strategies():
     legacy = app.GenerateRequest(prompt="a 20 mm block", generation_strategy="legacy")
     ir = app.GenerateRequest(prompt="a 20 mm block", generation_strategy="ir")
