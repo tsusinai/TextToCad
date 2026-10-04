@@ -554,8 +554,8 @@ def parse_prompt_detailed(
     depth_found = depth is not None or square_base or triplet_found or pair_found
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else (140.0 if kind == "airplane" else width * 0.67)))
     polygon_extrusion = _number_after(text, [
-        r"(?:thickness|厚度|挤出长度|挤出厚度)s*(?:is|为|是|[:=])?s*(d+(?:.d+)?)",
-        r"(d+(?:.d+)?)s*(?:mm)?s*(?:thickness|厚度|挤出长度|挤出厚度)",
+        r"(?:thickness|厚度|挤出长度|挤出厚度)\\s*(?:is|为|是|[:=])?\\s*(\\d+(?:\\.\\d+)?)",
+        r"(\\d+(?:\\.\\d+)?)\\s*(?:mm)?\\s*(?:thickness|厚度|挤出长度|挤出厚度)",
     ]) if kind == "polygon_prism" else None
     default_height = (
         40.0 if kind == "angle"
