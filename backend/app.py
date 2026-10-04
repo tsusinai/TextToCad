@@ -2421,6 +2421,16 @@ def _generate_ir_model(
             params.process,
             request.mold_pull_direction,
         )
+        analysis["selector_matches"] = [
+            {
+                "node_id": event.get("id"),
+                "operation": event.get("operation"),
+                "selector": event.get("selector"),
+                "matches": event.get("selector_matches"),
+            }
+            for event in execution.get("trace", [])
+            if event.get("selector_matches")
+        ]
         checks = _validate_shape(shape, params, analysis)
         checks["ir_constraints"] = constraint_report
         checks["ir_repair_attempts"] = repair_attempts
