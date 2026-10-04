@@ -2014,12 +2014,19 @@ def _generate_ir_model(
         recorder.emit("building", "ir_compile", "running")
         execution = execute_ir(normalized_ir)
         shape = execution["shape"]
-        for event in execution.get("trace", []):
+        node_step_ids: dict[str, str] = {}
+        for event_index, event in enumerate(execution.get("trace", [])):
             node_id = str(event.get("id", "ir_node"))
+            safe_id = re.sub(r"[^a-z_]", "_", node_id.lower())
+            safe_id = ("ir_" + safe_id).strip("_")[:40] or "ir_node"
+            while any(item["id"] == safe_id for item in recorder.events):
+                safe_id = (safe_id[:39] + "_") if len(safe_id) >= 40 else safe_id + "_"
+            node_step_ids[node_id] = safe_id
             recorder.emit(
                 "building",
-                node_id,
+                safe_id,
                 "succeeded",
+                node_id=node_id,
                 operation=event.get("operation"),
                 inputs=event.get("inputs", []),
             )
@@ -2034,8 +2041,9 @@ def _generate_ir_model(
             for event in execution.get("trace", [])[:6]:
                 node_id = str(event.get("id", ""))
                 intermediate = execution.get("node_shapes", {}).get(node_id)
-                if intermediate is not None:
-                    snapshots.append((node_id, intermediate))
+                step_id = node_step_ids.get(node_id)
+                if intermediate is not None and step_id:
+                    snapshots.append((step_id, intermediate))
 
         recorder.emit("validating", "geometry_validation", "running")
         analysis = analyze_manufacturability(params)
