@@ -260,7 +260,7 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 - `generation_strategy: "legacy" | "ir" | "auto"`，默认 `legacy`；前端高级模式发送 `auto`。
 - `design_ir` 返回最终 v0.2 IR，manifest 同时保存修复历史、执行 trace 和 fallback provenance。
 - `POST /v1/ir/validate` 只做静态验证，不启动 CadQuery。
-- `POST /v1/ir/compile` 在内存中执行约束与 CadQuery 编译并返回 metrics、face_measurements 和 trace，不写模型 artifact；面级 DFM 会明确区分 B-Rep 面距离、代理值、拔模方向和间隙 unknown。请求可携带 `mold_pull_direction: [x, y, z]`，用于注塑拔模检查。
+- `POST /v1/ir/compile` 在内存中执行约束与 CadQuery 编译并返回 metrics、face_measurements 和 trace，不写模型 artifact；面级 DFM 会明确区分 B-Rep 面距离、代理值、拔模方向和间隙 unknown。请求可携带 `mold_pull_direction: [x, y, z]`，用于注塑拔模检查；同时可传 `reference_ir` 与 `clearance_target_mm`，对两个实体执行真实间隙测量。
 - `GET /v1/models/{id}/ir` 返回生成结果中的最终 IR；完整修复与执行信息通过 manifest 获取。
 
 `auto` 策略先尝试 IR；IR 校验、约束修复或执行失败时，可以回退到 legacy 路径。响应的 `provenance` 同时写入 `requested_strategy=auto`、`effective_strategy=legacy`、稳定字段 `fallback_reason`（以及兼容字段 `ir_fallback_reason`），不能把回退结果伪装成 IR 成功。
