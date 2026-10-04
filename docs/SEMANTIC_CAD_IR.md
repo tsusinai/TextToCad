@@ -292,3 +292,5 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 - P8.2 增加可选 OCCT 法向射线采样；运行时若 OCP 射线接口可用，face sample 会带 normal_ray_thickness_mm，wall_thickness_analysis.status=ray_sampled，并在 /health 暴露 occt_normal_ray_available。不可用时仍安全回退到代理。
 
 - 多输出编译会逐实体执行 B-Rep 质量门；任一输出没有有效 B-Rep、正体积、面或单实体拓扑时整体编译返回 422，并附 output_quality.entities 逐项原因。
+
+- 生成路径在声明多个 outputs 且 trimesh 可用时额外导出 model_entities.glb；节点名包含 output_<node>_occt_face_<index>，下载格式为 glb_entities，analysis.glb_output_mapping 保存实体和面映射。
