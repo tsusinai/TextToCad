@@ -114,3 +114,11 @@ Astra 建模质量专项建议已落实第一批 P0/P1：
 - 前端新增建模过程面板，显示每个事件的状态与耗时；`include_steps=true` 时可从实际中间 GLB 快照打开步骤预览。
 - 最终 `generation_trace` 写入响应和 manifest，便于审查实际执行链；后端不可用时显示明确的本地离线流程。
 - GitHub Actions 的 Backend quality 在本轮提交后通过；gh-pages 已同步并由 Pages deployment 发布。
+
+
+## 通用 IR 主链路与质量门（2026-10-04）
+
+- 高级模式通过 generation_strategy=auto 进入 LLM → Semantic CAD IR v0.2 → 约束求解/有限修复 → CadQuery/OCCT；失败自动回退 legacy，并在 provenance 记录 fallback_reason 与稳定分类。
+- IR 不再要求固定模型族，支持原语、草图、拉伸、旋转、扫掠、放样、布尔、阵列和约束；普通/锐边正方体若未明确圆角或倒角会拒绝隐式 edge treatment。
+- 生成过程、修复尝试、节点步骤预览、实测包围盒和逐轴尺寸偏差进入响应与 manifest；前端显示实际生效策略，区分通用 IR 成功与旧构建器回退。
+- Backend quality CI 已通过，最新 main 为 1337666d611370cb3561215532d4504adfb0e95c。
