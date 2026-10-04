@@ -2188,6 +2188,7 @@ def _generate_model(
             provenance["requested_strategy"] = "auto"
             provenance["effective_strategy"] = "legacy"
             provenance["ir_fallback_reason"] = str(exc)[:240]
+            provenance["fallback_reason"] = provenance["ir_fallback_reason"]
             assumptions = (list(response.assumptions) + [
                 f"Generic IR path fell back to the deterministic builder: {str(exc)[:180]}"
             ])[:6]
