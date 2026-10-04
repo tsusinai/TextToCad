@@ -1588,7 +1588,9 @@
         readiness: 'DFM PASSED',
         state: 'PARAMETRIC SOLID',
         backendState: 'OCCT B-REP SOLID',
-        advancedState: 'DEEPSEEK LLM + OCCT B-REP',
+        advancedState: 'GENERIC LLM IR + OCCT B-REP',
+        irState: 'GENERIC CAD IR + OCCT',
+        fallbackState: 'LEGACY BUILDER FALLBACK',
         localState: 'CLIENT PREVIEW',
         failed: 'Generation Failed',
         solving: 'SOLVING CONSTRAINTS',
@@ -1715,7 +1717,9 @@
         readiness: 'DFM 验证通过',
         state: '参数化实体',
         backendState: 'OCCT B-REP 实体',
-        advancedState: 'DEEPSEEK + OCCT 实体',
+        advancedState: '通用 LLM IR + OCCT 实体',
+        irState: '通用 CAD IR + OCCT',
+        fallbackState: '已回退确定性构建器',
         localState: '本地几何预览',
         failed: '几何生成失败',
         solving: '正在求解几何约束',
@@ -3342,7 +3346,11 @@
         sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
         bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
         modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
-        modelState.textContent = remote ? (remote.llm_used ? copy[currentLang].advancedState : copy[currentLang].backendState) : copy[currentLang].state;
+        const effectiveStrategy = remote && remote.generation_strategy;
+        const irFallback = remote && remote.provenance && remote.provenance.requested_strategy === 'auto' && effectiveStrategy === 'legacy';
+        modelState.textContent = remote
+          ? (irFallback ? copy[currentLang].fallbackState : effectiveStrategy === 'ir' ? copy[currentLang].irState : remote.llm_used ? copy[currentLang].advancedState : copy[currentLang].backendState)
+          : copy[currentLang].state;
         llmAssumptions = remote && remote.assumptions ? remote.assumptions.slice(0, 6) : [];
         updateInterpretation(modelSpec, remote ? (remote.llm_used ? 'advanced' : 'backend') : 'local');
         updateProcessHint(remote && remote.profile);
