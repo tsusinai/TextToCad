@@ -150,9 +150,18 @@ def _entity_tuple(entity: Any) -> tuple[float, float, float] | None:
 
 
 def _entity_direction(entity: Any, topology: str) -> tuple[float, float, float] | None:
+    if topology == "face":
+        for args in ((), (0.5, 0.5)):
+            try:
+                vector = entity.normalAt(*args)
+                direction = _entity_tuple(vector)
+                if direction is not None:
+                    return direction
+            except Exception:
+                continue
+        return None
     try:
-        vector = entity.normalAt() if topology == "face" else entity.tangentAt(0.5)
-        return _entity_tuple(vector)
+        return _entity_tuple(entity.tangentAt(0.5))
     except Exception:
         return None
 
