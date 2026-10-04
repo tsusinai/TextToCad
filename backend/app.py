@@ -127,6 +127,8 @@ class GenerateRequest(BaseModel):
     strict_dimensions: bool = False
     include_steps: bool = False
     material: Literal["pla", "petg", "abs", "resin", "aluminum"] = "pla"
+    # Optional mold pull direction used by injection draft analysis; defaults to +Z.
+    mold_pull_direction: list[float] | None = None
     # legacy keeps existing behavior; ir uses generic Semantic CAD IR; auto tries IR then falls back safely.
     generation_strategy: Literal["legacy", "ir", "auto"] = "legacy"
 
@@ -137,6 +139,8 @@ class IRValidationRequest(BaseModel):
 
 class IRCompileRequest(BaseModel):
     ir: dict[str, Any]
+    # Optional mold pull direction for face-level draft analysis; defaults to +Z.
+    mold_pull_direction: list[float] | None = None
 
 
 class IRRepairRequest(BaseModel):
@@ -204,7 +208,7 @@ REQUEST_BUCKETS: dict[str, list[float]] = {}
 def _cache_key(request: GenerateRequest) -> str:
     normalized = " ".join(request.prompt.strip().lower().split())
     return hashlib.sha256(
-        f"{request.generation_strategy}\0{request.mode}\0{request.process}\0{request.units}\0{request.material}\0{request.strict_dimensions}\0{request.include_steps}\0{normalized}".encode("utf-8")
+        f"{request.generation_strategy}\0{request.mode}\0{request.process}\0{request.units}\0{request.material}\0{request.strict_dimensions}\0{request.include_steps}\0{request.mold_pull_direction}\0{normalized}".encode("utf-8")
     ).hexdigest()
 
 
