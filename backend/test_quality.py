@@ -495,4 +495,35 @@ def test_face_level_dfm_records_normals_and_areas():
     assert report["downward_face_count"] == 1
     assert report["wall_thickness_proxy_mm"] == 10.0
     assert report["wall_thickness_proxy_status"] == "pass"
+    assert report["wall_thickness_measurement"]["method"] == "opposing_face_center_proxy"
     assert report["overhang_status"] == "warning"
+    assert report["clearance_status"] == "unknown"
+
+
+def test_injection_draft_measurement_reports_face_level_warning():
+    class Vector:
+        def __init__(self, x, y, z):
+            self.x, self.y, self.z = x, y, z
+
+    class Face:
+        def Area(self):
+            return 25.0
+
+        def normalAt(self):
+            return Vector(1, 0, 0)
+
+        def Center(self):
+            return Vector(0, 0, 0)
+
+    class Solid:
+        def Faces(self):
+            return [Face()]
+
+    class Shape:
+        def val(self):
+            return Solid()
+
+    report = app._face_level_dfm(Shape(), "injection")
+    assert report["draft_status"] == "warning"
+    assert report["draft_measurements"][0]["status"] == "warning"
+    assert report["clearance_status"] == "unknown"
