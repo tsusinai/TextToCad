@@ -1561,6 +1561,8 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
     tolerance_limit = max(0.05, float(params.tolerance) * 2.0)
     dimension_match = max(dimension_delta.values(), default=0.0) <= tolerance_limit
     issue_codes = {issue["code"] for issue in analysis["issues"]}
+    face_measurements = analysis.get("face_measurements") or {}
+    wall_proxy_status = face_measurements.get("wall_thickness_proxy_status", "unknown")
     return {
         "valid_brep": metrics["valid_brep"],
         "occt_valid": metrics["occt_valid"],
@@ -1573,7 +1575,8 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
         "dimension_delta_mm": dimension_delta,
         "dimension_match": dimension_match,
         "dimension_tolerance_mm": round(tolerance_limit, 6),
-        "wall_thickness": "wall_thickness" not in issue_codes,
+        "wall_thickness": "wall_thickness" not in issue_codes and wall_proxy_status != "warning",
+        "wall_thickness_proxy": wall_proxy_status,
         "edge_treatment": "edge_treatment" not in issue_codes,
         "overhang": (analysis.get("face_measurements") or {}).get("overhang_status", "unknown"),
         "draft_angle": (analysis.get("face_measurements") or {}).get("draft_status", "unknown"),
