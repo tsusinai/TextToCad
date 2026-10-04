@@ -224,7 +224,12 @@ def _selector_clause_matches(entity: Any, topology: str, clause: dict[str, Any])
     raise IRExecutionError(f"selector property '{property_name}' is not implemented")
 
 
-def _topology_selection(shape: Any, selector: dict[str, Any], target: str) -> Any:
+def _topology_selection(
+    shape: Any,
+    selector: dict[str, Any],
+    target: str,
+    metadata: dict[str, Any] | None = None,
+) -> Any:
     if not isinstance(selector, dict):
         raise IRExecutionError("selector must be an object")
     source_topology = str(selector.get("topology", "face")).lower()
@@ -243,7 +248,7 @@ def _topology_selection(shape: Any, selector: dict[str, Any], target: str) -> An
     where = selector.get("where") or []
     if not isinstance(where, list):
         raise IRExecutionError("selector where must be a list")
-    selected = entities
+    selected_pairs = [(entity, index) for index, entity in enumerate(entities)]
     for clause in where:
         if not isinstance(clause, dict) or len(clause) != 1:
             raise IRExecutionError("selector clauses must contain one property")
@@ -254,14 +259,16 @@ def _topology_selection(shape: Any, selector: dict[str, Any], target: str) -> An
                 raise IRExecutionError("selector index must be an integer") from exc
             if index < 0 or index >= len(entities):
                 raise IRExecutionError("selector index is out of range")
-            selected = [entities[index]]
+            selected_pairs = [(entities[index], index)]
             continue
-        selected = [
-            entity for entity in selected
+        selected_pairs = [
+            (entity, index) for entity, index in selected_pairs
             if _selector_clause_matches(entity, source_topology, clause)
         ]
-    if not selected:
+    if not selected_pairs:
         raise IRExecutionError("selector matched no topology entities")
+    selected = [entity for entity, _ in selected_pairs]
+    source_indices = [index for _, index in selected_pairs]
 
     if target == "edge" and source_topology == "face":
         expanded: list[Any] = []
@@ -279,10 +286,30 @@ def _topology_selection(shape: Any, selector: dict[str, Any], target: str) -> An
         selected = expanded
     if target == "face" and source_topology == "edge":
         raise IRExecutionError("edge selector cannot be used as an open face selector")
+    if metadata is not None:
+        metadata.update({
+            "source_topology": source_topology,
+            "target_topology": target,
+            "source_indices": source_indices,
+            "matched_indices": [
+                index for index, entity in enumerate(list(getattr(shape, collections.get(target, "faces"))().vals()))
+                if any(
+                    (str(entity.hashCode()) if hasattr(entity, "hashCode") else repr(entity))
+                    == (str(selected_entity.hashCode()) if hasattr(selected_entity, "hashCode") else repr(selected_entity))
+                    for selected_entity in selected
+                )
+            ] if target != "solid" else source_indices,
+            "matched_count": len(selected),
+        })
     return shape.newObject(selected)
 
 
-def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, Any]) -> Any:
+def _node_shape(
+    node: dict[str, Any],
+    inputs: list[Any],
+    parameters: dict[str, Any],
+    selector_metadata: dict[str, Any] | None = None,
+) -> Any:
     operation = str(node.get("operation", ""))
     values = node.get("parameters") or {}
     frame = node.get("frame")
@@ -404,7 +431,7 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
         structured_selector = values.get("selector") or values.get("face_selector") or values.get("edge_selector")
         radius = _number(parameters, values.get("radius", values.get("distance")), f"{operation}.radius")
         if isinstance(structured_selector, dict):
-            edges = _topology_selection(inputs[0], structured_selector, "edge")
+            edges = _topology_selection(inputs[0], structured_selector, "edge", selector_metadata)
         else:
             selection = values.get("selection")
             edges = inputs[0].edges(selection) if selection else inputs[0].edges()
@@ -415,7 +442,7 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
         thickness = _number(parameters, values.get("thickness"), "shell.thickness")
         selector = values.get("selector") or values.get("face_selector")
         if isinstance(selector, dict):
-            return _topology_selection(inputs[0], selector, "face").shell(-thickness)
+            return _topology_selection(inputs[0], selector, "face", selector_metadata).shell(-thickness)
         selection = values.get("open_face", ">Z")
         return inputs[0].faces(selection).shell(-thickness)
     if operation == "mirror":
@@ -461,7 +488,8 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
     for node in ordered:
         node_id = str(node["id"])
         inputs = [shapes[reference] for reference in node.get("inputs", [])]
-        shape = _node_shape(node, inputs, parameters)
+        selector_metadata: dict[str, Any] = {}
+        shape = _node_shape(node, inputs, parameters, selector_metadata)
         shapes[node_id] = _as_shape(shape, node_id)
         trace_event = {
             "id": node_id,
@@ -478,6 +506,8 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
                 "topology": selector.get("topology", "face"),
                 "where": selector.get("where", []),
             }
+            if selector_metadata:
+                trace_event["selector_matches"] = selector_metadata
         trace.append(trace_event)
     output_nodes = ir.get("outputs") or ([{"node": ordered[-1]["id"]}] if ordered else [])
     output_id = output_nodes[0].get("node") if output_nodes else None
