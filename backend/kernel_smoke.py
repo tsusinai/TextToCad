@@ -40,7 +40,6 @@ def main() -> None:
                 "kind": "primitive",
                 "operation": "box",
                 "parameters": {"size": [14, 14, 8]},
-                "transform": {"translate": [0, 0, 1]},
             },
         ],
         "constraints": [],
