@@ -42,18 +42,33 @@ def main() -> None:
                 "operation": "box",
                 "parameters": {"size": [14, 14, 8]},
             },
+            {
+                "id": "triangle",
+                "kind": "primitive",
+                "operation": "polygon_prism",
+                "parameters": {
+                    "points": [[-30, -20], [30, -20], [0, 20]],
+                    "height": 30,
+                },
+            },
         ],
         "constraints": [],
         "outputs": [
             {"id": "base_output", "node": "base", "format": ["step"]},
             {"id": "cavity_output", "node": "cavity", "format": ["step"]},
+            {"id": "triangle_output", "node": "triangle", "format": ["step"]},
         ],
     }
     execution = execute_ir(app.validate_ir(ir))
-    assert execution["output_nodes"] == ["base", "cavity"]
+    assert execution["output_nodes"] == ["base", "cavity", "triangle"]
+    triangle_metrics = app.shape_metrics(execution["output_shapes"]["triangle"])
+    assert triangle_metrics["valid_brep"] is True
+    assert triangle_metrics["bbox_mm"]["x"] == 60.0
+    assert triangle_metrics["bbox_mm"]["y"] == 40.0
+    assert triangle_metrics["bbox_mm"]["z"] == 30.0
     quality = app._output_quality(execution["output_shapes"])
     assert quality["valid"] is True
-    assert quality["entity_count"] == 2
+    assert quality["entity_count"] == 3
 
     print("kernel smoke passed", {
         "face_count": dfm["face_count"],
