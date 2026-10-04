@@ -109,6 +109,27 @@ def _vector(parameters: dict[str, Any], value: Any, name: str, length: int = 3) 
     return tuple(float(item) for item in resolved)
 
 
+def _polygon_points(parameters: dict[str, Any], value: Any, name: str) -> list[list[float]]:
+    """Resolve planar polygon points and tolerate zero-Z points from an LLM."""
+    resolved = _resolve(value, parameters)
+    if not isinstance(resolved, (list, tuple)) or len(resolved) < 3:
+        raise IRExecutionError(f"{name} requires at least three points")
+    points: list[list[float]] = []
+    for index, raw_point in enumerate(resolved):
+        if not isinstance(raw_point, (list, tuple)) or len(raw_point) not in {2, 3}:
+            raise IRExecutionError(f"{name}[{index}] must be [x, y] or [x, y, z]")
+        try:
+            coordinates = [float(component) for component in raw_point]
+        except (TypeError, ValueError) as exc:
+            raise IRExecutionError(f"{name}[{index}] contains non-numeric coordinates") from exc
+        if not all(math.isfinite(component) for component in coordinates):
+            raise IRExecutionError(f"{name}[{index}] contains non-finite coordinates")
+        if len(coordinates) == 3 and abs(coordinates[2]) > 1e-6:
+            raise IRExecutionError(f"{name}[{index}] must lie on the XY plane")
+        points.append([coordinates[0], coordinates[1]])
+    return points
+
+
 def _workplane(frame: str | None) -> Any:
     if cq is None:
         raise IRExecutionError(f"CadQuery is not installed: {CADQUERY_ERROR}")
@@ -411,10 +432,8 @@ def _node_shape(
                 raise IRExecutionError(f"unsupported sketch geometry '{kind}'")
         return sketch
     if operation == "polygon_prism":
-        points = _resolve(values.get("points"), parameters)
+        points = _polygon_points(parameters, values.get("points"), "polygon_prism.points")
         height = _number(parameters, values.get("height"), "polygon_prism.height")
-        if not isinstance(points, list) or len(points) < 3:
-            raise IRExecutionError("polygon_prism requires at least three points")
         return _workplane(frame).polyline(points).close().extrude(height)
     if operation == "sweep":
         if len(inputs) != 2:
