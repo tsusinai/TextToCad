@@ -2479,6 +2479,7 @@
         }
         threeState.model = buildLocalThreeModel(THREE, spec);
         threeState.scene.add(threeState.model);
+        highlightSelectorFaces(threeState.model, backendArtifact && backendArtifact.analysis);
         threeState.active = true;
         threeState.source = 'local';
         threeViewport.classList.add('active');
@@ -2886,7 +2887,10 @@
         }
       }
       if (modelWrap) modelWrap.classList.toggle('feature-highlighted', selected !== null);
-      if (threeState.model) highlightThreeModel(threeState.model, selected !== null);
+      if (threeState.model) {
+        highlightThreeModel(threeState.model, selected !== null);
+        highlightSelectorFaces(threeState.model, backendArtifact && backendArtifact.analysis);
+      }
     }
     function highlightThreeModel(root, active) {
       if (!root) return;
@@ -3157,9 +3161,10 @@
       if (modelWrap) modelWrap.classList.toggle('selector-matched', selectorCount > 0);
       if (modelStage) modelStage.classList.toggle('selector-matched', selectorCount > 0);
       if (viewportSelection && selectorCount > 0) {
+        const mappedFaces = threeState.model ? highlightSelectorFaces(threeState.model, analysis) : 0;
         viewportSelection.textContent = currentLang === 'zh'
-          ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体'
-          : 'OCCT selector matched ' + selectorCount + ' topology entities';
+          ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体' + (mappedFaces ? ' · 已高亮 ' + mappedFaces + ' 面节点' : ' · 等待面映射')
+          : 'OCCT selector matched ' + selectorCount + ' topology entities' + (mappedFaces ? ' · ' + mappedFaces + ' mapped face nodes highlighted' : ' · waiting for face mapping');
         viewportSelection.hidden = false;
       }
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
