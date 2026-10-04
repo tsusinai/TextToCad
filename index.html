@@ -2454,7 +2454,7 @@
       } else if (kind === 'polygon_prism') {
         const profile = Array.isArray(spec.profile_points) && spec.profile_points.length >= 3
           ? spec.profile_points
-          : triangleProfilePoints(width, depth);
+          : regularPolygonProfilePoints(polygonSideCount(spec.title) || 3, width, depth);
         const shape = new THREE.Shape();
         shape.moveTo(Number(profile[0][0]), Number(profile[0][1]));
         profile.slice(1).forEach((point) => shape.lineTo(Number(point[0]), Number(point[1])));
@@ -3752,7 +3752,7 @@
       const w = spec.width, d = spec.depth, h = spec.height;
       const rows = ['# FORM AI CAD export', '# Parametric ' + spec.title, '# compartments=' + spec.compartments + ' chamfer=' + spec.chamfer, 'o ' + spec.title.replace(/\\s+/g, '_')];
       if (spec.kind === 'polygon_prism') {
-        const profile = Array.isArray(spec.profile_points) && spec.profile_points.length >= 3 ? spec.profile_points : triangleProfilePoints(w, d);
+        const profile = Array.isArray(spec.profile_points) && spec.profile_points.length >= 3 ? spec.profile_points : regularPolygonProfilePoints(polygonSideCount(spec.title) || 3, w, d);
         profile.forEach(([x, y]) => rows.push('v ' + x + ' ' + y + ' 0'));
         profile.forEach(([x, y]) => rows.push('v ' + x + ' ' + y + ' ' + h));
         const n = profile.length;
