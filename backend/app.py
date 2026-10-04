@@ -301,15 +301,63 @@ def _bounded(value: float, minimum: float, maximum: float) -> float:
     return round(max(minimum, min(maximum, value)), 2)
 
 
-def _triangle_profile_points(width: float, depth: float) -> list[list[float]]:
-    """Return a centered triangular planar profile for the generic prism primitive."""
+_POLYGON_SIDE_WORDS: dict[str, int] = {
+    "triangle": 3, "triangular": 3, "三角形": 3, "三角块": 3, "三角柱": 3, "三棱柱": 3,
+    "quadrilateral": 4, "四边形": 4, "四边柱": 4,
+    "pentagon": 5, "五边形": 5, "五边柱": 5,
+    "hexagon": 6, "六边形": 6, "六边柱": 6,
+    "heptagon": 7, "七边形": 7, "七边柱": 7,
+    "octagon": 8, "八边形": 8, "八边柱": 8,
+    "nonagon": 9, "九边形": 9, "九边柱": 9,
+    "decagon": 10, "十边形": 10, "十边柱": 10,
+    "hendecagon": 11, "十一边形": 11,
+    "dodecagon": 12, "十二边形": 12,
+}
+
+
+def _polygon_side_count(text: str) -> int | None:
+    normalized = " ".join(str(text).strip().lower().split())
+    for token, sides in sorted(_POLYGON_SIDE_WORDS.items(), key=lambda item: len(item[0]), reverse=True):
+        if token in normalized:
+            return sides
+    for pattern in (
+        r"(?:regular\s*)?(\d{1,2})\s*(?:-\s*)?gon\b",
+        r"正\s*(\d{1,2})\s*边形",
+    ):
+        match = re.search(pattern, normalized, flags=re.IGNORECASE)
+        if match:
+            sides = int(match.group(1))
+            if 3 <= sides <= 32:
+                return sides
+    return None
+
+
+def _polygon_profile_points(sides: int, width: float, depth: float) -> list[list[float]]:
+    """Return a centered planar polygon profile bounded by width/depth."""
+    sides = max(3, min(32, int(sides)))
+    if sides == 3:
+        half_width = float(width) / 2.0
+        half_depth = float(depth) / 2.0
+        return [
+            [round(-half_width, 6), round(-half_depth, 6)],
+            [round(half_width, 6), round(-half_depth, 6)],
+            [0.0, round(half_depth, 6)],
+        ]
     half_width = float(width) / 2.0
     half_depth = float(depth) / 2.0
+    rotation = math.pi / 2.0 + math.pi / (2.0 * sides)
     return [
-        [round(-half_width, 6), round(-half_depth, 6)],
-        [round(half_width, 6), round(-half_depth, 6)],
-        [0.0, round(half_depth, 6)],
+        [
+            round(half_width * math.cos(rotation + (2.0 * math.pi * index / sides)), 6),
+            round(half_depth * math.sin(rotation + (2.0 * math.pi * index / sides)), 6),
+        ]
+        for index in range(sides)
     ]
+
+
+def _triangle_profile_points(width: float, depth: float) -> list[list[float]]:
+    """Backward-compatible alias for the generic three-sided profile."""
+    return _polygon_profile_points(3, width, depth)
 
 
 UNIT_FACTORS_MM: dict[str, float] = {
@@ -403,13 +451,11 @@ def parse_prompt_detailed(
         )
     )
     cube_shape = rounded_cube or any(token in text for token in ("cube", "正方体", "方块"))
+    polygon_sides = _polygon_side_count(text)
     if rounded_cube:
         kind = "rounded_cube"
         title = "Parametric rounded cube"
-    elif any(token in text for token in (
-        "triangle", "triangular", "triangular prism", "triangle prism",
-        "三角形", "三角块", "三角柱", "三棱柱",
-    )):
+    elif polygon_sides is not None:
         # This is a generic polygon profile extruded by the CAD kernel, not a
         # dedicated triangular model-family builder.
         kind = "polygon_prism"
@@ -533,6 +579,10 @@ def parse_prompt_detailed(
     ])
     triplet_found = len(dimension_triplet) == 3
     diameter_found = diameter is not None
+    polygon_dimensions_explicit = bool(
+        triplet_found or len(dimension_pair) == 2 or footprint is not None
+        or width is not None or depth is not None or diameter_found
+    )
     if footprint is not None and not (kind == "polygon_prism" and len(dimension_pair) == 2):
         width = width or footprint
         depth = depth or footprint
@@ -553,6 +603,12 @@ def parse_prompt_detailed(
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
     depth_found = depth is not None or square_base or triplet_found or pair_found
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else (140.0 if kind == "airplane" else width * 0.67)))
+    if kind == "polygon_prism" and not polygon_dimensions_explicit:
+        if len(generic_numbers) == 1 and height is None:
+            width = depth = generic_numbers[0]
+            width_found = depth_found = True
+        else:
+            depth = width
     polygon_extrusion = _number_after(text, [
         r"(?:thickness|厚度|挤出长度|挤出厚度)\s*(?:is|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:thickness|厚度|挤出长度|挤出厚度)",
@@ -673,7 +729,7 @@ def parse_prompt_detailed(
         clearance=float(PROCESS_PROFILES[process]["clearance"]),
         material=material if material in {"pla", "petg", "abs", "resin", "aluminum"} else "pla",
         edge_style=edge_style,
-        profile_points=_triangle_profile_points(width, depth) if kind == "polygon_prism" else [],
+        profile_points=_polygon_profile_points(polygon_sides or 3, width, depth) if kind == "polygon_prism" else [],
     )
     field_sources = {
         "width": "parser" if width_found else "default",
@@ -809,7 +865,7 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "datums": [{"id": "xy", "type": "plane"}],
         "nodes": [{
             "id": "node-id", "kind": "primitive|sketch|feature",
-            "operation": "box|cylinder|sphere|cone|torus|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|shell|fillet|chamfer|linear_pattern|polar_pattern",
+            "operation": "box|cylinder|sphere|cone|torus|polygon_prism|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|shell|fillet|chamfer|linear_pattern|polar_pattern",
             "inputs": [], "parameters": {}, "frame": "xy"
         }],
         "constraints": [{"id": "constraint-id", "type": "range|geometric|topology|manufacturing", "parameter": "name", "hard": True}],
@@ -824,6 +880,7 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "constraints, and explicit node dependencies. Keep all numeric dimensions in millimetres. "
         "Only add a fillet, chamfer, shell, hole, or other feature when the user explicitly requests it. "
         "For a plain, regular, sharp, or unrounded cube/block, emit a box primitive with no edge treatment. "
+        "For a regular N-gon or polygon prism, emit polygon_prism with parameters.points as a planar list of [x,y] pairs and parameters.height. "
         "Do not infer rounded edges from generic words such as model, part, body, or solid. "
         f"Selected process: {process}. Requested input units: {units}. "
         f"Allowed IR shape: {json.dumps(schema)}"
@@ -1044,7 +1101,7 @@ def interpret_prompt(
         "cable_channel": cable_channel,
         "material": baseline.material,
         "edge_style": "fillet" if kind == "rounded_cube" else edge_style,
-        "profile_points": _triangle_profile_points(width, depth) if kind == "polygon_prism" else [],
+        "profile_points": _polygon_profile_points(len(baseline.profile_points) or 3, width, depth) if kind == "polygon_prism" else [],
     })
     titles = {
         "tray": "Parametric storage tray",
@@ -1114,7 +1171,7 @@ def build_design_ir(
     ]
     if params.kind == "polygon_prism":
         feature_nodes[0].update({
-            "points": params.profile_points or _triangle_profile_points(params.width, params.depth),
+            "points": params.profile_points or _polygon_profile_points(len(params.profile_points) or 3, params.width, params.depth),
             "height": params.height,
         })
     if params.kind == "angle":
@@ -1390,7 +1447,7 @@ def build_geometry(
         outer = leg_a.union(leg_b)
         base_operation = "l_profile_extrusion"
     elif params.kind == "polygon_prism":
-        points = params.profile_points or _triangle_profile_points(w, d)
+        points = params.profile_points or _polygon_profile_points(len(params.profile_points) or 3, w, d)
         outer = cq.Workplane("XY").polyline(points).close().extrude(h)
         base_operation = "polygon_prism"
     else:
