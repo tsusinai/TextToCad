@@ -2909,6 +2909,50 @@
         });
       });
     }
+    function selectorFaceIndices(analysis) {
+      const indices = new Set();
+      const entries = analysis && Array.isArray(analysis.selector_matches) ? analysis.selector_matches : [];
+      entries.forEach((entry) => {
+        const matches = entry && entry.matches;
+        if (!matches) return;
+        const values = Array.isArray(matches.matched_indices)
+          ? matches.matched_indices
+          : (matches.source_topology === 'face' && Array.isArray(matches.source_indices) ? matches.source_indices : []);
+        values.forEach((value) => {
+          const index = Number(value);
+          if (Number.isInteger(index) && index >= 0) indices.add(index);
+        });
+      });
+      return indices;
+    }
+    function highlightSelectorFaces(root, analysis) {
+      if (!root) return 0;
+      const indices = selectorFaceIndices(analysis);
+      let mapped = 0;
+      root.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+        const match = String(node.name || '').match(/^occt_face_(\d+)$/);
+        if (!match) return;
+        mapped += 1;
+        const selected = indices.has(Number(match[1]));
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (!material.emissive) return;
+          if (material.userData._selectorBaseEmissive === undefined) {
+            material.userData._selectorBaseEmissive = material.emissive.getHex();
+            material.userData._selectorBaseIntensity = material.emissiveIntensity || 0;
+          }
+          if (selected) {
+            material.emissive.setHex(0xc9ff4d);
+            material.emissiveIntensity = .9;
+          } else {
+            material.emissive.setHex(material.userData._selectorBaseEmissive);
+            material.emissiveIntensity = material.userData._selectorBaseIntensity;
+          }
+        });
+      });
+      return mapped;
+    }
     function renderFeatureTree(spec) {
       if (!featureTree || !spec) return;
       setFeatureHighlight(null, false);
