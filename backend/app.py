@@ -2083,7 +2083,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         metrics = shape_metrics(execution["shape"])
         face_measurements = _face_level_dfm(
             execution["shape"],
-            str(normalized.get("process", "fdm")),
+            str(normalized.get("process") or "fdm"),
         )
     except IRExecutionError as exc:
         status_code = 503 if cq is None else 422
