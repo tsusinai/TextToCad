@@ -1938,7 +1938,17 @@ def _write_artifacts(
             }
             glb_path = model_dir / "model.glb"
             three_mf_path = model_dir / "model.3mf"
-            mesh.export(str(glb_path), file_type="glb")
+            face_mapping = _export_face_mapped_glb(shape, glb_path)
+            if face_mapping is None:
+                mesh.export(str(glb_path), file_type="glb")
+                analysis["glb_face_mapping"] = {
+                    "version": "unavailable",
+                    "reason": "face tessellation or GLB node export unavailable",
+                }
+                checks["selector_face_mapping"] = "unknown"
+            else:
+                analysis["glb_face_mapping"] = face_mapping
+                checks["selector_face_mapping"] = "pass"
             _write_3mf(mesh, three_mf_path)
             preview_files = {"glb": glb_path, "3mf": three_mf_path}
         except Exception as exc:
