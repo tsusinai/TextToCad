@@ -79,7 +79,7 @@ LLM_API_KEY = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "").st
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
 # Optional shared-secret protection for public deployments. Keep empty for local-only use.
 BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
-BUILD_VERSION = os.getenv("BUILD_VERSION", "rounded-cube-material-v1")
+BUILD_VERSION = os.getenv("BUILD_VERSION", "semantic-ir-v1")
 try:
     LLM_TIMEOUT_SECONDS = max(1.0, min(60.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))))
 except ValueError:
