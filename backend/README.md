@@ -77,3 +77,5 @@ The v0.2 executor now preserves every node listed in outputs. POST /v1/ir/compil
 Face DFM output includes wall_thickness_analysis. It records whether the result came from an OCCT B-Rep face distance or an opposing-face center proxy, with confidence and an explicit normal_ray_sampling capability flag. Consumers should treat proxy output as conservative until a kernel-backed ray sample is available.
 
 The backend now attempts an optional OCCT normal-ray thickness sample from each face center. Capability is exposed as occt_normal_ray_available on /health; unavailable kernels retain the explicit proxy result and never label it as ray-sampled.
+
+All declared semantic outputs are now checked individually for valid B-Rep, positive volume, non-zero faces, and single-solid topology. The compiler rejects the request with per-entity output_quality details if any output fails.
