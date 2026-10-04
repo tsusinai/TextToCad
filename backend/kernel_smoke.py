@@ -82,7 +82,7 @@ def main() -> None:
         ],
     }
     execution = execute_ir(app.validate_ir(ir))
-    assert execution["output_nodes"] == ["base", "cavity", "regular_heptagon", "triangle", "octagon"]
+    assert execution["output_nodes"] == ["base", "cavity", "triangle", "octagon", "regular_heptagon"]
     triangle_metrics = app.shape_metrics(execution["output_shapes"]["triangle"])
     assert triangle_metrics["valid_brep"] is True
     assert triangle_metrics["bbox_mm"]["x"] == 60.0
