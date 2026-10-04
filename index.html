@@ -3160,8 +3160,8 @@
         : null;
       if (modelWrap) modelWrap.classList.toggle('selector-matched', selectorCount > 0);
       if (modelStage) modelStage.classList.toggle('selector-matched', selectorCount > 0);
+      const mappedFaces = threeState.model ? highlightSelectorFaces(threeState.model, analysis) : 0;
       if (viewportSelection && selectorCount > 0) {
-        const mappedFaces = threeState.model ? highlightSelectorFaces(threeState.model, analysis) : 0;
         viewportSelection.textContent = currentLang === 'zh'
           ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体' + (mappedFaces ? ' · 已高亮 ' + mappedFaces + ' 面节点' : ' · 等待面映射')
           : 'OCCT selector matched ' + selectorCount + ' topology entities' + (mappedFaces ? ' · ' + mappedFaces + ' mapped face nodes highlighted' : ' · waiting for face mapping');
