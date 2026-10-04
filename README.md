@@ -147,7 +147,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 
 ## 当前边界
 
-- 壁厚、间隙、悬空和拔模目前包含名义估算；真正的面级测量仍是下一阶段。`manufacturing_ready` 会保持 false。
+- 壁厚、间隙和拔模仍包含名义估算；当前已增加面面积、法向、中心点和下向面的保守悬空初筛。`manufacturing_ready` 会保持 false。
 - LLM 高级模式需要后端 API key；标准模式无需 API，仍可离线工作。
 - 没有后端时可以进行真实参数化预览和 OBJ 概念导出，但 STEP/STL/OCCT 检查必须连接后端。
 - 生产部署应使用 HTTPS、持久化 ARTIFACT_ROOT、严格 CORS、速率限制和进程级任务隔离。
