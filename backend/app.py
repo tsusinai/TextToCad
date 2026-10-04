@@ -2121,6 +2121,14 @@ def _generate_ir_model(
         recorder.emit("reviewing", "manufacturing_review", "warning",
                       nominal=True, issue_count=len(analysis["issues"]), review_required=True)
 
+        semantic_intent = str(
+            (normalized_ir.get("document") or {}).get("intent") or ""
+        ).strip()
+        if semantic_intent and semantic_intent.lower() not in {"design intent", "generic design"}:
+            title = semantic_intent[:120]
+        elif request.prompt.strip():
+            title = request.prompt.strip()[:120]
+
         provenance = copy.deepcopy(provenance)
         provenance["ir_strategy"] = "llm_generic_v0.2"
         provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
