@@ -503,6 +503,8 @@ def test_face_level_dfm_records_normals_and_areas():
     assert report["wall_thickness_proxy_mm"] == 10.0
     assert report["wall_thickness_proxy_status"] == "pass"
     assert report["wall_thickness_measurement"]["method"] == "opposing_face_center_proxy"
+    assert report["wall_thickness_analysis"]["normal_ray_sampling"] in {"available", "unavailable", "no_hit"}
+    assert report["wall_thickness_analysis"]["normal_ray_sample_count"] >= 0
     assert report["overhang_status"] == "warning"
     assert report["clearance_status"] == "unknown"
 
