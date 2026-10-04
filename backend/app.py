@@ -877,7 +877,7 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "datums": [{"id": "xy", "type": "plane"}],
         "nodes": [{
             "id": "node-id", "kind": "primitive|sketch|feature",
-            "operation": "box|cylinder|sphere|cone|torus|polygon_prism|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|shell|fillet|chamfer|linear_pattern|polar_pattern",
+            "operation": "box|cylinder|sphere|cone|torus|polygon_prism|regular_polygon|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|align|mirror|shell|fillet|chamfer|linear_pattern|polar_pattern",
             "inputs": [], "parameters": {}, "frame": "xy"
         }],
         "constraints": [{"id": "constraint-id", "type": "range|geometric|topology|manufacturing", "parameter": "name", "hard": True}],
@@ -894,7 +894,7 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "Primitive parameters guide: box requires size: [w,d,h] or width, depth, height; sphere requires radius (or diameter); cylinder requires radius (or diameter) and height; cone requires radius1 and height. "
         "For a plain, regular, sharp, or unrounded cube/block, emit a box primitive with no edge treatment. "
         "For a sphere or ball (球体/球), emit a sphere primitive with radius or diameter (if dimension not specified, use a reasonable default like radius=25). "
-        "For a regular N-gon or polygon prism, emit polygon_prism with parameters.points as a planar list of [x,y] pairs and parameters.height. "
+        "For a regular N-gon or polygon prism, emit regular_polygon with parameters.sides, parameters.points (planar [x,y] pairs) or width/depth, and parameters.height. Use polygon_prism only for an explicit irregular polygon profile. "
         "Do not infer rounded edges from generic words such as model, part, body, or solid. "
         f"Selected process: {process}. Requested input units: {units}. "
         f"Allowed IR shape: {json.dumps(schema)}"
