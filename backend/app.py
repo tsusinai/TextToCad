@@ -185,6 +185,9 @@ class ModelParameters(BaseModel):
     clearance: float = 0.3
     material: str = "pla"
     edge_style: str = "chamfer"
+    # Generic planar profile points in millimetres. The profile is extruded
+    # along height by the kernel; it is intentionally not a model-family enum.
+    profile_points: list[list[float]] = Field(default_factory=list)
 
 
 class GenerateResponse(BaseModel):
@@ -298,6 +301,17 @@ def _bounded(value: float, minimum: float, maximum: float) -> float:
     return round(max(minimum, min(maximum, value)), 2)
 
 
+def _triangle_profile_points(width: float, depth: float) -> list[list[float]]:
+    """Return a centered triangular planar profile for the generic prism primitive."""
+    half_width = float(width) / 2.0
+    half_depth = float(depth) / 2.0
+    return [
+        [round(-half_width, 6), round(-half_depth, 6)],
+        [round(half_width, 6), round(-half_depth, 6)],
+        [0.0, round(half_depth, 6)],
+    ]
+
+
 UNIT_FACTORS_MM: dict[str, float] = {
     "mm": 1.0,
     "毫米": 1.0,
@@ -392,6 +406,14 @@ def parse_prompt_detailed(
     if rounded_cube:
         kind = "rounded_cube"
         title = "Parametric rounded cube"
+    elif any(token in text for token in (
+        "triangle", "triangular", "triangular prism", "triangle prism",
+        "三角形", "三角块", "三角柱", "三棱柱",
+    )):
+        # This is a generic polygon profile extruded by the CAD kernel, not a
+        # dedicated triangular model-family builder.
+        kind = "polygon_prism"
+        title = "Parametric polygon prism"
     elif any(token in text for token in (
         "airplane", "aircraft", "model plane", "plane model", "飞机", "航模", "机翼", "机身",
     )):
@@ -541,6 +563,7 @@ def parse_prompt_detailed(
         else 40.0 if kind == "lamp"
         else 40.0 if kind == "airplane"
         else 100.0 if kind == "cup"
+        else 42.0 if kind == "polygon_prism"
         else 24.0
     )
     generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
@@ -560,7 +583,7 @@ def parse_prompt_detailed(
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|radius|倒角|圆角|圆弧|半径)",
     ])
     chamfer_found = chamfer_value is not None
-    chamfer_default = 4.0 if kind == "rounded_cube" else (0.0 if cube_shape or kind in {"angle", "airplane", "cup"} else 2.0)
+    chamfer_default = 4.0 if kind == "rounded_cube" else (0.0 if cube_shape or kind in {"angle", "airplane", "cup", "polygon_prism"} else 2.0)
     chamfer = chamfer_value if chamfer_value is not None else chamfer_default
     edge_style = "fillet" if kind == "rounded_cube" else "chamfer"
 
@@ -644,6 +667,7 @@ def parse_prompt_detailed(
         clearance=float(PROCESS_PROFILES[process]["clearance"]),
         material=material if material in {"pla", "petg", "abs", "resin", "aluminum"} else "pla",
         edge_style=edge_style,
+        profile_points=_triangle_profile_points(width, depth) if kind == "polygon_prism" else [],
     )
     field_sources = {
         "width": "parser" if width_found else "default",
@@ -656,6 +680,7 @@ def parse_prompt_detailed(
         "drainage_holes": "inferred" if kind == "plant" else "default",
         "cable_channel": "inferred" if kind == "lamp" else "default",
         "material": "parser",
+        "profile_points": "derived" if kind == "polygon_prism" else "default",
     }
     provenance = _parameter_provenance(
         field_sources,
@@ -689,7 +714,7 @@ def _llm_json(prompt: str, process: str, baseline: ModelParameters) -> dict[str,
         raise RuntimeError("LLM_API_URL must be an absolute HTTP(S) URL")
     schema = {
         "schema_version": "0.1",
-        "kind": "tray|organizer|clip|plant|lamp|pen|cup|airplane|angle|rounded_cube|block",
+        "kind": "tray|organizer|clip|plant|lamp|pen|cup|airplane|angle|rounded_cube|polygon_prism|block",
         "edge_style": "chamfer|fillet",
         "width": "number in mm", "depth": "number in mm", "height": "number in mm",
         "compartments": "integer 1-12", "wall": "number in mm", "bottom": "number in mm",
@@ -887,6 +912,9 @@ def interpret_prompt(
         "cup": "cup", "mug": "cup", "杯子": "cup", "水杯": "cup", "马克杯": "cup",
         "airplane": "airplane", "aircraft": "airplane", "model plane": "airplane", "飞机": "airplane", "航模": "airplane",
         "cable_clip": "clip", "cable clip": "clip",
+        "triangle": "polygon_prism", "triangular": "polygon_prism",
+        "triangular_prism": "polygon_prism", "triangle_prism": "polygon_prism",
+        "三角形": "polygon_prism", "三角块": "polygon_prism", "三角柱": "polygon_prism", "三棱柱": "polygon_prism",
         "rounded_cube": "rounded_cube", "rounded cube": "rounded_cube",
         "filleted_cube": "rounded_cube", "soft cube": "rounded_cube",
     }
@@ -894,7 +922,7 @@ def interpret_prompt(
     kind = aliases.get(raw_kind, raw_kind)
     kind_was_provided = "kind" in candidate
     normalization_assumptions: list[str] = []
-    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "cup", "airplane", "angle", "rounded_cube", "block"}:
+    if kind not in {"tray", "organizer", "clip", "plant", "lamp", "pen", "cup", "airplane", "angle", "rounded_cube", "polygon_prism", "block"}:
         kind = baseline.kind
         if kind_was_provided:
             normalization_assumptions.append("Unsupported model family was replaced with the deterministic baseline.")
@@ -1010,6 +1038,7 @@ def interpret_prompt(
         "cable_channel": cable_channel,
         "material": baseline.material,
         "edge_style": "fillet" if kind == "rounded_cube" else edge_style,
+        "profile_points": _triangle_profile_points(width, depth) if kind == "polygon_prism" else [],
     })
     titles = {
         "tray": "Parametric storage tray",
@@ -1022,6 +1051,7 @@ def interpret_prompt(
         "airplane": "Parametric airplane model",
         "angle": "Parametric L bracket",
         "rounded_cube": "Parametric rounded cube",
+        "polygon_prism": "Parametric polygon prism",
         "block": "Parametric solid",
     }
     raw_assumptions = raw.get("assumptions", []) if isinstance(raw, dict) else []
@@ -1034,7 +1064,7 @@ def interpret_prompt(
 
     field_names = (
         "kind", "width", "depth", "height", "compartments", "chamfer",
-        "wall", "bottom", "drainage_holes", "cable_channel",
+        "wall", "bottom", "drainage_holes", "cable_channel", "profile_points",
     )
     fields = provenance.setdefault("fields", {})
     for field in field_names:
@@ -1069,12 +1099,18 @@ def build_design_ir(
     base_operation = (
         "cylinder" if params.kind in {"plant", "pen", "cup"}
         else "l_profile_extrusion" if params.kind == "angle"
+        else "polygon_prism" if params.kind == "polygon_prism"
         else "rounded_box" if params.kind == "rounded_cube"
         else "box"
     )
     feature_nodes: list[dict[str, Any]] = [
         {"id": "base_solid", "type": "primitive", "operation": base_operation, "status": "planned"},
     ]
+    if params.kind == "polygon_prism":
+        feature_nodes[0].update({
+            "points": params.profile_points or _triangle_profile_points(params.width, params.depth),
+            "height": params.height,
+        })
     if params.kind == "angle":
         feature_nodes.append({
             "id": "angle_profile", "type": "profile", "operation": "union_l_legs",
@@ -1347,6 +1383,10 @@ def build_geometry(
         ).translate((-w / 2, -d / 2, 0))
         outer = leg_a.union(leg_b)
         base_operation = "l_profile_extrusion"
+    elif params.kind == "polygon_prism":
+        points = params.profile_points or _triangle_profile_points(w, d)
+        outer = cq.Workplane("XY").polyline(points).close().extrude(h)
+        base_operation = "polygon_prism"
     else:
         outer = cq.Workplane("XY").box(w, d, h, centered=(True, True, False))
         base_operation = "rounded_box" if rounded_cube else "box"
@@ -1363,6 +1403,12 @@ def build_geometry(
 
     if params.kind == "angle":
         done("angle_profile", outer, "union_l_legs", leg_a_mm=w, leg_b_mm=d, thickness_mm=wall)
+        return outer
+
+    if params.kind == "polygon_prism":
+        done("polygon_profile", outer, "polygon_prism",
+             profile_points=params.profile_points or _triangle_profile_points(w, d),
+             extrusion_mm=h)
         return outer
 
     if params.kind in ("tray", "organizer"):
