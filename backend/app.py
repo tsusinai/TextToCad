@@ -2628,6 +2628,14 @@ def _generate_ir_model(
             params.process,
             request.mold_pull_direction,
         )
+        analysis["output_nodes"] = execution.get("output_nodes", [execution["output_node"]])
+        analysis["output_metrics"] = [
+            {
+                "node": node_id,
+                "metrics": shape_metrics(output_shape),
+            }
+            for node_id, output_shape in execution.get("output_shapes", {}).items()
+        ]
         analysis["selector_matches"] = [
             {
                 "node_id": event.get("id"),
