@@ -263,3 +263,8 @@ P7 下一步：将多实体输出接入预览场景与选择器语义，并在 O
 - 仍需在含 CadQuery/OCCT 的部署镜像中用真实薄壁、壳体和凹腔样本做几何回归。
 
 - 多实体质量门已接入：编译与 IR 生成逐输出检查 B-Rep、体积、面数和单实体拓扑，任一输出失败即拒绝并返回逐实体 output_quality。
+
+## P8.4 多实体预览产物
+
+- 多输出 IR 生成时额外导出合并的 model_entities.glb，每个实体和 OCCT 面保持稳定节点名。
+- 现有 model.glb、STEP、STL 行为保持兼容；新增 glb_entities 下载格式和 analysis.glb_output_mapping。
