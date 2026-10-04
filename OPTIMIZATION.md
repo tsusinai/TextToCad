@@ -151,3 +151,5 @@ P7 后续聚焦：多实体预览语义、OCCT 射线/法向厚度，以及更�
 - 面级 DFM 现在尝试通过 OCP BRepIntCurveSurface 从面中心沿内法向采样到下一交点；成功时输出 normal_ray_thickness_mm 和 ray_sampled 状态。
 - /health 增加 OCCT 射线能力探针；运行时不支持时继续使用保守 B-Rep 代理并保留限制说明。
 - 后续需在完整 CAD 镜像中补充薄壁、壳体、凹腔和相切面的回归样本。
+
+- 多输出不再只返回 metrics；每个实体都经过 B-Rep/体积/面数/单实体校验，编译失败时返回 output_quality.entities，便于定位具体坏实体。
