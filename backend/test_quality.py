@@ -557,3 +557,33 @@ def test_shape_distance_prefers_kernel_method():
     distance, method = app._shape_distance(Shape(4.5), Shape(4.5))
     assert distance == 4.5
     assert method == "brep_shape_distance"
+
+
+def test_selector_returns_match_metadata_without_kernel():
+    class Collection:
+        def __init__(self, values):
+            self._values = values
+
+        def vals(self):
+            return self._values
+
+    class Shape:
+        def __init__(self):
+            self._edges = [object(), object(), object()]
+
+        def edges(self):
+            return Collection(self._edges)
+
+        def newObject(self, selected):
+            return selected
+
+    metadata = {}
+    result = app._topology_selection(
+        Shape(),
+        {"topology": "edge", "where": [{"index": 1}]},
+        "edge",
+        metadata,
+    )
+    assert len(result) == 1
+    assert metadata["matched_indices"] == [1]
+    assert metadata["matched_count"] == 1
