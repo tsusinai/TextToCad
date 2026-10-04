@@ -435,6 +435,18 @@ def _node_shape(
     values = node.get("parameters") or {}
     frame = node.get("frame")
 
+    def _apply_inline_transform(res: Any) -> Any:
+        pos = values.get("position") or values.get("origin") or values.get("center")
+        if pos is not None:
+            if isinstance(pos, (list, tuple)) and len(pos) == 3:
+                res = res.translate(_vector(parameters, pos, f"{operation}.position"))
+            elif isinstance(pos, dict):
+                x = _number(parameters, pos.get("x", 0), f"{operation}.position.x", -1e12)
+                y = _number(parameters, pos.get("y", 0), f"{operation}.position.y", -1e12)
+                z = _number(parameters, pos.get("z", 0), f"{operation}.position.z", -1e12)
+                res = res.translate((x, y, z))
+        return res
+
     if operation == "box":
         size = values.get("size")
         if size is None:
@@ -442,7 +454,7 @@ def _node_shape(
         width, depth, height = (_number(parameters, item, f"box.{axis}") for item, axis in zip(size, ("width", "depth", "height")))
         centered = values.get("centered", (True, True, False))
         centered = tuple(bool(item) for item in _resolve(centered, parameters))
-        return _workplane(frame).box(width, depth, height, centered=centered)
+        return _apply_inline_transform(_workplane(frame).box(width, depth, height, centered=centered))
     if operation == "cylinder":
         radius_value = values.get("radius")
         if radius_value is None:
@@ -452,8 +464,9 @@ def _node_shape(
             else:
                 radius_value = 20.0
         radius = _number(parameters, radius_value, "cylinder.radius")
-        height = _number(parameters, values.get("height", 40.0), "cylinder.height")
-        return _workplane(frame).circle(radius).extrude(height)
+        height_val = values.get("height", values.get("length", 40.0))
+        height = _number(parameters, height_val, "cylinder.height")
+        return _apply_inline_transform(_workplane(frame).circle(radius).extrude(height))
     if operation == "sphere":
         radius_value = values.get("radius")
         if radius_value is None:
@@ -472,16 +485,17 @@ def _node_shape(
                 radius_value = _number(parameters, parameters["diameter"], "parameters.diameter") / 2
             else:
                 radius_value = 25.0
-        return _workplane(frame).sphere(_number(parameters, radius_value, "sphere.radius"))
+        return _apply_inline_transform(_workplane(frame).sphere(_number(parameters, radius_value, "sphere.radius")))
     if operation == "cone":
-        height = _number(parameters, values.get("height", 40.0), "cone.height")
+        height_val = values.get("height", values.get("length", 40.0))
+        height = _number(parameters, height_val, "cone.height")
         radius1 = _number(parameters, values.get("radius1", values.get("radius", 20.0)), "cone.radius1")
         radius2 = _number(parameters, values.get("radius2", 0.01), "cone.radius2", -1e-12)
-        return _workplane(frame).cone(height, radius1, radius2)
+        return _apply_inline_transform(_workplane(frame).cone(height, radius1, radius2))
     if operation == "torus":
         major = _number(parameters, values.get("major_radius", values.get("radius", 30.0)), "torus.major_radius")
         minor = _number(parameters, values.get("minor_radius", 10.0), "torus.minor_radius")
-        return _workplane(frame).torus(major, minor)
+        return _apply_inline_transform(_workplane(frame).newObject([cq.Solid.makeTorus(major, minor)]))
     if operation == "sketch":
         geometry = values.get("geometry", values.get("elements", []))
         if not isinstance(geometry, list) or not geometry:
@@ -508,11 +522,11 @@ def _node_shape(
     if operation == "regular_polygon":
         points = _regular_polygon_points(parameters, values)
         height = _number(parameters, values.get("height", 40.0), "regular_polygon.height")
-        return _workplane(frame).polyline(points).close().extrude(height)
+        return _apply_inline_transform(_workplane(frame).polyline(points).close().extrude(height))
     if operation == "polygon_prism":
         points = _polygon_points(parameters, values.get("points"), "polygon_prism.points")
         height = _number(parameters, values.get("height"), "polygon_prism.height")
-        return _workplane(frame).polyline(points).close().extrude(height)
+        return _apply_inline_transform(_workplane(frame).polyline(points).close().extrude(height))
     if operation == "sweep":
         if len(inputs) != 2:
             raise IRExecutionError("sweep requires a profile and a path input")

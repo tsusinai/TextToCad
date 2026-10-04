@@ -1783,6 +1783,39 @@
         exportMeta: 'STEP · STL · 3MF · GLB'
       }
     };
+
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+    const polygonSideWords = {
+      triangle: 3, triangular: 3, '三角形': 3, '三角块': 3, '三角柱': 3, '三棱柱': 3,
+      quadrilateral: 4, '四边形': 4, square: 4, '正方形': 4, pentagon: 5, '五边形': 5, hexagon: 6, '六边形': 6,
+      heptagon: 7, '七边形': 7, octagon: 8, '八边形': 8, nonagon: 9, '九边形': 9,
+      decagon: 10, '十边形': 10, hendecagon: 11, '十一边形': 11, dodecagon: 12, '十二边形': 12
+    };
+    function polygonSideCount(text) {
+      const value = String(text || '').toLowerCase();
+      for (const token of Object.keys(polygonSideWords).sort((a, b) => b.length - a.length)) {
+        if (value.includes(token)) return polygonSideWords[token];
+      }
+      const numeric = value.match(/(?:regular\s*)?(\d{1,2})\s*(?:-\s*)?gon\b/) || value.match(/正\s*(\d{1,2})\s*边形/);
+      if (!numeric) return 0;
+      const sides = Number(numeric[1]);
+      return sides >= 3 && sides <= 32 ? sides : 0;
+    }
+    function regularPolygonProfilePoints(sides, width, depth) {
+      const count = clamp(Number(sides) || 3, 3, 32);
+      if (count === 3) return [[-width / 2, -depth / 2], [width / 2, -depth / 2], [0, depth / 2]];
+      const rotation = Math.PI / 2 + Math.PI / (2 * count);
+      const points = [];
+      for (let i = 0; i < count; i++) {
+        const angle = rotation + (2 * Math.PI * i) / count;
+        points.push([
+          Math.cos(angle) * (width / 2),
+          Math.sin(angle) * (depth / 2)
+        ]);
+      }
+      return points;
+    }
     function updateMaterialOptions() {
       if (!materialSelect) return;
       Object.entries(materialPresets).forEach(([key, preset]) => {
@@ -1924,7 +1957,6 @@
       if (typeof renderRevisions === 'function') renderRevisions();
     }
     langToggle.addEventListener('click', () => { currentLang = currentLang === 'en' ? 'zh' : 'en'; try { localStorage.setItem('formCadLang', currentLang); } catch (error) {} translate(); });
-    translate();
 
     function updatePreviewHint() {
       if (!interactionHint) return;
@@ -1962,38 +1994,14 @@
     }
     probeBackendCapabilities();
 
-    const polygonSideWords = {
-      triangle: 3, triangular: 3, '三角形': 3, '三角块': 3, '三角柱': 3, '三棱柱': 3,
-      quadrilateral: 4, '四边形': 4, square: 4, '正方形': 4, pentagon: 5, '五边形': 5, hexagon: 6, '六边形': 6,
-      heptagon: 7, '七边形': 7, octagon: 8, '八边形': 8, nonagon: 9, '九边形': 9,
-      decagon: 10, '十边形': 10, hendecagon: 11, '十一边形': 11, dodecagon: 12, '十二边形': 12
-    };
-    function polygonSideCount(text) {
-      const value = String(text || '').toLowerCase();
-      for (const token of Object.keys(polygonSideWords).sort((a, b) => b.length - a.length)) {
-        if (value.includes(token)) return polygonSideWords[token];
-      }
-      const numeric = value.match(/(?:regular\s*)?(\d{1,2})\s*(?:-\s*)?gon\b/) || value.match(/正\s*(\d{1,2})\s*边形/);
-      if (!numeric) return 0;
-      const sides = Number(numeric[1]);
-      return sides >= 3 && sides <= 32 ? sides : 0;
-    }
-    function regularPolygonProfilePoints(sides, width, depth) {
-      const count = clamp(Number(sides) || 3, 3, 32);
-      if (count === 3) return [[-width / 2, -depth / 2], [width / 2, -depth / 2], [0, depth / 2]];
-      const rotation = Math.PI / 2 + Math.PI / (2 * count);
-      const raw = Array.from({ length: count }, (_, index) => {
-        const angle = rotation + (Math.PI * 2 * index / count);
-        return [width / 2 * Math.cos(angle), depth / 2 * Math.sin(angle)];
-      });
-      const xs = raw.map((point) => point[0]), ys = raw.map((point) => point[1]);
-      const scaleX = width / Math.max(Math.max(...xs) - Math.min(...xs), 1e-6);
-      const scaleY = depth / Math.max(Math.max(...ys) - Math.min(...ys), 1e-6);
-      return raw.map(([x, y]) => [x * scaleX, y * scaleY]);
-    }
     function titleFor(text) {
-      const value = text.toLowerCase();
+      const value = String(text || '').toLowerCase();
       if (/rounded cube|rounded block|filleted cube|soft cube|no sharp edges|no sharp corners|圆角立方体|圆角方块|圆润方块|无棱角|没有棱角|没用棱角|不带棱角/.test(value) || ((value.includes('cube') || value.includes('正方体') || value.includes('方块')) && /round|fillet|圆角|圆润|倒圆|棱角/.test(value))) return 'Rounded cube';
+      if (/torus|ring|donut|圆环|环体/.test(value)) return 'Torus';
+      if (/sphere|ball|球体|圆球|球/.test(value)) return 'Sphere';
+      if (/cone|圆锥|锥体/.test(value)) return 'Cone';
+      if (/pipe|tube|hollow cylinder|空心圆柱|圆管|钢管|筒/.test(value)) return 'Hollow cylinder';
+      if (/cylinder|圆柱|圆柱体/.test(value)) return 'Cylinder';
       if (polygonSideCount(value) || /polygon\s*(?:prism|block)?|多边形|多边柱/.test(value)) return 'Polygon prism';
       if (/airplane|aircraft|model plane|plane model|飞机|航模|机翼|机身/.test(value)) return 'Airplane model';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
@@ -2004,7 +2012,8 @@
       if (value.includes('cup') || value.includes('mug') || value.includes('杯子') || value.includes('水杯') || value.includes('马克杯') || value.includes('杯')) return 'Cup';
       if (value.includes('tray') || value.includes('托盘')) return 'Storage tray';
       if (value.includes('desk') || value.includes('桌面') || value.includes('收纳盒') || value.includes('收纳')) return 'Desk organizer';
-      return 'Solid block';
+      if (/cube|block|box|方块|立方体|立方|立方块/.test(value)) return 'Box';
+      return 'Parametric CAD part';
     }
     function kindForTitle(title) {
       const value = String(title || '').toLowerCase();
@@ -2085,7 +2094,6 @@
       const scale = hasExplicitUnit ? 1 : fallbackFactor;
       return { width: width * scale, depth: depth * scale, height: height * scale };
     }
-    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
     function triangleProfilePoints(width, depth) {
       return regularPolygonProfilePoints(3, width, depth);
     }
@@ -2309,9 +2317,17 @@
         } catch (error) {
           console.warn('RoundedBoxGeometry unavailable; using box fallback.', error);
         }
+        let GLTFLoader = null;
+        try {
+          ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+        } catch (error) {
+          console.warn('GLTFLoader unavailable.', error);
+        }
         if (threeState.renderer && threeState.THREE) return threeState.THREE;
         threeState.THREE = THREE;
+        threeState.OrbitControls = OrbitControls;
         threeState.RoundedBoxGeometry = RoundedBoxGeometry;
+        threeState.GLTFLoader = GLTFLoader;
         threeState.scene = new THREE.Scene();
         threeState.scene.background = null;
         threeState.scene.fog = new THREE.Fog(0x15181c, 400, 1200);
@@ -2409,6 +2425,7 @@
     }
 
     function buildLocalThreeModel(THREE, spec) {
+      if (!spec) spec = { width: 40, depth: 40, height: 40, kind: 'block' };
       const root = new THREE.Group();
       const preset = materialPresetFor(spec);
       const body = makeLocalMaterial(THREE, preset.body, preset.roughness, preset.metalness);
@@ -2433,9 +2450,29 @@
       const height = Math.max(Number(spec.height) || 42, 5);
       const wall = Math.min(Math.max(Number(spec.wall) || 3, 1.2), Math.min(width, depth) / 3);
       const bottom = Math.min(Math.max(Number(spec.bottom) || wall, 1.2), Math.max(height - 1, 1.2));
-      const kind = spec.kind || 'organizer';
+      const kind = spec.kind || 'block';
 
-      if (kind === 'plant' || kind === 'pen' || kind === 'cup') {
+      if (kind === 'sphere' || (spec.title && (spec.title.includes('Sphere') || spec.title.includes('球')))) {
+        const rad = Math.min(width, depth, height) / 2;
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(Math.max(rad, 1), 64, 32), body);
+        mesh.position.set(0, rad, 0);
+        root.add(mesh);
+      } else if (kind === 'torus' || (spec.title && (spec.title.includes('Torus') || spec.title.includes('环')))) {
+        const major = Math.min(width, depth) / 2;
+        const minor = Math.max(major / 4, 1);
+        const mesh = new THREE.Mesh(new THREE.TorusGeometry(major, minor, 24, 64), body);
+        mesh.rotation.x = Math.PI / 2;
+        mesh.position.set(0, minor, 0);
+        root.add(mesh);
+      } else if (kind === 'cone' || (spec.title && (spec.title.includes('Cone') || spec.title.includes('锥')))) {
+        const rad = Math.min(width, depth) / 2;
+        const mesh = new THREE.Mesh(new THREE.ConeGeometry(Math.max(rad, 1), height, 64), body);
+        mesh.position.set(0, height / 2, 0);
+        root.add(mesh);
+      } else if (kind === 'cylinder' || (spec.title && (spec.title.includes('Cylinder') || spec.title.includes('圆柱')))) {
+        const rad = Math.min(width, depth) / 2;
+        cylinder(rad, height, 0, height / 2, 0, body, false);
+      } else if (kind === 'plant' || kind === 'pen' || kind === 'cup') {
         const radius = Math.min(width, depth) / 2;
         const innerRadius = Math.max(radius - wall, 1);
         cylinder(radius, height, 0, height / 2, 0, side, true);
@@ -2561,7 +2598,8 @@
       const sequence = ++threeState.loadSeq;
       try {
         const THREE = await ensureThreeRenderer();
-        const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+        const GLTFLoader = threeState.GLTFLoader || (await import('three/addons/loaders/GLTFLoader.js')).GLTFLoader;
+        if (!GLTFLoader) throw new Error('GLTFLoader unavailable');
         if (sequence !== threeState.loadSeq) return;
         const loader = new GLTFLoader();
         if (threeState.requestController) threeState.requestController.abort();
@@ -3128,8 +3166,28 @@
       if (bodyValue) bodyValue.textContent = displayTitle(spec.title);
       if (sizeValue) sizeValue.textContent = spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm';
       const bodyMeta = document.getElementById('bodyMeta');
-      if (bodyMeta) bodyMeta.textContent = currentLang === 'zh' ? ((spec.compartments || 1) + ' 个隔间 · 可制造实体') : ((spec.compartments || 1) + ' compartments · closed volume');
-      if (modelMeta) modelMeta.textContent = currentLang === 'zh' ? ((spec.compartments || 1) + ' 个隔间 · 壁厚 ' + (spec.wall || 3) + ' 毫米 · 倒角 ' + (spec.chamfer || 0) + ' 毫米') : ((spec.compartments || 1) + ' compartments · ' + (spec.wall || 3) + ' mm wall · edge ' + (spec.chamfer || 0) + ' mm');
+      const checks = backendArtifact && backendArtifact.checks;
+      const entity = checks && checks.output_quality && checks.output_quality.entities && checks.output_quality.entities[0];
+      const faceCount = entity && entity.metrics && entity.metrics.face_count;
+      const vol = entity && entity.metrics && entity.metrics.volume_mm3;
+      if (bodyMeta) {
+        if (faceCount) {
+          bodyMeta.textContent = currentLang === 'zh' ? (faceCount + ' 表面 · 水密流形实体') : (faceCount + ' faces · watertight manifold');
+        } else {
+          bodyMeta.textContent = currentLang === 'zh' ? '水密流形实体 (Watertight Manifold)' : 'watertight manifold';
+        }
+      }
+      if (modelMeta) {
+        if (vol) {
+          modelMeta.textContent = currentLang === 'zh'
+            ? ('体积 ' + Math.round(vol) + ' mm³ · ' + (spec.chamfer > 0 ? '倒角 ' + spec.chamfer + ' 毫米' : '精确几何边界'))
+            : ('Vol ' + Math.round(vol) + ' mm³ · ' + (spec.chamfer > 0 ? 'chamfer ' + spec.chamfer + ' mm' : 'precise boundary'));
+        } else {
+          modelMeta.textContent = currentLang === 'zh'
+            ? ('壁厚 ' + (spec.wall || 3) + ' 毫米 · 倒角 ' + (spec.chamfer || 0) + ' 毫米')
+            : ('wall ' + (spec.wall || 3) + ' mm · edge ' + (spec.chamfer || 0) + ' mm');
+        }
+      }
       if (parameterFields.width) syncParameterEditor(spec);
       updateMaterialCard(spec);
     }
@@ -3141,7 +3199,16 @@
       const assumptions = assumptionList(prompt.value);
       const separator = currentLang === 'zh' ? '、' : ', ';
       interpretationSummary.textContent = displayTitle(spec.title) + ' · ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm';
-      interpretationDetails.textContent = spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments') + ' · ' + (currentLang === 'zh' ? '倒角 ' : 'chamfer ') + spec.chamfer + ' mm' + (assumptions.length ? ' · ' + t.assumptions + ': ' + assumptions.join(separator) : '');
+      if (backendArtifact && backendArtifact.design_ir && Array.isArray(backendArtifact.design_ir.nodes) && backendArtifact.design_ir.nodes.length > 0) {
+        const nodeCount = backendArtifact.design_ir.nodes.length;
+        const checks = backendArtifact.checks;
+        const entity = checks && checks.output_quality && checks.output_quality.entities && checks.output_quality.entities[0];
+        const vol = entity && entity.metrics && entity.metrics.volume_mm3;
+        interpretationDetails.textContent = nodeCount + (currentLang === 'zh' ? ' 个特征节点 · 通用 CAD IR 编译 · ' : ' feature nodes · Generic CAD IR compiled · ') + (vol ? (currentLang === 'zh' ? '体积 ' : 'Vol ') + Math.round(vol) + ' mm³' : (currentLang === 'zh' ? '几何求解收敛' : 'constraints satisfied'));
+      } else {
+        const compDesc = (spec.compartments && spec.compartments > 1) ? (spec.compartments + (currentLang === 'zh' ? ' 个隔间 · ' : ' compartments · ')) : '';
+        interpretationDetails.textContent = compDesc + (spec.chamfer > 0 ? (currentLang === 'zh' ? '倒角 ' : 'chamfer ') + spec.chamfer + ' mm · ' : '') + (currentLang === 'zh' ? '纯自然语言解析' : 'Natural language parametric intent') + (assumptions.length ? ' · ' + t.assumptions + ': ' + assumptions.join(separator) : '');
+      }
       if (llmAssumptions.length) interpretationDetails.textContent += ' · ' + t.llmAssumptions + ': ' + llmAssumptions.join(separator);
       interpretationStatus.textContent = source === 'advanced' ? t.advancedState : (source === 'backend' ? t.backendState : (source === 'draft' ? t.interpretationReady : t.localState));
       document.querySelector('.chip.neutral').textContent = spec.width + ' × ' + spec.depth + ' mm';
@@ -3589,8 +3656,21 @@
         renderModel(modelSpec, currentView);
         bodyValue.textContent = displayTitle(modelSpec.title);
         sizeValue.textContent = modelSpec.width + ' × ' + modelSpec.depth + ' × ' + modelSpec.height + ' mm';
-        bodyMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 可制造实体' : modelSpec.compartments + ' compartments · closed volume';
-        modelMeta.textContent = currentLang === 'zh' ? modelSpec.compartments + ' 个隔间 · 壁厚 ' + (modelSpec.wall || 3) + ' 毫米 · 倒角 ' + modelSpec.chamfer + ' 毫米' : modelSpec.compartments + ' compartments · ' + (modelSpec.wall || 3) + ' mm wall · chamfer ' + modelSpec.chamfer + ' mm';
+        if (backendArtifact && backendArtifact.checks) {
+          const checks = backendArtifact.checks;
+          const entity = checks.output_quality && checks.output_quality.entities && checks.output_quality.entities[0];
+          const faceCount = entity && entity.metrics && entity.metrics.face_count;
+          const vol = entity && entity.metrics && entity.metrics.volume_mm3;
+          bodyMeta.textContent = currentLang === 'zh'
+            ? (faceCount ? faceCount + ' 表面 · 水密流形实体' : '可制造水密流形实体')
+            : (faceCount ? faceCount + ' faces · watertight manifold' : 'watertight manifold');
+          modelMeta.textContent = currentLang === 'zh'
+            ? (vol ? '体积 ' + Math.round(vol) + ' mm³ · ' : '') + (modelSpec.chamfer > 0 ? '倒角 ' + modelSpec.chamfer + ' 毫米' : '精确几何边界')
+            : (vol ? 'Vol ' + Math.round(vol) + ' mm³ · ' : '') + (modelSpec.chamfer > 0 ? 'chamfer ' + modelSpec.chamfer + ' mm' : 'precise boundary');
+        } else {
+          bodyMeta.textContent = currentLang === 'zh' ? '参数化水密实体' : 'watertight solid';
+          modelMeta.textContent = currentLang === 'zh' ? '壁厚 ' + (modelSpec.wall || 3) + ' 毫米' : (modelSpec.wall || 3) + ' mm wall';
+        }
         const effectiveStrategy = remote && remote.generation_strategy;
         const irFallback = remote && remote.provenance && remote.provenance.requested_strategy === 'auto' && effectiveStrategy === 'legacy';
         modelState.textContent = remote
@@ -3799,6 +3879,7 @@
       link.href = url; link.download = 'form-cad-model.obj'; link.click();
       URL.revokeObjectURL(url);
     });
+    translate();
     processSelect.value = selectedProcess;
     modelSpec = parseModel(prompt.value);
     renderModel(modelSpec, currentView);

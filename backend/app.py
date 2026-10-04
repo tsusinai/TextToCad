@@ -1001,10 +1001,22 @@ def _normalize_ir_draft(
         "regular_polygon_prism": "regular_polygon",
         "rounded_cube": "box",
         "rectangular_prism": "box",
+        "cube": "box",
+        "cuboid": "box",
+        "block": "box",
+        "ball": "sphere",
+        "ring": "torus",
+        "donut": "torus",
         "subtract": "cut",
         "difference": "cut",
+        "hole": "cut",
+        "drill": "cut",
         "add": "union",
         "fuse": "union",
+        "combine": "union",
+        "boolean_union": "union",
+        "boolean_cut": "cut",
+        "boolean_intersect": "intersect",
     }
     raw_nodes = candidate.get("nodes")
     if not isinstance(raw_nodes, list):
@@ -1086,9 +1098,10 @@ def _deterministic_ir_plan(
     primitive_tokens = (
         "cube", "block", "box", "方块", "正方体", "立方体",
         "sphere", "ball", "球", "cylinder", "圆柱", "圆柱体",
-        "cone", "圆锥", "圆锥体", "polygon", "多边形", "triangle", "三角",
+        "cone", "圆锥", "圆锥体", "torus", "ring", "donut", "圆环", "圆环体", "环体",
+        "polygon", "多边形", "triangle", "三角",
         "square", "正方形", "pentagon", "五边形", "hexagon", "六边形",
-        "octagon", "八边形", "gon", "边形",
+        "octagon", "八边形", "gon", "边形", "hole", "通孔", "带孔", "空心", "管", "筒",
     )
     if not any(token in text for token in primitive_tokens):
         raise RuntimeError(
@@ -1118,6 +1131,28 @@ def _deterministic_ir_plan(
             "kind": "primitive",
             "operation": "sphere",
             "parameters": {"radius": "radius"},
+            "frame": "xy",
+        }]
+    elif any(token in text for token in ("torus", "ring", "donut", "圆环", "圆环体", "环体")):
+        major = max(2.0, min(width, depth) / 2)
+        minor = max(0.8, round(major / 4.0, 2))
+        parameters["major_radius"] = {
+            "value": major,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        parameters["minor_radius"] = {
+            "value": minor,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "torus",
+            "parameters": {"major_radius": "major_radius", "minor_radius": "minor_radius"},
             "frame": "xy",
         }]
     elif any(token in text for token in ("cylinder", "圆柱", "圆柱体")):
@@ -1170,6 +1205,27 @@ def _deterministic_ir_plan(
             "parameters": {"size": ["width", "depth", "height"], "centered": [True, True, False]},
             "frame": "xy",
         }]
+
+    has_hole = bool(re.search(r"(hole|through[- ]?hole|hollow|bore|pipe|tube|内孔|穿孔|通孔|带孔|空心|管|筒)", text, flags=re.IGNORECASE))
+    if has_hole and nodes[0]["operation"] in {"box", "cylinder", "regular_polygon"}:
+        hole_rad = max(0.5, round(min(width, depth) / 4.0, 2))
+        parameters["hole_radius"] = {"value": hole_rad, "unit": "mm", "source": "derived", "role": "dimension"}
+        hole_height = height + 4.0
+        nodes.append({
+            "id": "hole_cylinder",
+            "kind": "primitive",
+            "operation": "cylinder",
+            "parameters": {"radius": "hole_radius", "height": hole_height, "position": [0, 0, -2.0]},
+            "frame": "xy",
+        })
+        nodes.append({
+            "id": "body_with_hole",
+            "kind": "feature",
+            "operation": "cut",
+            "inputs": [nodes[0]["id"], "hole_cylinder"],
+            "parameters": {},
+            "frame": "xy",
+        })
 
     explicit_edge_treatment = bool(re.search(
         r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\s*edge|no\s*sharp|无棱角)",

@@ -807,3 +807,43 @@ def test_triangle_without_dimensions_stays_generic_polygon_prism():
     assert params.profile_points == [[-60.0, -40.2], [60.0, -40.2], [0.0, 40.2]]
     assert params.height == 42.0
     assert provenance["fields"]["profile_points"]["status"] == "derived"
+
+
+def test_deterministic_ir_builds_torus():
+    _, params, _ = app.parse_prompt_detailed("a torus ring 60 mm")
+    ir = app._deterministic_ir_plan("a torus ring 60 mm", "fdm", "mm", params)
+    assert ir["nodes"][0]["operation"] == "torus"
+    execution = app.execute_ir(ir)
+    assert execution["shape"] is not None
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+
+
+def test_deterministic_ir_builds_hollow_cylinder():
+    _, params, _ = app.parse_prompt_detailed("a hollow cylinder 40 mm and height 50 mm")
+    ir = app._deterministic_ir_plan("a hollow cylinder 40 mm and height 50 mm", "fdm", "mm", params)
+    ops = [node["operation"] for node in ir["nodes"]]
+    assert "cut" in ops
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["face_count"] >= 4
+
+
+def test_ir_executor_supports_inline_position_transform():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "box1",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"size": [20, 20, 10], "position": [10, 0, 5]},
+            }
+        ],
+        "outputs": [{"id": "main", "node": "box1", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["bbox_mm"]["z"] == 10.0
+
