@@ -413,3 +413,23 @@ def test_cache_key_separates_generation_strategies():
     legacy = app.GenerateRequest(prompt="a 20 mm block", generation_strategy="legacy")
     ir = app.GenerateRequest(prompt="a 20 mm block", generation_strategy="ir")
     assert app._cache_key(legacy) != app._cache_key(ir)
+
+
+def test_ir_validator_accepts_path_and_pattern_features():
+    ir = {
+        "schema_version": "0.2",
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [
+            {"id": "profile", "kind": "sketch", "operation": "sketch",
+             "parameters": {"geometry": [{"type": "circle", "radius": 2}]}, "frame": "xy"},
+            {"id": "path", "kind": "sketch", "operation": "sketch",
+             "parameters": {"geometry": [{"type": "polyline", "points": [[0, 0], [20, 0], [20, 20]]}]}, "frame": "xy"},
+            {"id": "swept", "kind": "feature", "operation": "sweep",
+             "inputs": ["profile", "path"]},
+            {"id": "repeated", "kind": "feature", "operation": "linear_pattern",
+             "inputs": ["swept"], "parameters": {"count": 2, "spacing": [30, 0, 0]}},
+        ],
+        "outputs": [{"id": "main", "node": "repeated"}],
+    }
+    normalized = app.validate_ir(ir)
+    assert [node["operation"] for node in normalized["nodes"]][-2:] == ["sweep", "linear_pattern"]
