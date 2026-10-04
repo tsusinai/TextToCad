@@ -1447,6 +1447,13 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
 def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any]) -> dict[str, Any]:
     metrics = _shape_metrics(shape)
     bbox = metrics["bbox_mm"]
+    expected = {"x": params.width, "y": params.depth, "z": params.height}
+    dimension_delta = {
+        axis: round(abs(float(bbox[axis]) - float(expected[axis])), 6)
+        for axis in ("x", "y", "z")
+    }
+    tolerance_limit = max(0.05, float(params.tolerance) * 2.0)
+    dimension_match = max(dimension_delta.values(), default=0.0) <= tolerance_limit
     issue_codes = {issue["code"] for issue in analysis["issues"]}
     return {
         "valid_brep": metrics["valid_brep"],
@@ -1455,13 +1462,18 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
         "single_solid": metrics["solid_count"] == 1,
         "positive_volume": metrics["volume_mm3"] > 0,
         "bounded": all(dimension > 0 for dimension in bbox.values()),
+        "bbox_mm": bbox,
+        "expected_bbox_mm": expected,
+        "dimension_delta_mm": dimension_delta,
+        "dimension_match": dimension_match,
+        "dimension_tolerance_mm": round(tolerance_limit, 6),
         "wall_thickness": "wall_thickness" not in issue_codes,
         "edge_treatment": "edge_treatment" not in issue_codes,
         "overhang": "unknown",
         "draft_angle": "unknown",
         "clearance": "unknown",
         "export_ready": False,
-        "measurement_quality": "nominal",
+        "measurement_quality": "nominal_with_bbox",
     }
 
 
