@@ -255,19 +255,19 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 
 ## API 与兼容策略
 
-现有 `POST /v1/generate` 保持不变，增加：
+当前同步主接口是 `POST /v1/models`，异步主接口是 `POST /v1/jobs`；两者都接受：
 
-- `generation_strategy: "legacy" | "ir" | "auto"`，默认 `auto`。
-- `design_ir` 返回 v0.2 IR。
+- `generation_strategy: "legacy" | "ir" | "auto"`，默认 `legacy`；前端高级模式发送 `auto`。
+- `design_ir` 返回最终 v0.2 IR，manifest 同时保存修复历史、执行 trace 和 fallback provenance。
 - `POST /v1/ir/validate` 只做静态验证，不启动 CadQuery。
-- `POST /v1/ir/compile` 生成模型和 manifest。
-- `GET /v1/models/{id}/ir` 返回最终 IR、修复历史和执行映射。
+- `POST /v1/ir/compile` 在内存中执行约束与 CadQuery 编译并返回 metrics/trace，不写模型 artifact。
+- `GET /v1/models/{id}/ir` 返回生成结果中的最终 IR；完整修复与执行信息通过 manifest 获取。
 
 `auto` 策略先尝试 IR；IR 校验、约束修复或执行失败时，可以回退到 legacy 路径。响应的 `provenance` 同时写入 `requested_strategy=auto`、`effective_strategy=legacy`、稳定字段 `fallback_reason`（以及兼容字段 `ir_fallback_reason`），不能把回退结果伪装成 IR 成功。
 
 ## 性能、质量和安全门禁
 
-- LLM 只在 advanced/auto 且需要语义补全时调用；标准尺寸体可离线生成。
+- LLM 只在请求选择 ir/auto 且需要语义补全时调用；legacy 标准路径可离线生成。
 - IR 校验、参数求解和基础原语尽量进程内完成。
 - 每个任务设置 LLM 超时、输出字节上限、节点数上限、深度上限和修复轮数上限。
 - 禁止任意代码、任意模块、文件路径、网络 URL 和未注册操作。
