@@ -3554,7 +3554,6 @@
         renderGenerationTrace(localGenerationTrace('preview'), 'running');
         let remote = null;
         let backendError = null;
-        let backendMismatch = false;
         try {
           remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal, updateGenerationProgress);
         } catch (error) {
@@ -3569,16 +3568,6 @@
           console.warn('Geometry backend unavailable; using local preview.', error);
         }
         if (sequence !== generationSeq) return;
-        if (remote && remote.generation_strategy !== 'ir' && nextSpec.kind && nextSpec.kind !== 'block') {
-          const remoteKind = remote.parameters && remote.parameters.kind
-            ? remote.parameters.kind
-            : kindForTitle(remote.title || '');
-          if (remoteKind && remoteKind !== nextSpec.kind) {
-            backendMismatch = true;
-            backendError = new Error('backend model family mismatch: expected ' + nextSpec.kind + ', received ' + remoteKind);
-            remote = null;
-          }
-        }
         modelState.textContent = copy[currentLang].building;
         solved.textContent = copy[currentLang].building;
         solved.classList.remove('warn');
@@ -3627,10 +3616,8 @@
         updateProcessHint(remote && remote.profile);
         updateChecks(modelSpec, remote && remote.checks);
         updateExportButtons();
-        if (backendMismatch) {
-          setGenerationError(currentLang === 'zh'
-            ? '后端返回的模型类型与输入不一致，已阻止错误模型；请重建后端服务后重试。'
-            : 'The backend returned the wrong model family; the incorrect result was blocked. Rebuild the backend and retry.');
+        if (remote && remote.needs_clarification && Array.isArray(remote.clarification_questions) && remote.clarification_questions.length) {
+          setGenerationError((currentLang === 'zh' ? '需要补充：' : 'Please clarify: ') + remote.clarification_questions.join(' · '));
         } else if (backendError && backendUrl) {
           if (isMixedContent) {
             setGenerationError(currentLang === 'zh'
