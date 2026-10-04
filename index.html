@@ -1964,7 +1964,7 @@
 
     const polygonSideWords = {
       triangle: 3, triangular: 3, '三角形': 3, '三角块': 3, '三角柱': 3, '三棱柱': 3,
-      quadrilateral: 4, '四边形': 4, pentagon: 5, '五边形': 5, hexagon: 6, '六边形': 6,
+      quadrilateral: 4, '四边形': 4, square: 4, '正方形': 4, pentagon: 5, '五边形': 5, hexagon: 6, '六边形': 6,
       heptagon: 7, '七边形': 7, octagon: 8, '八边形': 8, nonagon: 9, '九边形': 9,
       decagon: 10, '十边形': 10, hendecagon: 11, '十一边形': 11, dodecagon: 12, '十二边形': 12
     };
@@ -1982,10 +1982,14 @@
       const count = clamp(Number(sides) || 3, 3, 32);
       if (count === 3) return [[-width / 2, -depth / 2], [width / 2, -depth / 2], [0, depth / 2]];
       const rotation = Math.PI / 2 + Math.PI / (2 * count);
-      return Array.from({ length: count }, (_, index) => {
+      const raw = Array.from({ length: count }, (_, index) => {
         const angle = rotation + (Math.PI * 2 * index / count);
         return [width / 2 * Math.cos(angle), depth / 2 * Math.sin(angle)];
       });
+      const xs = raw.map((point) => point[0]), ys = raw.map((point) => point[1]);
+      const scaleX = width / Math.max(Math.max(...xs) - Math.min(...xs), 1e-6);
+      const scaleY = depth / Math.max(Math.max(...ys) - Math.min(...ys), 1e-6);
+      return raw.map(([x, y]) => [x * scaleX, y * scaleY]);
     }
     function titleFor(text) {
       const value = text.toLowerCase();
