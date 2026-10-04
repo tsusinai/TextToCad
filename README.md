@@ -82,17 +82,18 @@ flowchart LR
   G --> H[Three.js 交互预览]
 ~~~
 
-LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会把 mm/cm/m/in 统一换算为毫米，记录原始单位和逐字段来源，对模型族、尺寸、布尔值、数值范围和响应大小做校验，再交给 CadQuery/OCCT 建模。没有 API key、provider 超时、JSON 无效或 provider 不支持 JSON response format 时，会回退到确定性解析器。
+LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会把 mm/cm/m/in 统一换算为毫米，记录原始单位和逐字段来源，对 IR 参数、特征操作、选择器、尺寸、布尔值、数值范围和响应大小做校验，再交给 CadQuery/OCCT 建模；旧模型族只作为兼容提示，不限制新描述。没有 API key、provider 超时、JSON 无效或 provider 不支持 JSON response format 时，会回退到确定性解析器。
 
-## 支持的模型族
+## 典型示例（非固定模型族）
 
-- Storage tray / organizer：托盘、桌面收纳盒、隔间
+- Storage tray / organizer：托盘、桌面收纳盒、隔间（示例）
 - Cable clip：线缆夹和开口结构
 - Plant pot：花盆、圆柱腔体、排水孔
 - Lamp base：灯座和底部隐藏走线槽
 - Pen cup：笔筒和圆柱腔体
 - Solid block：通用实体块
-- L bracket：L 形支架、直角折条，支持两条腿尺寸与板厚
+- L bracket：L 形支架、直角折条，支持两条腿尺寸与板厚（示例）
+- Generic IR：任意原语、草图、拉伸、旋转、布尔、阵列和约束组合；未列出的形体不会被强制归入这些示例。
 
 ## API 快速参考
 
@@ -118,6 +119,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
   "prompt": "block 120 80",
   "units": "mm",
   "strict_dimensions": true,
+  "mode": "advanced",
   "generation_strategy": "auto"
 }
 ~~~
@@ -129,7 +131,8 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
   "prompt": "一个带三个隔间、宽 120 毫米、深 80 毫米的桌面收纳盒",
   "units": "mm",
   "process": "fdm",
-  "mode": "advanced"
+  "mode": "advanced",
+  "generation_strategy": "auto"
 }
 ~~~
 
@@ -140,7 +143,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 1. LLM/规则解析层：理解意图，生成受限参数和假设。
 2. 几何确定层：由 Semantic CAD IR、CadQuery/OCCT、验证器和导出器完成实际建模。
 
-每个 revision 会保存参数来源、assumptions、特征规划、约束、检查和导出 manifest。后续可以在 IR 上加入版本化 JSON Schema、Feature DAG、约束求解器、面级 DFM 检查和自动修复闭环。
+每个 revision 会保存参数来源、assumptions、特征规划、约束、检查和导出 manifest。IR 已支持版本化 Schema、Feature DAG、约束求解器、有限自动修复和可回退执行；后续继续扩展面级 DFM、sweep/loft/pattern 和真实语料回归。
 
 ## 当前边界
 
