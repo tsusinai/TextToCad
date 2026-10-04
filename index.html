@@ -2919,9 +2919,9 @@
       entries.forEach((entry) => {
         const matches = entry && entry.matches;
         if (!matches) return;
-        const values = Array.isArray(matches.matched_indices)
-          ? matches.matched_indices
-          : (matches.source_topology === 'face' && Array.isArray(matches.source_indices) ? matches.source_indices : []);
+        const values = (matches.mapping_status === 'final_output' || matches.mapping_status === 'partial') && Array.isArray(matches.output_indices)
+          ? matches.output_indices
+          : [];
         values.forEach((value) => {
           const index = Number(value);
           if (Number.isInteger(index) && index >= 0) indices.add(index);
@@ -2937,8 +2937,8 @@
         if (!node.isMesh || !node.material) return;
         const match = String(node.name || '').match(/^occt_face_(\d+)$/);
         if (!match) return;
-        mapped += 1;
         const selected = indices.has(Number(match[1]));
+        if (selected) mapped += 1;
         const materials = Array.isArray(node.material) ? node.material : [node.material];
         materials.forEach((material) => {
           if (!material.emissive) return;
