@@ -2930,7 +2930,7 @@ def _enforce_explicit_polygon_profile(
     expected_points = params.profile_points or _polygon_profile_points(3, params.width, params.depth)
     polygon_nodes = [
         node for node in normalized_ir.get("nodes", [])
-        if node.get("operation") == "polygon_prism"
+        if node.get("operation") in {"polygon_prism", "regular_polygon"}
     ]
     if polygon_nodes:
         node = polygon_nodes[0]
@@ -2943,6 +2943,10 @@ def _enforce_explicit_polygon_profile(
         if changed:
             values["points"] = copy.deepcopy(expected_points)
         values["height"] = params.height
+        if node.get("operation") == "regular_polygon":
+            if values.get("sides") != len(expected_points):
+                values["sides"] = len(expected_points)
+                changed = True
         return validate_ir(normalized_ir), changed
     # If the provider ignored the explicit polygon request, use the deterministic
     # generic IR profile instead of silently showing a triangle or box.
