@@ -133,3 +133,13 @@ Astra 建模质量专项建议已落实第一批 P0/P1：
 - `/v1/ir/compile` 支持可选 mating `reference_ir` 与 `clearance_target_mm`，通过 B-Rep shape distance 返回两个实体的间隙和测量方法；缺少参考实体或内核 API 时保持 unknown。
 - GLB 预览优先输出最终 OCCT 面对应的 `occt_face_<index>` 节点和 `analysis.glb_face_mapping`；selector 只有在输入拓扑身份仍存在于最终输出时才进行真实面级高亮，不满足时保留整体提示并明确降级。
 - P6 验收目标已完成；下一阶段聚焦 OCCT 射线厚度、干涉检查和多实体语义映射。
+
+
+## P7 多实体输出与干涉分类（2026-10-04）
+
+- Semantic CAD IR 不再只保留最后一个节点；多个 outputs 会同时执行并返回独立 metrics，兼容旧版主输出字段。
+- mating reference_ir 的 B-Rep 距离现在分为 pass、warning、contact、interference，并带工艺容差和稳定的 state 字段。
+- wall_thickness_analysis 公开真实测量方法与置信度；未启用法向射线采样时明确标注，避免夸大当前 DFM 能力。
+- 已增加多输出 schema 与 clearance 状态单元测试。
+
+P7 后续聚焦：多实体预览语义、OCCT 射线/法向厚度，以及更严格的实体间相交体积检查。
