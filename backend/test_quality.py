@@ -467,6 +467,23 @@ def test_generic_ir_selector_applies_to_edge_feature():
     assert app.shape_metrics(execution["shape"])["valid_brep"] is True
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_executes_sphere_primitive():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "ball", "kind": "primitive", "operation": "sphere",
+             "parameters": {"radius": 15}},
+        ],
+        "outputs": [{"id": "main", "node": "ball"}],
+    }
+    execution = app.execute_ir(app.validate_ir(ir))
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["valid_brep"] is True
+    assert metrics["solid_count"] == 1
+    assert metrics["volume_mm3"] > 0
+
+
 def test_face_level_dfm_records_normals_and_areas():
     class Vector:
         def __init__(self, x, y, z):

@@ -393,20 +393,40 @@ def _node_shape(
         radius_value = values.get("radius")
         if radius_value is None:
             diameter = values.get("diameter")
-            radius_value = _number(parameters, diameter, "cylinder.diameter") / 2
+            if diameter is not None:
+                radius_value = _number(parameters, diameter, "cylinder.diameter") / 2
+            else:
+                radius_value = 20.0
         radius = _number(parameters, radius_value, "cylinder.radius")
-        height = _number(parameters, values.get("height"), "cylinder.height")
+        height = _number(parameters, values.get("height", 40.0), "cylinder.height")
         return _workplane(frame).circle(radius).extrude(height)
     if operation == "sphere":
-        return _workplane(frame).sphere(_number(parameters, values.get("radius"), "sphere.radius"))
+        radius_value = values.get("radius")
+        if radius_value is None:
+            diameter = values.get("diameter")
+            if diameter is not None:
+                radius_value = _number(parameters, diameter, "sphere.diameter") / 2
+            elif values.get("size") is not None:
+                size_val = values.get("size")
+                if isinstance(size_val, (list, tuple)) and size_val:
+                    radius_value = _number(parameters, size_val[0], "sphere.size") / 2
+                else:
+                    radius_value = _number(parameters, size_val, "sphere.size") / 2
+            elif "radius" in parameters:
+                radius_value = parameters["radius"]
+            elif "diameter" in parameters:
+                radius_value = _number(parameters, parameters["diameter"], "parameters.diameter") / 2
+            else:
+                radius_value = 25.0
+        return _workplane(frame).sphere(_number(parameters, radius_value, "sphere.radius"))
     if operation == "cone":
-        height = _number(parameters, values.get("height"), "cone.height")
-        radius1 = _number(parameters, values.get("radius1"), "cone.radius1")
+        height = _number(parameters, values.get("height", 40.0), "cone.height")
+        radius1 = _number(parameters, values.get("radius1", values.get("radius", 20.0)), "cone.radius1")
         radius2 = _number(parameters, values.get("radius2", 0.01), "cone.radius2", -1e-12)
         return _workplane(frame).cone(height, radius1, radius2)
     if operation == "torus":
-        major = _number(parameters, values.get("major_radius"), "torus.major_radius")
-        minor = _number(parameters, values.get("minor_radius"), "torus.minor_radius")
+        major = _number(parameters, values.get("major_radius", values.get("radius", 30.0)), "torus.major_radius")
+        minor = _number(parameters, values.get("minor_radius", 10.0), "torus.minor_radius")
         return _workplane(frame).torus(major, minor)
     if operation == "sketch":
         geometry = values.get("geometry", values.get("elements", []))
