@@ -286,3 +286,5 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 - POST /v1/ir/compile 返回 output_nodes、output_metrics，每个输出包含独立的 B-Rep 指标；参考 IR 同样返回 reference_output_metrics。
 - 传入 reference_ir 时，clearance 会区分 pass、warning、contact 和 interference，并返回 state、contact_tolerance_mm、interference、测量方法。没有参考实体或距离 API 时保持 unknown。
 - 面级壁厚分析现在显式返回 wall_thickness_analysis：记录 B-Rep 面距离或相对面中心代理、置信度和 normal_ray_sampling=not_available。这避免把代理测量误报为完整法向射线厚度。
+
+- 当距离落在内核零容差内，编译接口会尝试计算 B-Rep 布尔交集体积：可证明公共体积时标为 interference；零公共体积则标为 contact；内核不支持交集时保持保守的 interference 解释并记录方法。
