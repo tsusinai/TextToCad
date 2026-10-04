@@ -121,11 +121,12 @@ Astra 建模质量专项建议已落实第一批 P0/P1：
 - 高级模式通过 generation_strategy=auto 进入 LLM → Semantic CAD IR v0.2 → 约束求解/有限修复 → CadQuery/OCCT；失败自动回退 legacy，并在 provenance 记录 fallback_reason 与稳定分类。
 - IR 不再要求固定模型族，支持原语、草图、拉伸、旋转、扫掠、放样、布尔、阵列和约束；普通/锐边正方体若未明确圆角或倒角会拒绝隐式 edge treatment。
 - 生成过程、修复尝试、节点步骤预览、实测包围盒和逐轴尺寸偏差进入响应与 manifest；前端显示实际生效策略，区分通用 IR 成功与旧构建器回退。
-- Backend quality CI 已通过，最新 main 为 b37f44a57f5bb146ed149284749f743b4b28b0ef。
+- Backend quality CI 已通过；当前主链路继续保留 legacy/IR/auto 三种策略，并把实际生效策略写入 provenance。
 
 
 ## P6 拓扑选择与面级 DFM（2026-10-04）
 
 - IR selector 已接入 OCCT/CadQuery shape，支持 index、normal、position、area、parallel_to、perpendicular_to、axis；圆角、倒角和 shell 可使用结构化面/边选择器。
 - 选择器无匹配或拓扑类型不适配时 fail-closed，执行 trace 保留 selector 请求，auto 策略可按 selector_resolution 回退。
-- 质量门新增面面积、中心点、法向、下向面、悬空初筛以及前端采样摘要；壁厚、间隙和注塑拔模仍标记为需复核。
+- 质量门新增面面积、中心点、法向、下向面、悬空初筛以及前端采样摘要；壁厚优先使用 B-Rep 面间距离并记录面索引/方法，内核不支持时回退相对面中心代理。
+- 注塑工艺按 +Z 拉模方向逐面计算拔模偏差；装配间隙因缺少 mating solid 保持 unknown，并在 UI 显示复核语义，避免名义值伪装成通过。
