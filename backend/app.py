@@ -2863,6 +2863,7 @@ def _generate_ir_model(
             provenance,
             recorder,
             snapshots,
+            execution.get("output_shapes"),
         )
         response = GenerateResponse(
             model_id=model_id,
