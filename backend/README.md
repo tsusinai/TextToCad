@@ -79,3 +79,5 @@ Face DFM output includes wall_thickness_analysis. It records whether the result 
 The backend now attempts an optional OCCT normal-ray thickness sample from each face center. Capability is exposed as occt_normal_ray_available on /health; unavailable kernels retain the explicit proxy result and never label it as ray-sampled.
 
 All declared semantic outputs are now checked individually for valid B-Rep, positive volume, non-zero faces, and single-solid topology. The compiler rejects the request with per-entity output_quality details if any output fails.
+
+When an IR declares multiple outputs and the mesh stack is available, generation also emits model_entities.glb (download format glb_entities). Its nodes are named output_<node>_occt_face_<index>, with analysis.glb_output_mapping preserving the semantic entity mapping.
