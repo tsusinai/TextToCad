@@ -760,7 +760,7 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "datums": [{"id": "xy", "type": "plane"}],
         "nodes": [{
             "id": "node-id", "kind": "primitive|sketch|feature",
-            "operation": "box|cylinder|sphere|cone|torus|sketch|extrude|revolve|union|cut|intersect|translate|rotate|shell|fillet|chamfer",
+            "operation": "box|cylinder|sphere|cone|torus|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|shell|fillet|chamfer|linear_pattern|polar_pattern",
             "inputs": [], "parameters": {}, "frame": "xy"
         }],
         "constraints": [{"id": "constraint-id", "type": "range|geometric|topology|manufacturing", "parameter": "name", "hard": True}],
