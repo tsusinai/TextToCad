@@ -2838,9 +2838,10 @@ def _generate_ir_model(
     try:
         recorder.emit("parsing", "interpretation", "running", mode=request.mode, units=request.units,
                       strategy=request.generation_strategy)
-        title, params, _, baseline_assumptions, provenance = parse_prompt_detailed(
+        title, params, provenance = parse_prompt_detailed(
             request.prompt, request.process, request.units, request.material
         )
+        baseline_assumptions = list(provenance.get("assumptions", []))
         if request.strict_dimensions and provenance.get("units", {}).get("ambiguous_dimensions"):
             raise ValueError("ambiguous dimensions; specify width, depth, and height or provide a dimension triplet")
         recorder.emit("parsing", "interpretation", "succeeded",
