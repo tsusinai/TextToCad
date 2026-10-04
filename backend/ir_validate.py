@@ -7,6 +7,7 @@ uses registered operations. Kernel validity is handled later by the executor.
 from __future__ import annotations
 
 import re
+import math
 from typing import Any
 
 from pydantic import ValidationError
@@ -58,6 +59,71 @@ def _expression_names(expression: str) -> set[str]:
         if token not in {"mm", "cm", "m", "in"}
     }
 
+
+
+def _validate_geometry_parameters(
+    node: Any,
+    path: str,
+    issues: list[dict[str, Any]],
+) -> None:
+    """Validate cheap, operation-specific geometry contracts before the kernel."""
+    operation = str(node.operation)
+    values = node.parameters or {}
+
+    def positive_number(value: Any, value_path: str) -> None:
+        if isinstance(value, bool):
+            issues.append(_issue("geometry_value", "geometry dimensions must be numeric", value_path))
+            return
+        if isinstance(value, (int, float)):
+            if not math.isfinite(float(value)) or float(value) <= 0:
+                issues.append(_issue("geometry_value", "geometry dimensions must be finite and greater than zero", value_path))
+
+    if operation == "box":
+        size = values.get("size")
+        if size is not None:
+            if not isinstance(size, (list, tuple)) or len(size) != 3:
+                issues.append(_issue("box_size", "box.size must contain exactly three values", f"{path}.parameters.size"))
+            else:
+                for index, item in enumerate(size):
+                    positive_number(item, f"{path}.parameters.size[{index}]")
+        else:
+            for name in ("width", "depth", "height"):
+                if name in values:
+                    positive_number(values[name], f"{path}.parameters.{name}")
+
+    if operation in {"polygon_prism", "regular_polygon"}:
+        sides = values.get("sides")
+        if sides is not None and isinstance(sides, (int, float)) and (int(sides) != sides or not 3 <= int(sides) <= 64):
+            issues.append(_issue("polygon_sides", "polygon sides must be an integer from 3 to 64", f"{path}.parameters.sides"))
+        points = values.get("points")
+        if operation == "polygon_prism" and points is None:
+            issues.append(_issue("polygon_points", "polygon_prism requires explicit planar points", f"{path}.parameters.points"))
+        if points is not None:
+            if not isinstance(points, (list, tuple)) or len(points) < 3:
+                issues.append(_issue("polygon_points", "polygon points must contain at least three vertices", f"{path}.parameters.points"))
+            else:
+                for point_index, point in enumerate(points):
+                    if not isinstance(point, (list, tuple)) or len(point) not in {2, 3}:
+                        issues.append(_issue("polygon_point", "polygon vertices must be [x,y] or [x,y,z]", f"{path}.parameters.points[{point_index}]"))
+                        continue
+                    try:
+                        coordinates = [float(component) for component in point]
+                    except (TypeError, ValueError):
+                        issues.append(_issue("polygon_point", "polygon vertices must be numeric", f"{path}.parameters.points[{point_index}]"))
+                        continue
+                    if not all(math.isfinite(component) for component in coordinates):
+                        issues.append(_issue("polygon_point", "polygon vertices must be finite", f"{path}.parameters.points[{point_index}]"))
+                    if len(coordinates) == 3 and abs(coordinates[2]) > 1e-6:
+                        issues.append(_issue("polygon_planarity", "polygon vertices must lie on the XY plane", f"{path}.parameters.points[{point_index}]"))
+            if sides is not None and isinstance(sides, (int, float)) and isinstance(points, (list, tuple)) and len(points) != int(sides):
+                issues.append(_issue("polygon_point_count", "polygon point count must match sides", f"{path}.parameters.points"))
+        if operation == "regular_polygon" and points is None and not any(name in values for name in ("width", "depth", "diameter", "radius", "circumradius")):
+            issues.append(_issue("polygon_definition", "regular_polygon needs points, a footprint, diameter, or radius", f"{path}.parameters"))
+
+    if operation in {"extrude", "revolve"}:
+        dimension = values.get("length", values.get("angle"))
+        if dimension is not None and isinstance(dimension, (int, float)) and not math.isfinite(float(dimension)):
+            issues.append(_issue("feature_value", "feature extent must be finite", f"{path}.parameters"))
 
 def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraints: int = 256) -> dict[str, Any]:
     """Validate and normalize an IR document, raising IRValidationError on failure."""
@@ -120,6 +186,7 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
             issues.append(_issue("kind_not_allowed", f"node kind '{node.kind}' is not registered", f"{path}.kind"))
         if node.operation not in ALLOWED_OPERATIONS:
             issues.append(_issue("operation_not_allowed", f"operation '{node.operation}' is not registered", f"{path}.operation"))
+        _validate_geometry_parameters(node, path, issues)
         for input_index, reference in enumerate(node.inputs):
             if reference not in known_nodes:
                 issues.append(_issue("missing_reference", f"node input '{reference}' does not exist", f"{path}.inputs[{input_index}]"))
