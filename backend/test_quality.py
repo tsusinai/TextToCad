@@ -458,3 +458,39 @@ def test_generic_ir_selector_applies_to_edge_feature():
     }
     execution = app.execute_ir(app.validate_ir(ir))
     assert app.shape_metrics(execution["shape"])["valid_brep"] is True
+
+
+def test_face_level_dfm_records_normals_and_areas():
+    class Vector:
+        def __init__(self, x, y, z):
+            self.x, self.y, self.z = x, y, z
+
+    class Face:
+        def __init__(self, area, normal, center):
+            self._area, self._normal, self._center = area, normal, center
+
+        def Area(self):
+            return self._area
+
+        def normalAt(self):
+            return Vector(*self._normal)
+
+        def Center(self):
+            return Vector(*self._center)
+
+    class Solid:
+        def Faces(self):
+            return [
+                Face(100, (0, 0, 1), (0, 0, 10)),
+                Face(100, (0, 0, -1), (0, 0, 0)),
+            ]
+
+    class Shape:
+        def val(self):
+            return Solid()
+
+    report = app._face_level_dfm(Shape(), "fdm")
+    assert report["face_count"] == 2
+    assert report["min_face_area_mm2"] == 100.0
+    assert report["downward_face_count"] == 1
+    assert report["overhang_status"] == "warning"
