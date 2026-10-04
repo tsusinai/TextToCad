@@ -263,7 +263,7 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 - `POST /v1/ir/compile` 生成模型和 manifest。
 - `GET /v1/models/{id}/ir` 返回最终 IR、修复历史和执行映射。
 
-`auto` 策略先尝试 IR；IR 校验或执行失败时，可以回退到 legacy 路径，但响应必须写明 `fallback_reason`，不能把回退结果伪装成 IR 成功。
+`auto` 策略先尝试 IR；IR 校验、约束修复或执行失败时，可以回退到 legacy 路径。响应的 `provenance` 同时写入 `requested_strategy=auto`、`effective_strategy=legacy`、稳定字段 `fallback_reason`（以及兼容字段 `ir_fallback_reason`），不能把回退结果伪装成 IR 成功。
 
 ## 性能、质量和安全门禁
 
