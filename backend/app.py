@@ -2081,6 +2081,10 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
     try:
         execution = execute_ir(normalized)
         metrics = shape_metrics(execution["shape"])
+        face_measurements = _face_level_dfm(
+            execution["shape"],
+            str(normalized.get("process", "fdm")),
+        )
     except IRExecutionError as exc:
         status_code = 503 if cq is None else 422
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
@@ -2090,6 +2094,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         "output_node": execution["output_node"],
         "metrics": metrics,
         "constraints": constraint_report,
+        "face_measurements": face_measurements,
         "trace": execution["trace"],
     }
 
