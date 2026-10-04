@@ -224,6 +224,50 @@ def _selector_clause_matches(entity: Any, topology: str, clause: dict[str, Any])
     raise IRExecutionError(f"selector property '{property_name}' is not implemented")
 
 
+def _topology_entity_key(entity: Any) -> str:
+    try:
+        return f"hash:{int(entity.hashCode())}"
+    except Exception:
+        return f"repr:{repr(entity)}"
+
+
+def _finalize_selector_metadata(metadata: dict[str, Any], output_shape: Any) -> None:
+    """Map selected input topology entities to the final output only when OCCT identity survives."""
+    selected_entities = metadata.pop("_selected_entities", [])
+    target = str(metadata.get("target_topology", "face"))
+    collections = {
+        "solid": "solids",
+        "shell": "shells",
+        "face": "faces",
+        "edge": "edges",
+        "vertex": "vertices",
+    }
+    collection_name = collections.get(target)
+    if not selected_entities or collection_name is None:
+        metadata["mapping_status"] = "unavailable"
+        metadata["output_indices"] = []
+        return
+    try:
+        output_entities = list(getattr(output_shape, collection_name)().vals())
+    except Exception:
+        metadata["mapping_status"] = "unavailable"
+        metadata["output_indices"] = []
+        return
+    output_keys = {_topology_entity_key(entity): index for index, entity in enumerate(output_entities)}
+    output_indices = [
+        output_keys[_topology_entity_key(entity)]
+        for entity in selected_entities
+        if _topology_entity_key(entity) in output_keys
+    ]
+    metadata["output_indices"] = output_indices
+    if len(output_indices) == len(selected_entities):
+        metadata["mapping_status"] = "final_output"
+    elif output_indices:
+        metadata["mapping_status"] = "partial"
+    else:
+        metadata["mapping_status"] = "unmapped"
+
+
 def _topology_selection(
     shape: Any,
     selector: dict[str, Any],
@@ -291,6 +335,8 @@ def _topology_selection(
             "source_topology": source_topology,
             "target_topology": target,
             "source_indices": source_indices,
+            "_selected_entities": selected,
+
             "matched_indices": [
                 index for index, entity in enumerate(list(getattr(shape, collections.get(target, "faces"))().vals()))
                 if any(
@@ -491,6 +537,8 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
         selector_metadata: dict[str, Any] = {}
         shape = _node_shape(node, inputs, parameters, selector_metadata)
         shapes[node_id] = _as_shape(shape, node_id)
+        if selector_metadata:
+            _finalize_selector_metadata(selector_metadata, shapes[node_id])
         trace_event = {
             "id": node_id,
             "operation": node.get("operation"),
