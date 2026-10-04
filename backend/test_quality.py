@@ -410,6 +410,25 @@ def test_generation_strategy_defaults_to_ir_and_accepts_compatibility_modes():
     assert ir_request.generation_strategy == "auto"
 
 
+def test_llm_ir_normalizer_fills_generic_contract():
+    raw = {
+        "schema_version": "0.1",
+        "parameters": {"width": 20, "height": 8},
+        "nodes": [{
+            "id": "body",
+            "operation": "rectangular_prism",
+            "parameters": {"size": [20, 12, 8]},
+            "frame": "xy",
+        }],
+    }
+    normalized = app._normalize_ir_draft(raw, "a rectangular part", "fdm", "mm")
+    assert normalized["schema_version"] == "0.2"
+    assert normalized["nodes"][0]["operation"] == "box"
+    assert normalized["datums"][0]["id"] == "xy"
+    assert normalized["outputs"][0]["node"] == "body"
+    assert app.validate_ir(normalized)["schema_version"] == "0.2"
+
+
 def test_deterministic_primitive_planner_is_family_independent(monkeypatch):
     params_title, params, _ = app.parse_prompt_detailed("a regular octagon 80 mm wide and 20 mm tall")
     ir = app._deterministic_ir_plan("a regular octagon 80 mm wide and 20 mm tall", "fdm", "mm", params)
