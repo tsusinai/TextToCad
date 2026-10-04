@@ -196,6 +196,38 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
         if not isinstance(points, list) or len(points) < 3:
             raise IRExecutionError("polygon_prism requires at least three points")
         return _workplane(frame).polyline(points).close().extrude(height)
+    if operation == "sweep":
+        if len(inputs) != 2:
+            raise IRExecutionError("sweep requires a profile and a path input")
+        profile, path = inputs
+        return profile.sweep(path, isFrenet=bool(_resolve(values.get("is_frenet", False), parameters)))
+    if operation == "loft":
+        if len(inputs) < 2:
+            raise IRExecutionError("loft requires at least two section inputs")
+        sections = inputs[0]
+        for section in inputs[1:]:
+            sections = sections.add(section)
+        return sections.loft(combine=bool(_resolve(values.get("combine", True), parameters)))
+    if operation == "linear_pattern":
+        if len(inputs) != 1:
+            raise IRExecutionError("linear_pattern requires exactly one input")
+        count = int(_number(parameters, values.get("count", 2), "linear_pattern.count", 0))
+        spacing = _vector(parameters, values.get("spacing", [10, 0, 0]), "linear_pattern.spacing")
+        result = inputs[0]
+        for index in range(1, count):
+            vector = tuple(component * index for component in spacing)
+            result = result.union(inputs[0].translate(vector))
+        return result
+    if operation == "polar_pattern":
+        if len(inputs) != 1:
+            raise IRExecutionError("polar_pattern requires exactly one input")
+        count = int(_number(parameters, values.get("count", 2), "polar_pattern.count", 0))
+        angle = float(_resolve(values.get("angle", 360), parameters))
+        axis = _vector(parameters, values.get("axis", [0, 0, 1]), "polar_pattern.axis")
+        result = inputs[0]
+        for index in range(1, count):
+            result = result.union(inputs[0].rotate((0, 0, 0), axis, angle * index / count))
+        return result
     if operation in {"union", "cut", "intersect"}:
         return _combine(inputs, operation)
     if operation == "translate":
