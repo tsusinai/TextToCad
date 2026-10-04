@@ -3676,6 +3676,7 @@
     }
     bindArtifactExport(export3mf, '3mf');
     bindArtifactExport(exportGlb, 'glb');
+    bindArtifactExport(exportGlbEntities, 'glb_entities');
     if (exportStep) exportStep.addEventListener('click', () => {
       if (!backendArtifact || !backendArtifact.step) return;
       downloadBackendArtifact(backendArtifact.step, 'step').catch(() => setGenerationError(currentLang === 'zh' ? '导出失败，请检查后端连接。' : 'Export failed; check the backend connection.'));
