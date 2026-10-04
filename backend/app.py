@@ -1847,6 +1847,33 @@ def _face_level_dfm(
     }
 
 
+def _output_quality(output_shapes: dict[str, Any]) -> dict[str, Any]:
+    """Validate every semantic output while preserving per-entity metrics."""
+    entities: list[dict[str, Any]] = []
+    for node_id, output_shape in output_shapes.items():
+        try:
+            metrics = shape_metrics(output_shape)
+            valid = bool(
+                metrics.get("valid_brep")
+                and metrics.get("solid_count") == 1
+                and metrics.get("face_count", 0) > 0
+                and metrics.get("volume_mm3", 0) > 0
+            )
+            entities.append({"node": node_id, "valid": valid, "metrics": metrics})
+        except Exception as exc:
+            entities.append({
+                "node": node_id,
+                "valid": False,
+                "metrics": None,
+                "error": str(exc)[:180],
+            })
+    return {
+        "valid": bool(entities) and all(item["valid"] for item in entities),
+        "entity_count": len(entities),
+        "entities": entities,
+    }
+
+
 def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any]) -> dict[str, Any]:
     metrics = _shape_metrics(shape)
     bbox = metrics["bbox_mm"]
@@ -2385,6 +2412,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
             }
             for node_id, output_shape in execution.get("output_shapes", {}).items()
         ]
+        output_quality = _output_quality(execution.get("output_shapes", {}))
         face_measurements = _face_level_dfm(
             execution["shape"],
             str(normalized.get("process") or "fdm"),
@@ -2471,6 +2499,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         "output_nodes": execution.get("output_nodes", [execution["output_node"]]),
         "metrics": metrics,
         "output_metrics": output_metrics,
+        "output_quality": output_quality,
         "reference_metrics": reference_metrics,
         "reference_output_metrics": reference_output_metrics,
         "constraints": constraint_report,
@@ -2688,6 +2717,8 @@ def _generate_ir_model(
             }
             for node_id, output_shape in execution.get("output_shapes", {}).items()
         ]
+        output_quality = _output_quality(execution.get("output_shapes", {}))
+        analysis["output_quality"] = output_quality
         analysis["selector_matches"] = [
             {
                 "node_id": event.get("id"),
@@ -2702,9 +2733,11 @@ def _generate_ir_model(
         checks["ir_constraints"] = constraint_report
         checks["ir_repair_attempts"] = repair_attempts
         checks["ir_execution"] = execution.get("trace", [])
+        checks["output_quality"] = output_quality
+        checks["all_outputs_valid"] = output_quality["valid"]
         hard_checks = {
             key: checks[key]
-            for key in ("valid_brep", "occt_valid", "nonzero_faces", "single_solid", "positive_volume", "bounded")
+            for key in ("valid_brep", "occt_valid", "nonzero_faces", "single_solid", "positive_volume", "bounded", "all_outputs_valid")
         }
         if not all(hard_checks.values()):
             raise ValueError(f"geometry validation failed: {checks}")
