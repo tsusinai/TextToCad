@@ -129,4 +129,4 @@ Astra 建模质量专项建议已落实第一批 P0/P1：
 - IR selector 已接入 OCCT/CadQuery shape，支持 index、normal、position、area、parallel_to、perpendicular_to、axis；圆角、倒角和 shell 可使用结构化面/边选择器。
 - 选择器无匹配或拓扑类型不适配时 fail-closed，执行 trace 保留 selector 请求，auto 策略可按 selector_resolution 回退。
 - 质量门新增面面积、中心点、法向、下向面、悬空初筛以及前端采样摘要；壁厚优先使用 B-Rep 面间距离并记录面索引/方法，内核不支持时回退相对面中心代理。
-- 注塑工艺按 +Z 拉模方向逐面计算拔模偏差；装配间隙因缺少 mating solid 保持 unknown，并在 UI 显示复核语义，避免名义值伪装成通过。
+- 注塑工艺按可配置拉模方向（默认 +Z）逐面计算拔模偏差；POST /v1/models、/v1/jobs、/v1/ir/compile 和前端注塑控件共用同一向量契约。装配间隙因缺少 mating solid 保持 unknown，并在 UI 显示复核语义，避免名义值伪装成通过。
