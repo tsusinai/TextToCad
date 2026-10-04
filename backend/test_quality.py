@@ -588,3 +588,40 @@ def test_selector_returns_match_metadata_without_kernel():
     assert len(result) == 1
     assert metadata["matched_indices"] == [1]
     assert metadata["matched_count"] == 1
+
+
+def test_selector_mapping_requires_final_topology_identity():
+    class Entity:
+        def __init__(self, key):
+            self.key = key
+
+        def hashCode(self):
+            return self.key
+
+    class Collection:
+        def __init__(self, values):
+            self._values = values
+
+        def vals(self):
+            return self._values
+
+    class Shape:
+        def __init__(self, faces):
+            self._faces = faces
+
+        def faces(self):
+            return Collection(self._faces)
+
+    selected = Entity(11)
+    metadata = {
+        "target_topology": "face",
+        "_selected_entities": [selected],
+    }
+    ir_executor._finalize_selector_metadata(metadata, Shape([Entity(10), selected]))
+    assert metadata["mapping_status"] == "final_output"
+    assert metadata["output_indices"] == [1]
+
+    missing = {"target_topology": "face", "_selected_entities": [selected]}
+    ir_executor._finalize_selector_metadata(missing, Shape([Entity(10)]))
+    assert missing["mapping_status"] == "unmapped"
+    assert missing["output_indices"] == []
