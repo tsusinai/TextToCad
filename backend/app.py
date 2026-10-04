@@ -2109,6 +2109,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         face_measurements = _face_level_dfm(
             execution["shape"],
             str(normalized.get("process") or "fdm"),
+            request.mold_pull_direction,
         )
     except IRExecutionError as exc:
         status_code = 503 if cq is None else 422
@@ -2317,7 +2318,11 @@ def _generate_ir_model(
 
         recorder.emit("validating", "geometry_validation", "running")
         analysis = analyze_manufacturability(params)
-        analysis["face_measurements"] = _face_level_dfm(shape, params.process)
+        analysis["face_measurements"] = _face_level_dfm(
+            shape,
+            params.process,
+            request.mold_pull_direction,
+        )
         checks = _validate_shape(shape, params, analysis)
         checks["ir_constraints"] = constraint_report
         checks["ir_repair_attempts"] = repair_attempts
@@ -2490,7 +2495,11 @@ def _generate_model(
         shape = build_geometry(params, recorder, design_ir, snapshots)
         recorder.emit("validating", "geometry_validation", "running")
         analysis = analyze_manufacturability(params)
-        analysis["face_measurements"] = _face_level_dfm(shape, params.process)
+        analysis["face_measurements"] = _face_level_dfm(
+            shape,
+            params.process,
+            request.mold_pull_direction,
+        )
         edge_feature = next((node for node in design_ir["features"] if node["id"] == "edge_treatment"), None)
         if edge_feature and edge_feature["status"] == "degraded":
             analysis["issues"].append({
