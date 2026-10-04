@@ -2782,9 +2782,15 @@ def validate_ir_endpoint(request: IRValidationRequest) -> dict[str, Any]:
 @app.post("/v1/ir/plan")
 def plan_ir_endpoint(request: IRPlanRequest) -> dict[str, Any]:
     """Generate and validate a generic v0.2 IR with the configured LLM."""
+    llm_used = True
     try:
-        raw = _llm_ir_json(request.prompt, request.process, request.units)
-        normalized = validate_ir(raw)
+        _, baseline, _ = parse_prompt_detailed(request.prompt, request.process, request.units)
+        try:
+            raw = _llm_ir_json(request.prompt, request.process, request.units)
+        except RuntimeError:
+            llm_used = False
+            raw = _deterministic_ir_plan(request.prompt, request.process, request.units, baseline)
+        normalized = validate_ir(_normalize_ir_draft(raw, request.prompt, request.process, request.units))
     except (RuntimeError, IRValidationError) as exc:
         if isinstance(exc, IRValidationError):
             raise HTTPException(status_code=422, detail={"valid": False, "issues": exc.issues}) from exc
@@ -2793,7 +2799,7 @@ def plan_ir_endpoint(request: IRPlanRequest) -> dict[str, Any]:
     return {
         "valid": constraints["valid"],
         "schema_version": "0.2",
-        "llm_used": True,
+        "llm_used": llm_used,
         "constraints": constraints,
         "ir": normalized,
     }
