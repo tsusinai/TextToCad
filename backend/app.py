@@ -1974,12 +1974,42 @@ def _generate_ir_model(
             normalized_ir,
             process_profile=PROCESS_PROFILES[request.process],
         )
+        repair_attempts: list[dict[str, Any]] = []
+        for attempt in range(2):
+            if constraint_report["valid"]:
+                break
+            patches = suggest_repairs(normalized_ir, constraint_report)
+            if not patches:
+                break
+            try:
+                repaired_ir = apply_patches(normalized_ir, patches)
+            except (TypeError, ValueError):
+                break
+            if repaired_ir == normalized_ir:
+                break
+            normalized_ir = repaired_ir
+            repair_attempts.append({
+                "attempt": attempt + 1,
+                "patch_count": len(patches),
+                "patches": copy.deepcopy(patches),
+            })
+            recorder.emit(
+                "validating",
+                "ir_repair" + ("_" * (attempt + 1)),
+                "succeeded",
+                patch_count=len(patches),
+            )
+            constraint_report = solve_constraints(
+                normalized_ir,
+                process_profile=PROCESS_PROFILES[request.process],
+            )
         if not constraint_report["valid"]:
             raise ValueError(f"IR hard constraints failed: {constraint_report['violations'][:6]}")
         recorder.emit("validating", "constraint_solve", "succeeded",
                       evaluated=constraint_report.get("evaluated", 0),
                       deferred=constraint_report.get("deferred", 0),
-                      violations=len(constraint_report.get("violations", [])))
+                      violations=len(constraint_report.get("violations", [])),
+                      repairs=len(repair_attempts))
 
         recorder.emit("building", "ir_compile", "running")
         execution = execute_ir(normalized_ir)
@@ -2011,6 +2041,7 @@ def _generate_ir_model(
         analysis = analyze_manufacturability(params)
         checks = _validate_shape(shape, params, analysis)
         checks["ir_constraints"] = constraint_report
+        checks["ir_repair_attempts"] = repair_attempts
         checks["ir_execution"] = execution.get("trace", [])
         hard_checks = {
             key: checks[key]
@@ -2027,10 +2058,13 @@ def _generate_ir_model(
         provenance["ir_strategy"] = "llm_generic_v0.2"
         provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
         provenance["ir_constraint_report"] = constraint_report
+        provenance["ir_repair_attempts"] = repair_attempts
         assumptions = (list(baseline_assumptions) + [
             "Generic Semantic CAD IR was compiled by CadQuery/OCCT.",
             "IR dimensions and feature intent were validated before kernel execution.",
-        ])[:6]
+        ] + ([
+            f"IR constraint repair applied ({len(repair_attempts)} attempt(s))."
+        ] if repair_attempts else []))[:6]
         model_id = uuid.uuid4().hex
         artifacts, step_schema = _write_artifacts(
             model_id,
@@ -2045,6 +2079,7 @@ def _generate_ir_model(
                 "llm_used": True,
                 "assumptions": assumptions,
                 "constraint_report": constraint_report,
+                "repair_attempts": repair_attempts,
             },
             normalized_ir,
             provenance,
