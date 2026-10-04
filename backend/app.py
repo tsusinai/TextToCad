@@ -303,7 +303,7 @@ def _bounded(value: float, minimum: float, maximum: float) -> float:
 
 _POLYGON_SIDE_WORDS: dict[str, int] = {
     "triangle": 3, "triangular": 3, "三角形": 3, "三角块": 3, "三角柱": 3, "三棱柱": 3,
-    "quadrilateral": 4, "四边形": 4, "四边柱": 4,
+    "quadrilateral": 4, "四边形": 4, "四边柱": 4, "square": 4, "正方形": 4,
     "pentagon": 5, "五边形": 5, "五边柱": 5,
     "hexagon": 6, "六边形": 6, "六边柱": 6,
     "heptagon": 7, "七边形": 7, "七边柱": 7,
