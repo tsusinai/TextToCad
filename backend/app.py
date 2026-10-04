@@ -3040,6 +3040,53 @@ def _ir_error_code(error: Exception) -> str:
     return "ir_generation_error"
 
 
+
+def _geometry_repair_patches(ir: dict[str, Any], message: str) -> list[dict[str, Any]]:
+    """Return one conservative IR patch for common OCC edge/thickness failures."""
+    lowered = str(message).lower()
+    if not any(token in lowered for token in ("fillet", "chamfer", "shell", "radius", "thickness")):
+        return []
+    parameters = ir.get("parameters") or {}
+    dimensions: list[float] = []
+    for name in ("width", "depth", "height"):
+        raw = parameters.get(name)
+        value = raw.get("value") if isinstance(raw, dict) else raw
+        if isinstance(value, (int, float)) and float(value) > 0:
+            dimensions.append(float(value))
+    safe_edge = max(0.2, round(min(dimensions) / 8.0, 2)) if dimensions else 1.0
+    safe_wall = max(0.8, round(min(dimensions) / 6.0, 2)) if dimensions else 1.2
+    for node in ir.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        operation = str(node.get("operation", ""))
+        values = node.get("parameters") or {}
+        if operation in {"fillet", "chamfer"} and "radius" in values:
+            current = values.get("radius")
+            if isinstance(current, (int, float)) and abs(float(current) - safe_edge) <= 1e-6:
+                continue
+            return [{
+                "op": "replace_node_parameter",
+                "node": node.get("id"),
+                "parameter": "radius",
+                "value": safe_edge,
+                "reason": "OCC edge treatment failed; reduced radius to a bounded value.",
+                "source": "deterministic_geometry_repair",
+            }]
+        if operation == "shell" and "thickness" in values:
+            current = values.get("thickness")
+            if isinstance(current, (int, float)) and abs(float(current) - safe_wall) <= 1e-6:
+                continue
+            return [{
+                "op": "replace_node_parameter",
+                "node": node.get("id"),
+                "parameter": "thickness",
+                "value": safe_wall,
+                "reason": "OCC shell failed; reduced wall thickness to a bounded value.",
+                "source": "deterministic_geometry_repair",
+            }]
+    return []
+
+
 def _polygon_points_are_planar(value: Any) -> bool:
     if not isinstance(value, list) or len(value) < 3:
         return False
@@ -3220,7 +3267,31 @@ def _generate_ir_model(
                       repairs=len(repair_attempts))
 
         recorder.emit("building", "ir_compile", "running")
-        execution = execute_ir(normalized_ir)
+        execution = None
+        for geometry_attempt in range(2):
+            try:
+                execution = execute_ir(normalized_ir)
+                break
+            except IRExecutionError as exc:
+                patches = _geometry_repair_patches(normalized_ir, str(exc))
+                if not patches or geometry_attempt >= 1:
+                    raise
+                normalized_ir = apply_patches(normalized_ir, patches)
+                repair_attempts.append({
+                    "attempt": geometry_attempt + 1,
+                    "patch_count": len(patches),
+                    "patches": copy.deepcopy(patches),
+                    "stage": "geometry",
+                })
+                recorder.emit(
+                    "building",
+                    "ir_geometry_repair",
+                    "warning",
+                    reason=str(exc)[:240],
+                    patch_count=len(patches),
+                )
+        if execution is None:
+            raise IRExecutionError("IR execution produced no result")
         shape = execution["shape"]
         node_step_ids: dict[str, str] = {}
         for event_index, event in enumerate(execution.get("trace", [])):
