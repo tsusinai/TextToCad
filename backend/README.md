@@ -41,7 +41,7 @@ When `BACKEND_API_KEY` is set, every `/v1/*` request requires `X-API-Key`; `/hea
 
 ## DeepSeek / OpenAI-compatible LLM
 
-Advanced mode is provider-neutral. For local Docker testing with DeepSeek, copy the template and set:
+The generic IR planner is provider-neutral; advanced UI settings only change the amount of design context shown to the user. For local Docker testing with DeepSeek, copy the template and set:
 
 ~~~bash
 cp .env.example .env
