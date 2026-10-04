@@ -3488,10 +3488,22 @@
       });
       if (jobResponse.status === 404) {
         const response = await backendFetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
-        if (!response.ok) throw new Error('geometry backend returned ' + response.status);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          const detail = payload && payload.detail
+            ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
+            : '';
+          throw new Error('geometry backend returned ' + response.status + (detail ? ': ' + detail : ''));
+        }
         return response.json();
       }
-      if (!jobResponse.ok) throw new Error('geometry job endpoint returned ' + jobResponse.status);
+      if (!jobResponse.ok) {
+        const payload = await jobResponse.json().catch(() => ({}));
+        const detail = payload && payload.detail
+          ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
+          : '';
+        throw new Error('geometry job endpoint returned ' + jobResponse.status + (detail ? ': ' + detail : ''));
+      }
       const job = await jobResponse.json();
       const jobId = job.job_id;
       if (onProgress) onProgress({ stage: 'queued', current_step: null, elapsed_ms: 0, events: [] });
@@ -3500,7 +3512,13 @@
       try {
         while (true) {
           const statusResponse = await backendFetch(backendUrl + '/v1/jobs/' + jobId, { signal });
-          if (!statusResponse.ok) throw new Error('geometry job status returned ' + statusResponse.status);
+          if (!statusResponse.ok) {
+            const payload = await statusResponse.json().catch(() => ({}));
+            const detail = payload && payload.detail
+              ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
+              : '';
+            throw new Error('geometry job status returned ' + statusResponse.status + (detail ? ': ' + detail : ''));
+          }
           const status = await statusResponse.json();
           if (status.progress && onProgress) onProgress(status.progress);
           if (status.status === 'succeeded') return status.result;
