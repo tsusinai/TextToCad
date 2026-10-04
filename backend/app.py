@@ -3317,6 +3317,8 @@ def _generate_ir_model(
 
         provenance = copy.deepcopy(provenance)
         provenance["ir_strategy"] = "llm_generic_v0.2" if llm_used else "deterministic_primitive_v0.2"
+        provenance["planner"] = "llm_ir" if llm_used else "deterministic_primitive"
+        provenance["llm_used"] = llm_used
         provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
         provenance["ir_constraint_report"] = constraint_report
         provenance["ir_repair_attempts"] = repair_attempts
