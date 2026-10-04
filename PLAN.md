@@ -261,3 +261,5 @@ P7 下一步：将多实体输出接入预览场景与选择器语义，并在 O
 - 已加入可选 OCP/BRepIntCurveSurface 射线采样器，从面中心沿内法向取第一有效交点并记录厚度、样本数和置信度。
 - /health 暴露 occt_normal_ray_available；OCP 接口缺失或单面无有效命中时自动回退 B-Rep 面距/中心代理。
 - 仍需在含 CadQuery/OCCT 的部署镜像中用真实薄壁、壳体和凹腔样本做几何回归。
+
+- 多实体质量门已接入：编译与 IR 生成逐输出检查 B-Rep、体积、面数和单实体拓扑，任一输出失败即拒绝并返回逐实体 output_quality。
