@@ -2158,13 +2158,67 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
     except IRExecutionError as exc:
         status_code = 503 if cq is None else 422
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    profile = PROCESS_PROFILES.get(str(normalized.get("process") or "fdm"), PROCESS_PROFILES["fdm"])
+    required_clearance = float(request.clearance_target_mm or profile["clearance"])
+    clearance: dict[str, Any] = {
+        "status": "unknown",
+        "required_mm": round(required_clearance, 6),
+        "reason": "reference_ir is required to prove mating clearance",
+    }
+    reference_metrics: dict[str, Any] | None = None
+    reference_output_node: str | None = None
+    if request.reference_ir is not None:
+        try:
+            reference_normalized = validate_ir(request.reference_ir)
+        except IRValidationError as exc:
+            raise HTTPException(status_code=422, detail={
+                "valid": False,
+                "reference": True,
+                "schema_version": "0.2",
+                "issues": exc.issues,
+            }) from exc
+        reference_constraints = solve_constraints(
+            reference_normalized,
+            process_profile=PROCESS_PROFILES.get(str(reference_normalized.get("process") or "fdm")),
+        )
+        if not reference_constraints["valid"]:
+            raise HTTPException(status_code=422, detail={
+                "valid": False,
+                "reference": True,
+                "schema_version": "0.2",
+                "constraints": reference_constraints,
+            })
+        try:
+            reference_execution = execute_ir(reference_normalized)
+            reference_metrics = shape_metrics(reference_execution["shape"])
+            reference_output_node = reference_execution["output_node"]
+            distance_mm, method = _shape_distance(execution["shape"], reference_execution["shape"])
+        except IRExecutionError as exc:
+            status_code = 503 if cq is None else 422
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        if distance_mm is None:
+            clearance = {
+                "status": "unknown",
+                "required_mm": round(required_clearance, 6),
+                "reason": "kernel did not expose a shape distance method",
+            }
+        else:
+            clearance = {
+                "status": "pass" if distance_mm >= required_clearance else "warning",
+                "distance_mm": round(distance_mm, 6),
+                "required_mm": round(required_clearance, 6),
+                "method": method or "brep_shape_distance",
+                "reference_output_node": reference_output_node,
+            }
     return {
         "valid": True,
         "schema_version": "0.2",
         "output_node": execution["output_node"],
         "metrics": metrics,
+        "reference_metrics": reference_metrics,
         "constraints": constraint_report,
         "face_measurements": face_measurements,
+        "clearance": clearance,
         "trace": execution["trace"],
     }
 
