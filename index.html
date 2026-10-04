@@ -1962,10 +1962,35 @@
     }
     probeBackendCapabilities();
 
+    const polygonSideWords = {
+      triangle: 3, triangular: 3, '三角形': 3, '三角块': 3, '三角柱': 3, '三棱柱': 3,
+      quadrilateral: 4, '四边形': 4, pentagon: 5, '五边形': 5, hexagon: 6, '六边形': 6,
+      heptagon: 7, '七边形': 7, octagon: 8, '八边形': 8, nonagon: 9, '九边形': 9,
+      decagon: 10, '十边形': 10, hendecagon: 11, '十一边形': 11, dodecagon: 12, '十二边形': 12
+    };
+    function polygonSideCount(text) {
+      const value = String(text || '').toLowerCase();
+      for (const token of Object.keys(polygonSideWords).sort((a, b) => b.length - a.length)) {
+        if (value.includes(token)) return polygonSideWords[token];
+      }
+      const numeric = value.match(/(?:regular\s*)?(\d{1,2})\s*(?:-\s*)?gon\b/) || value.match(/正\s*(\d{1,2})\s*边形/);
+      if (!numeric) return 0;
+      const sides = Number(numeric[1]);
+      return sides >= 3 && sides <= 32 ? sides : 0;
+    }
+    function regularPolygonProfilePoints(sides, width, depth) {
+      const count = clamp(Number(sides) || 3, 3, 32);
+      if (count === 3) return [[-width / 2, -depth / 2], [width / 2, -depth / 2], [0, depth / 2]];
+      const rotation = Math.PI / 2 + Math.PI / (2 * count);
+      return Array.from({ length: count }, (_, index) => {
+        const angle = rotation + (Math.PI * 2 * index / count);
+        return [width / 2 * Math.cos(angle), depth / 2 * Math.sin(angle)];
+      });
+    }
     function titleFor(text) {
       const value = text.toLowerCase();
       if (/rounded cube|rounded block|filleted cube|soft cube|no sharp edges|no sharp corners|圆角立方体|圆角方块|圆润方块|无棱角|没有棱角|没用棱角|不带棱角/.test(value) || ((value.includes('cube') || value.includes('正方体') || value.includes('方块')) && /round|fillet|圆角|圆润|倒圆|棱角/.test(value))) return 'Rounded cube';
-      if (/triangle|triangular|triangular prism|triangle prism|三角形|三角块|三角柱|三棱柱/.test(value)) return 'Polygon prism';
+      if (polygonSideCount(value) || /polygon\s*(?:prism|block)?|多边形|多边柱/.test(value)) return 'Polygon prism';
       if (/airplane|aircraft|model plane|plane model|飞机|航模|机翼|机身/.test(value)) return 'Airplane model';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('l shape') || value.includes('l-shaped') || value.includes('angle bracket') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯') || value.includes('弯折')) return 'L bracket';
       if (value.includes('cable') || value.includes('clip') || value.includes('线缆') || value.includes('电缆') || value.includes('夹')) return 'Cable clip';
@@ -1980,7 +2005,7 @@
     function kindForTitle(title) {
       const value = String(title || '').toLowerCase();
       if (value.includes('rounded cube') || value.includes('rounded block') || value.includes('filleted cube') || value.includes('soft cube') || value.includes('圆角') || value.includes('无棱角') || value.includes('没有棱角') || value.includes('没用棱角') || value.includes('不带棱角')) return 'rounded_cube';
-      if (value.includes('polygon prism') || value.includes('triangle') || value.includes('triangular') || value.includes('三角形') || value.includes('三角块') || value.includes('三角柱') || value.includes('三棱柱')) return 'polygon_prism';
+      if (value.includes('polygon prism') || polygonSideCount(value)) return 'polygon_prism';
       if (value.includes('airplane') || value.includes('aircraft') || value.includes('飞机') || value.includes('航模') || value.includes('机翼') || value.includes('机身')) return 'airplane';
       if (value.includes('l bracket') || value.includes('l-shape') || value.includes('angle') || value.includes('l形') || value.includes('l 型') || value.includes('l型') || value.includes('直角支架') || value.includes('角码') || value.includes('折条') || value.includes('折弯')) return 'angle';
       if (value.includes('plant') || value.includes('pot') || value.includes('花盆') || value.includes('植物')) return 'plant';
@@ -2023,6 +2048,7 @@
       const airplaneShape = detectedKind === 'airplane';
       const cupShape = detectedKind === 'cup';
       const polygonShape = detectedKind === 'polygon_prism';
+      const polygonSides = polygonSideCount(normalized) || 3;
       const cubeShape = !polygonShape && (roundedCube || /cube|正方体|方块/i.test(normalized));
       const pairMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])/i);
       const pair = pairMatch ? pairMatch.slice(1).map(Number) : [];
@@ -2045,6 +2071,7 @@
       const squareBase = /footprint|占地|底面|见方/i.test(normalized);
       let depth = airplaneShape ? (wingSpan || positional[1] || 140) : (valueFor('deep|depth|长|深') || footprint || (squareBase ? width : (positional[1] || (angleShape && pair[1]) || (cupShape ? width : width * 0.67))));
       let height = valueFor('tall|height|高') || positional[2] || (titleFor(text) === 'Plant pot' ? 82 : (cupShape ? 100 : (airplaneShape ? 40 : (angleShape ? 40 : (roundedCube ? 80 : 42)))));
+      if (polygonShape && polygonSides !== 3 && !triplet.length && !pair.length && !footprint && !diameter && !valueFor('wide|width|宽|deep|depth|长|深') && !genericNumbers.length) depth = width;
       if (cubeShape && triplet.length !== 3) {
         const edge = cubeEdge || pair[0] || genericNumbers[0] || 80;
         width = valueFor('wide|width|宽') || edge;
@@ -2056,7 +2083,7 @@
     }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
     function triangleProfilePoints(width, depth) {
-      return [[-width / 2, -depth / 2], [width / 2, -depth / 2], [0, depth / 2]];
+      return regularPolygonProfilePoints(3, width, depth);
     }
     function parseModel(text) {
       const normalized = canonicalDimensionText(text);
@@ -2065,14 +2092,15 @@
       const title = titleFor(text);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (title === 'Desk organizer' ? 3 : 1))), 1, 6);
       const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
-      const polygonShape = /triangle|triangular|triangular prism|triangle prism|三角形|三角块|三角柱|三棱柱/i.test(normalized);
+      const polygonShape = polygonSideCount(normalized) > 0;
+      const polygonSides = polygonSideCount(normalized) || 3;
       const cubeShape = !polygonShape && /cube|正方体|方块/i.test(normalized);
       const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'Rounded cube' ? 4 : (cubeShape || polygonShape || title === 'L bracket' || title === 'Airplane model' || title === 'Cup' ? 0 : 4));
       const dimensions = dimensionsFor(text);
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
       const wall = wallMatch ? Number(wallMatch[1]) : (title === 'Airplane model' ? 1.6 : (title === 'Cup' ? 2 : 3));
       const profile = processProfiles[selectedProcess];
-      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance, material: selectedMaterial, edge_style: title === 'Rounded cube' ? 'fillet' : 'chamfer', cube_shape: cubeShape, profile_points: polygonShape ? triangleProfilePoints(dimensions.width, dimensions.depth) : [] };
+      return { title, kind: kindForTitle(title), width: dimensions.width, depth: dimensions.depth, height: dimensions.height, compartments, chamfer, wall, bottom: wall, process: selectedProcess, tolerance: profile.tolerance, clearance: profile.clearance, material: selectedMaterial, edge_style: title === 'Rounded cube' ? 'fillet' : 'chamfer', cube_shape: cubeShape, profile_points: polygonShape ? regularPolygonProfilePoints(polygonSides, dimensions.width, dimensions.depth) : [] };
     }
     function pointList(points) { return points.map((point) => point[0].toFixed(1) + ',' + point[1].toFixed(1)).join(' '); }
     function renderRotationalIso(spec) {
@@ -2425,7 +2453,7 @@
       } else if (kind === 'polygon_prism') {
         const profile = Array.isArray(spec.profile_points) && spec.profile_points.length >= 3
           ? spec.profile_points
-          : triangleProfilePoints(width, depth);
+          : regularPolygonProfilePoints(polygonSideCount(spec.title) || 3, width, depth);
         const shape = new THREE.Shape();
         shape.moveTo(Number(profile[0][0]), Number(profile[0][1]));
         profile.slice(1).forEach((point) => shape.lineTo(Number(point[0]), Number(point[1])));
@@ -2665,13 +2693,32 @@
       const y = 180;
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated airplane front view"><path d="M 260 ' + (y - h/2) + ' Q ' + (x + l*.55) + ' ' + (y - h*.2) + ' ' + (x + l) + ' ' + y + ' Q ' + (x + l*.55) + ' ' + (y + h*.2) + ' 260 ' + (y + h/2) + ' Q ' + (x + l*.45) + ' ' + (y + h*.2) + ' ' + x + ' ' + y + ' Q ' + (x + l*.45) + ' ' + (y - h*.2) + ' 260 ' + (y - h/2) + ' Z" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / AIRPLANE / ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
     }
+    function polygonPointsFor(spec) {
+      const fallbackSides = polygonSideCount(spec && spec.title) || 3;
+      const raw = Array.isArray(spec && spec.profile_points) && spec.profile_points.length >= 3
+        ? spec.profile_points
+        : regularPolygonProfilePoints(fallbackSides, Number(spec.width) || 120, Number(spec.depth) || 80);
+      return raw.map((point) => [Number(point[0]) || 0, Number(point[1]) || 0]);
+    }
+    function fitPolygonProfile(points, width, depth) {
+      const xs = points.map((point) => point[0]);
+      const ys = points.map((point) => point[1]);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const rangeX = Math.max(maxX - minX, 1e-6);
+      const rangeY = Math.max(maxY - minY, 1e-6);
+      return points.map(([x, y]) => [(x - minX) * width / rangeX, (y - minY) * depth / rangeY]);
+    }
+    function polygonLabel(spec) {
+      return 'POLYGON ' + polygonPointsFor(spec).length + '-GON';
+    }
     function renderPolygonTop(spec) {
       const w = clamp(spec.width / 60, .8, 1.8) * 230;
-      const d = clamp(spec.depth / 40, .8, 1.8) * 170;
+      const d = clamp(spec.depth / 60, .8, 1.8) * 230;
       const x = (520 - w) / 2;
       const y = (350 - d) / 2;
-      const points = [[260, y], [x + w, y + d], [x, y + d]];
-      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism top view CAD model"><polygon points="' + pointList(points) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / TRIANGLE / ' + spec.width + ' × ' + spec.depth + ' mm</text></svg>';
+      const points = fitPolygonProfile(polygonPointsFor(spec), w, d).map(([px, py]) => [x + px, y + py]);
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism top view CAD model"><polygon points="' + pointList(points) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + polygonLabel(spec) + ' / ' + spec.width + ' × ' + spec.depth + ' mm</text></svg>';
     }
     function renderPolygonFront(spec) {
       const w = clamp(spec.width / 60, .8, 1.8) * 280;
@@ -2682,13 +2729,19 @@
     }
     function renderPolygonIso(spec) {
       const w = clamp(spec.width / 60, .8, 1.8) * 230;
-      const d = clamp(spec.depth / 40, .8, 1.8) * 170;
+      const d = clamp(spec.depth / 60, .8, 1.8) * 230;
       const h = clamp(spec.height / 30, .7, 1.8) * 145;
+      const profile = fitPolygonProfile(polygonPointsFor(spec), w, d);
       const project = (x, y, z) => [205 + (x - y) * .72, 215 + (x + y) * .34 - z];
-      const base = [[0, 0, 0], [w, 0, 0], [w / 2, d, 0]];
+      const base = profile.map(([x, y]) => [x, y, 0]);
       const top = base.map(([x, y]) => [x, y, h]);
       const face = (vertices, fill) => '<polygon points="' + pointList(vertices.map(([x, y, z]) => project(x, y, z))) + '" fill="' + fill + '"/>';
-      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism isometric CAD model"><ellipse cx="205" cy="365" rx="150" ry="20" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="3" stroke-linejoin="round">' + face(top, '#ddf79b') + face([base[0], base[2], top[2], top[0]], '#9fca82') + face([base[1], base[0], top[0], top[1]], '#6e9e68') + face([base[2], base[1], top[1], top[2]], '#7fae6f') + '</g><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">ISOMETRIC / TRIANGLE / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
+      const colors = ['#9fca82', '#7fae6f', '#6e9e68', '#86b777'];
+      const sides = base.map((point, index) => {
+        const next = (index + 1) % base.length;
+        return face([point, base[next], top[next], top[index]], colors[index % colors.length]);
+      }).join('');
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism isometric CAD model"><ellipse cx="205" cy="365" rx="150" ry="20" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="3" stroke-linejoin="round">' + face(top, '#ddf79b') + sides + '</g><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">ISOMETRIC / ' + polygonLabel(spec) + ' / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
     }
     function renderModel(spec, view) {
       if (!spec) return;
@@ -3530,6 +3583,9 @@
           cable_channel: remoteParams.cable_channel ?? nextSpec.cable_channel ?? false,
           material: remoteParams.material || nextSpec.material || selectedMaterial,
           edge_style: nextSpec.cube_shape ? nextSpec.edge_style : (remoteParams.edge_style || nextSpec.edge_style || 'chamfer'),
+          profile_points: Array.isArray(remoteParams.profile_points) && remoteParams.profile_points.length >= 3
+            ? remoteParams.profile_points
+            : (nextSpec.profile_points || []),
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
         renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
@@ -3695,7 +3751,7 @@
       const w = spec.width, d = spec.depth, h = spec.height;
       const rows = ['# FORM AI CAD export', '# Parametric ' + spec.title, '# compartments=' + spec.compartments + ' chamfer=' + spec.chamfer, 'o ' + spec.title.replace(/\\s+/g, '_')];
       if (spec.kind === 'polygon_prism') {
-        const profile = Array.isArray(spec.profile_points) && spec.profile_points.length >= 3 ? spec.profile_points : triangleProfilePoints(w, d);
+        const profile = Array.isArray(spec.profile_points) && spec.profile_points.length >= 3 ? spec.profile_points : regularPolygonProfilePoints(polygonSideCount(spec.title) || 3, w, d);
         profile.forEach(([x, y]) => rows.push('v ' + x + ' ' + y + ' 0'));
         profile.forEach(([x, y]) => rows.push('v ' + x + ' ' + y + ' ' + h));
         const n = profile.length;
