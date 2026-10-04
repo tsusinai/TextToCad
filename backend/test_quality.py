@@ -677,6 +677,7 @@ def test_triangle_prompt_compiles_to_generic_polygon_prism():
     )
     assert title == "Parametric polygon prism"
     assert params.kind == "polygon_prism"
+    assert (params.width, params.depth, params.height) == (60.0, 40.0, 30.0)
     assert params.profile_points == [[-30.0, -20.0], [30.0, -20.0], [0.0, 20.0]]
     assert provenance["fields"]["profile_points"]["status"] == "derived"
     ir = app.build_design_ir(
