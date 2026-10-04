@@ -12,7 +12,8 @@ from ir_executor import execute_ir
 
 def main() -> None:
     if app.cq is None:
-        raise SystemExit("CadQuery is unavailable in the kernel image")
+        detail = getattr(app, "CADQUERY_ERROR", "") or "unknown import error"
+        raise SystemExit(f"CadQuery is unavailable in the kernel image: {detail}")
 
     outer = app.cq.Workplane("XY").box(40, 30, 20)
     inner = app.cq.Workplane("XY").box(36, 26, 18).translate((0, 0, 1))
