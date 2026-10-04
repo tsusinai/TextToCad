@@ -2022,7 +2022,8 @@
       const roundedCube = detectedKind === 'rounded_cube';
       const airplaneShape = detectedKind === 'airplane';
       const cupShape = detectedKind === 'cup';
-      const cubeShape = roundedCube || /cube|正方体|方块/i.test(normalized);
+      const polygonShape = detectedKind === 'polygon_prism';
+      const cubeShape = !polygonShape && (roundedCube || /cube|正方体|方块/i.test(normalized));
       const pairMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*)?(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*mm)?(?![a-z\d])/i);
       const pair = pairMatch ? pairMatch.slice(1).map(Number) : [];
       const valueFor = (terms) => {
@@ -2064,8 +2065,8 @@
       const title = titleFor(text);
       const compartments = clamp(Number(countMatch ? countMatch[1] : (wordCount || (title === 'Desk organizer' ? 3 : 1))), 1, 6);
       const chamferMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:chamfer|倒角|radius|圆角|圆弧|半径)/) || normalized.match(/(?:chamfer|倒角|radius|圆角|圆弧|半径)[^\d]{0,8}(\d+(?:\.\d+)?)/);
-      const cubeShape = /cube|正方体|方块/i.test(normalized);
       const polygonShape = /triangle|triangular|triangular prism|triangle prism|三角形|三角块|三角柱|三棱柱/i.test(normalized);
+      const cubeShape = !polygonShape && /cube|正方体|方块/i.test(normalized);
       const chamfer = chamferMatch ? Number(chamferMatch[1]) : (title === 'Rounded cube' ? 4 : (cubeShape || polygonShape || title === 'L bracket' || title === 'Airplane model' || title === 'Cup' ? 0 : 4));
       const dimensions = dimensionsFor(text);
       const wallMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)?\s*(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)/) || normalized.match(/(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)[^\d]{0,8}(\d+(?:\.\d+)?)/);
