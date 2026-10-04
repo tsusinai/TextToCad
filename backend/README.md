@@ -74,6 +74,6 @@ The Docker image should additionally be used for CadQuery/OCCT export smoke test
 
 The v0.2 executor now preserves every node listed in outputs. POST /v1/ir/compile remains backward compatible (shape, output_node, metrics) and additionally returns output_nodes and output_metrics for all semantic entities. A mating reference_ir exposes reference_output_metrics and classifies measured distance as pass, warning, contact, or interference with the process tolerance.
 
-Face DFM output includes wall_thickness_analysis. It records whether the result came from an OCCT B-Rep face distance or an opposing-face center proxy, with confidence and an explicit normal_ray_sampling=not_available flag. Consumers should treat this as a conservative measurement until a kernel-backed normal-ray solver is enabled.
+Face DFM output includes wall_thickness_analysis. It records whether the result came from an OCCT B-Rep face distance or an opposing-face center proxy, with confidence and an explicit normal_ray_sampling capability flag. Consumers should treat proxy output as conservative until a kernel-backed ray sample is available.
 
 The backend now attempts an optional OCCT normal-ray thickness sample from each face center. Capability is exposed as occt_normal_ray_available on /health; unavailable kernels retain the explicit proxy result and never label it as ray-sampled.
