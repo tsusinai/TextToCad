@@ -278,3 +278,11 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 ## 推荐结论
 
 不要把“完全没有模型族识别”作为目标。应把模型族识别降级为可选的宏/提示层，把通用 IR 设为唯一执行协议。这样既能保留常见物体的速度和质量，也能让新物体通过原语、特征和约束进入同一条可验证的 CadQuery/OCCT 链路。
+
+
+## P7：多输出与装配关系
+
+- outputs 可声明多个实体；IR 执行器保留全部输出，同时继续以第一个输出兼容旧版 shape / output_node 字段。
+- POST /v1/ir/compile 返回 output_nodes、output_metrics，每个输出包含独立的 B-Rep 指标；参考 IR 同样返回 reference_output_metrics。
+- 传入 reference_ir 时，clearance 会区分 pass、warning、contact 和 interference，并返回 state、contact_tolerance_mm、interference、测量方法。没有参考实体或距离 API 时保持 unknown。
+- 面级壁厚分析现在显式返回 wall_thickness_analysis：记录 B-Rep 面距离或相对面中心代理、置信度和 normal_ray_sampling=not_available。这避免把代理测量误报为完整法向射线厚度。
