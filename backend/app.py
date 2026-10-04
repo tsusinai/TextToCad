@@ -1172,7 +1172,7 @@ def _deterministic_ir_plan(
         }]
 
     explicit_edge_treatment = bool(re.search(
-        r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\\s*edge|no\\s*sharp|无棱角)",
+        r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\s*edge|no\s*sharp|无棱角)",
         text,
         flags=re.IGNORECASE,
     ))
