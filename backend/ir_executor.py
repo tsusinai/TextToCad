@@ -135,6 +135,144 @@ def _combine(inputs: list[Any], operation: str) -> Any:
     return result
 
 
+def _entity_tuple(entity: Any) -> tuple[float, float, float] | None:
+    """Read a CadQuery/OCC vector without depending on one Vector API version."""
+    try:
+        value = entity.toTuple()
+        if len(value) == 3:
+            return tuple(float(item) for item in value)
+    except Exception:
+        pass
+    try:
+        return (float(entity.x), float(entity.y), float(entity.z))
+    except Exception:
+        return None
+
+
+def _entity_direction(entity: Any, topology: str) -> tuple[float, float, float] | None:
+    try:
+        vector = entity.normalAt() if topology == "face" else entity.tangentAt(0.5)
+        return _entity_tuple(vector)
+    except Exception:
+        return None
+
+
+def _normalize_vector(vector: tuple[float, float, float]) -> tuple[float, float, float]:
+    length = math.sqrt(sum(component * component for component in vector))
+    if length <= 1e-12:
+        raise IRExecutionError("selector direction cannot be zero")
+    return tuple(component / length for component in vector)
+
+
+def _selector_clause_matches(entity: Any, topology: str, clause: dict[str, Any]) -> bool:
+    if len(clause) != 1:
+        raise IRExecutionError("selector clauses must contain one property")
+    property_name, expected = next(iter(clause.items()))
+    if property_name == "index":
+        return False
+    if property_name in {"normal", "parallel_to", "perpendicular_to", "axis"}:
+        if not isinstance(expected, (list, tuple)) or len(expected) != 3:
+            raise IRExecutionError(f"selector '{property_name}' must contain three numbers")
+        actual = _entity_direction(entity, topology)
+        if actual is None:
+            raise IRExecutionError(f"selector cannot read {topology} direction")
+        actual_n = _normalize_vector(actual)
+        expected_n = _normalize_vector(tuple(float(item) for item in expected))
+        dot = sum(actual_n[index] * expected_n[index] for index in range(3))
+        tolerance = 1e-3
+        if property_name == "normal":
+            return all(abs(actual_n[index] - expected_n[index]) <= tolerance for index in range(3))
+        if property_name == "parallel_to" or property_name == "axis":
+            return abs(abs(dot) - 1.0) <= tolerance
+        return abs(dot) <= tolerance
+    if property_name == "position":
+        if not isinstance(expected, (list, tuple)) or len(expected) != 3:
+            raise IRExecutionError("selector position must contain three numbers")
+        try:
+            actual = _entity_tuple(entity.Center())
+        except Exception as exc:
+            raise IRExecutionError("selector cannot read entity position") from exc
+        if actual is None:
+            raise IRExecutionError("selector cannot read entity position")
+        tolerance = 1e-3
+        return all(abs(actual[index] - float(expected[index])) <= tolerance for index in range(3))
+    if property_name == "area":
+        try:
+            actual_area = float(entity.Area())
+        except Exception as exc:
+            raise IRExecutionError("selector cannot read entity area") from exc
+        if isinstance(expected, (int, float)):
+            return abs(actual_area - float(expected)) <= 1e-3
+        if isinstance(expected, dict):
+            minimum = expected.get("min", expected.get("minimum"))
+            maximum = expected.get("max", expected.get("maximum"))
+            if minimum is not None and actual_area < float(minimum):
+                return False
+            if maximum is not None and actual_area > float(maximum):
+                return False
+            return True
+        raise IRExecutionError("selector area must be a number or min/max object")
+    raise IRExecutionError(f"selector property '{property_name}' is not implemented")
+
+
+def _topology_selection(shape: Any, selector: dict[str, Any], target: str) -> Any:
+    if not isinstance(selector, dict):
+        raise IRExecutionError("selector must be an object")
+    source_topology = str(selector.get("topology", "face")).lower()
+    collections = {
+        "solid": "solids",
+        "shell": "shells",
+        "face": "faces",
+        "edge": "edges",
+        "vertex": "vertices",
+    }
+    collection_name = collections.get(source_topology)
+    if collection_name is None:
+        raise IRExecutionError(f"selector topology '{source_topology}' is not supported")
+    collection = getattr(shape, collection_name)()
+    entities = list(collection.vals())
+    where = selector.get("where") or []
+    if not isinstance(where, list):
+        raise IRExecutionError("selector where must be a list")
+    selected = entities
+    for clause in where:
+        if not isinstance(clause, dict) or len(clause) != 1:
+            raise IRExecutionError("selector clauses must contain one property")
+        if "index" in clause:
+            try:
+                index = int(clause["index"])
+            except (TypeError, ValueError) as exc:
+                raise IRExecutionError("selector index must be an integer") from exc
+            if index < 0 or index >= len(entities):
+                raise IRExecutionError("selector index is out of range")
+            selected = [entities[index]]
+            continue
+        selected = [
+            entity for entity in selected
+            if _selector_clause_matches(entity, source_topology, clause)
+        ]
+    if not selected:
+        raise IRExecutionError("selector matched no topology entities")
+
+    if target == "edge" and source_topology == "face":
+        expanded: list[Any] = []
+        seen: set[str] = set()
+        for face in selected:
+            try:
+                edges = face.Edges()
+            except Exception as exc:
+                raise IRExecutionError("selector cannot expand face edges") from exc
+            for edge in edges:
+                key = str(edge.hashCode()) if hasattr(edge, "hashCode") else repr(edge)
+                if key not in seen:
+                    seen.add(key)
+                    expanded.append(edge)
+        selected = expanded
+    if target == "face" and source_topology == "edge":
+        raise IRExecutionError("edge selector cannot be used as an open face selector")
+    return shape.newObject(selected)
+
+
 def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, Any]) -> Any:
     operation = str(node.get("operation", ""))
     values = node.get("parameters") or {}
@@ -255,16 +393,20 @@ def _node_shape(node: dict[str, Any], inputs: list[Any], parameters: dict[str, A
         if len(inputs) != 1:
             raise IRExecutionError(f"{operation} requires exactly one input")
         structured_selector = values.get("selector") or values.get("face_selector") or values.get("edge_selector")
-        if isinstance(structured_selector, dict):
-            raise IRExecutionError("selector resolution requires the P6 topology adapter")
         radius = _number(parameters, values.get("radius", values.get("distance")), f"{operation}.radius")
-        selection = values.get("selection")
-        edges = inputs[0].edges(selection) if selection else inputs[0].edges()
+        if isinstance(structured_selector, dict):
+            edges = _topology_selection(inputs[0], structured_selector, "edge")
+        else:
+            selection = values.get("selection")
+            edges = inputs[0].edges(selection) if selection else inputs[0].edges()
         return getattr(edges, operation)(radius)
     if operation == "shell":
         if len(inputs) != 1:
             raise IRExecutionError("shell requires exactly one input")
         thickness = _number(parameters, values.get("thickness"), "shell.thickness")
+        selector = values.get("selector") or values.get("face_selector")
+        if isinstance(selector, dict):
+            return _topology_selection(inputs[0], selector, "face").shell(-thickness)
         selection = values.get("open_face", ">Z")
         return inputs[0].faces(selection).shell(-thickness)
     if operation == "mirror":
