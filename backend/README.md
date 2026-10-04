@@ -28,10 +28,10 @@ The response contains validated STEP and STL download URLs plus optional 3MF and
 
 - `GET /health` reports CadQuery/OCCT, preview, LLM, authentication, and queue status. It does not require the API key.
 - `GET /v1/process-profiles` returns FDM, SLA, CNC, and injection molding constraints.
-- `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`; `strict_dimensions: true` rejects ambiguous unlabeled dimensions instead of applying defaults.
+- `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`; `generation_strategy` accepts `legacy`, `ir`, or `auto`. Standard mode defaults to the deterministic builder; advanced UI requests `auto`, which tries LLM → generic Semantic CAD IR v0.2 → CadQuery/OCCT and falls back to the deterministic builder with a recorded reason. `strict_dimensions: true` rejects ambiguous unlabeled dimensions instead of applying defaults.
 - `POST /v1/jobs` creates a bounded asynchronous job; `GET /v1/jobs/{job_id}` polls it and `DELETE /v1/jobs/{job_id}` cancels it. A full queue returns HTTP 429. Generation mutations also use a bounded per-client rate limit (configurable with `RATE_LIMIT_WINDOW_SECONDS` and `MAX_MUTATIONS_PER_WINDOW`). Job responses include `progress.stage`, `progress.current_step`, elapsed time, and ordered `events`; the trace is updated after each real CAD operation rather than simulated on the client.
 - `GET /v1/models/{model_id}/manifest` returns parameters, checks, process metadata, exports, and the reproducible manifest.
-- `GET /v1/models/{model_id}/ir` returns Semantic CAD IR v0.1.
+- `GET /v1/models/{model_id}/ir` returns the v0.2 Semantic CAD IR used by the generation path. The IR is family-independent: primitives, features, constraints, selectors, and outputs are validated before kernel execution.
 - `GET /v1/models/{model_id}/analysis` returns nominal wall-map samples, issues, and review status.
 - `GET /v1/models/{model_id}/download?format=step|stl|3mf|glb` downloads an artifact.
 - `GET /v1/models/{model_id}/steps/{step_id}` serves an intermediate GLB when `include_steps: true`; the final response and manifest expose `generation_trace`.
