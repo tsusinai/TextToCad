@@ -439,3 +439,22 @@ def test_ir_fallback_error_codes_are_stable():
     assert app._ir_error_code(RuntimeError("operation 'sweep' is not implemented")) == "unsupported_operation"
     assert app._ir_error_code(RuntimeError("CadQuery is not installed")) == "cadquery_unavailable"
     assert app._ir_error_code(ValueError("geometry validation failed")) == "kernel_validation"
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_selector_applies_to_edge_feature():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "body", "kind": "primitive", "operation": "box",
+             "parameters": {"size": [30, 20, 10]}},
+            {"id": "edge_treatment", "kind": "feature", "operation": "fillet",
+             "inputs": ["body"], "parameters": {
+                 "radius": 1,
+                 "selector": {"entity": "body", "topology": "edge", "where": [{"index": 0}]},
+             }},
+        ],
+        "outputs": [{"id": "main", "node": "edge_treatment"}],
+    }
+    execution = app.execute_ir(app.validate_ir(ir))
+    assert app.shape_metrics(execution["shape"])["valid_brep"] is True
