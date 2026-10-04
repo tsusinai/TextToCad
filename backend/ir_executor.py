@@ -130,6 +130,60 @@ def _polygon_points(parameters: dict[str, Any], value: Any, name: str) -> list[l
     return points
 
 
+
+def _regular_polygon_points(
+    parameters: dict[str, Any],
+    values: dict[str, Any],
+    name: str = "regular_polygon",
+) -> list[list[float]]:
+    """Resolve a regular polygon from points, footprint, or circumradius."""
+    sides_value = values.get("sides", 6)
+    try:
+        sides = int(float(_resolve(sides_value, parameters)))
+    except (TypeError, ValueError) as exc:
+        raise IRExecutionError(f"{name}.sides must be an integer") from exc
+    if sides < 3 or sides > 64:
+        raise IRExecutionError(f"{name}.sides must be between 3 and 64")
+    if values.get("points") is not None:
+        points = _polygon_points(parameters, values.get("points"), f"{name}.points")
+        if len(points) != sides:
+            raise IRExecutionError(f"{name}.points count must equal sides")
+        return points
+
+    width_value = values.get("width")
+    depth_value = values.get("depth")
+    diameter_value = values.get("diameter")
+    radius_value = values.get("radius", values.get("circumradius"))
+    if diameter_value is not None:
+        diameter = _number(parameters, diameter_value, f"{name}.diameter")
+        width = depth = diameter
+    elif width_value is not None or depth_value is not None:
+        width = _number(parameters, width_value if width_value is not None else depth_value, f"{name}.width")
+        depth = _number(parameters, depth_value if depth_value is not None else width_value, f"{name}.depth")
+    elif radius_value is not None:
+        radius = _number(parameters, radius_value, f"{name}.radius")
+        width = depth = radius * 2.0
+    else:
+        width = depth = 40.0
+    half_width = width / 2.0
+    half_depth = depth / 2.0
+    rotation = math.pi / 2.0 + math.pi / (2.0 * sides)
+    raw = [
+        [
+            half_width * math.cos(rotation + (2.0 * math.pi * index / sides)),
+            half_depth * math.sin(rotation + (2.0 * math.pi * index / sides)),
+        ]
+        for index in range(sides)
+    ]
+    min_x = min(point[0] for point in raw)
+    max_x = max(point[0] for point in raw)
+    min_y = min(point[1] for point in raw)
+    max_y = max(point[1] for point in raw)
+    scale_x = width / max(max_x - min_x, 1e-9)
+    scale_y = depth / max(max_y - min_y, 1e-9)
+    return [[point[0] * scale_x, point[1] * scale_y] for point in raw]
+
+
 def _workplane(frame: str | None) -> Any:
     if cq is None:
         raise IRExecutionError(f"CadQuery is not installed: {CADQUERY_ERROR}")
@@ -451,6 +505,10 @@ def _node_shape(
             else:
                 raise IRExecutionError(f"unsupported sketch geometry '{kind}'")
         return sketch
+    if operation == "regular_polygon":
+        points = _regular_polygon_points(parameters, values)
+        height = _number(parameters, values.get("height", 40.0), "regular_polygon.height")
+        return _workplane(frame).polyline(points).close().extrude(height)
     if operation == "polygon_prism":
         points = _polygon_points(parameters, values.get("points"), "polygon_prism.points")
         height = _number(parameters, values.get("height"), "polygon_prism.height")
