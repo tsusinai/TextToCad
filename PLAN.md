@@ -278,3 +278,11 @@ P7 下一步：将多实体输出接入预览场景与选择器语义，并在 O
 - .github/workflows/quality.yml 增加镜像构建和烟测 job；run 260 已通过，parser regression 与 kernel smoke 均为 success。
 
 验收结论：CadQuery/OCCT 的生产式 Docker 镜像已经具备可重复的最小内核回归门禁；后续新增 IR 操作或 DFM 算法应先扩展该 smoke 样例，再合并到主分支。
+
+
+## IR-first 交付状态（2026-10）
+
+- 默认生成策略已切换为 `ir`，前端标准与高级模式都走通用 IR。
+- 已注册 `regular_polygon` 原语并覆盖三角形到任意正多边形的参数化边界框。
+- LLM 仅输出数据 IR；确定性规划器只处理明确原语，未知自由形体不会回退到模型族模板。
+- 生成结果保留 IR、约束报告、修复尝试、执行 trace 和导出工件，便于审计与增量演进。
