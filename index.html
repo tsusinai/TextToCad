@@ -3114,7 +3114,13 @@
       const nominalOnly = !data.face_samples && !data.measured_wall_map;
       issueBadge.classList.toggle('warn', issues.length > 0 || nominalOnly);
       issueBadge.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项问题' : 'issues') : (nominalOnly ? copy[currentLang].unknown : (currentLang === 'zh' ? '已验证' : 'VERIFIED'));
-      analysisSummary.textContent = issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : (nominalOnly ? copy[currentLang].estimateSummary : copy[currentLang].noIssues);
+      const outputCount = Array.isArray(data.output_nodes)
+        ? data.output_nodes.length
+        : (Array.isArray(data.output_metrics) ? data.output_metrics.length : 0);
+      const outputNote = outputCount > 1
+        ? (currentLang === 'zh' ? ' · ' + outputCount + ' 个输出实体' : ' · ' + outputCount + ' output entities')
+        : '';
+      analysisSummary.textContent = (issues.length ? issues.length + ' ' + (currentLang === 'zh' ? '项制造问题' : 'manufacturing issues') : (nominalOnly ? copy[currentLang].estimateSummary : copy[currentLang].noIssues)) + outputNote;
       if (!issues.length) {
         const empty = document.createElement('div');
         empty.className = 'issue-empty';
@@ -3133,7 +3139,8 @@
       if (!spec) return;
       const profile = (backendArtifact && backendArtifact.profile) || processProfiles[selectedProcess];
       const analysis = backendArtifact && backendArtifact.analysis;
-      const measured = Boolean(analysis && (analysis.face_samples || analysis.measured_wall_map));
+      const faceMeasurementForChecks = analysis && analysis.face_measurements;
+      const measured = Boolean(analysis && (analysis.face_samples || analysis.measured_wall_map || (faceMeasurementForChecks && faceMeasurementForChecks.face_count)));
       const checks = remoteChecks ? {
         wall: remoteChecks.wall_thickness,
         radius: remoteChecks.edge_treatment,
@@ -3153,12 +3160,17 @@
       solved.classList.toggle('warn', passed !== 4);
       const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
       const faceMeasurement = analysis && analysis.face_measurements;
+      const outputNodes = analysis && Array.isArray(analysis.output_nodes) ? analysis.output_nodes : [];
+      const outputCount = outputNodes.length || (analysis && Array.isArray(analysis.output_metrics) ? analysis.output_metrics.length : 0);
       const selectorMatches = analysis && Array.isArray(analysis.selector_matches) ? analysis.selector_matches : [];
       const selectorCount = selectorMatches.reduce((total, item) => total + Number((item.matches && item.matches.matched_count) || 0), 0);
+      const outputSummary = outputCount > 1
+        ? (currentLang === 'zh' ? ' · 输出实体 ' + outputCount : ' · ' + outputCount + ' output entities')
+        : '';
       const faceSummary = faceMeasurement && faceMeasurement.face_count
         ? (currentLang === 'zh'
-          ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚 ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · 拔模 ' + (faceMeasurement.draft_status || '未知') + ' · 间隙 ' + (faceMeasurement.clearance_status || '未知') + (selectorCount ? ' · selector 命中 ' + selectorCount : '')
-          : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · draft ' + (faceMeasurement.draft_status || 'unknown') + ' · clearance ' + (faceMeasurement.clearance_status || 'unknown') + (selectorCount ? ' · selector matches ' + selectorCount : ''))
+          ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚 ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · 拔模 ' + (faceMeasurement.draft_status || '未知') + ' · 间隙 ' + (faceMeasurement.clearance_status || '未知') + (selectorCount ? ' · selector 命中 ' + selectorCount : '') + outputSummary
+          : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · draft ' + (faceMeasurement.draft_status || 'unknown') + ' · clearance ' + (faceMeasurement.clearance_status || 'unknown') + (selectorCount ? ' · selector matches ' + selectorCount : '') + outputSummary)
         : null;
       if (modelWrap) modelWrap.classList.toggle('selector-matched', selectorCount > 0);
       if (modelStage) modelStage.classList.toggle('selector-matched', selectorCount > 0);
