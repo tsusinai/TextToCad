@@ -2694,13 +2694,32 @@
       const y = 180;
       return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated airplane front view"><path d="M 260 ' + (y - h/2) + ' Q ' + (x + l*.55) + ' ' + (y - h*.2) + ' ' + (x + l) + ' ' + y + ' Q ' + (x + l*.55) + ' ' + (y + h*.2) + ' 260 ' + (y + h/2) + ' Q ' + (x + l*.45) + ' ' + (y + h*.2) + ' ' + x + ' ' + y + ' Q ' + (x + l*.45) + ' ' + (y - h*.2) + ' 260 ' + (y - h/2) + ' Z" fill="#9fca82" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">FRONT / AIRPLANE / ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
     }
+    function polygonPointsFor(spec) {
+      const fallbackSides = polygonSideCount(spec && spec.title) || 3;
+      const raw = Array.isArray(spec && spec.profile_points) && spec.profile_points.length >= 3
+        ? spec.profile_points
+        : regularPolygonProfilePoints(fallbackSides, Number(spec.width) || 120, Number(spec.depth) || 80);
+      return raw.map((point) => [Number(point[0]) || 0, Number(point[1]) || 0]);
+    }
+    function fitPolygonProfile(points, width, depth) {
+      const xs = points.map((point) => point[0]);
+      const ys = points.map((point) => point[1]);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const rangeX = Math.max(maxX - minX, 1e-6);
+      const rangeY = Math.max(maxY - minY, 1e-6);
+      return points.map(([x, y]) => [(x - minX) * width / rangeX, (y - minY) * depth / rangeY]);
+    }
+    function polygonLabel(spec) {
+      return 'POLYGON ' + polygonPointsFor(spec).length + '-GON';
+    }
     function renderPolygonTop(spec) {
       const w = clamp(spec.width / 60, .8, 1.8) * 230;
-      const d = clamp(spec.depth / 40, .8, 1.8) * 170;
+      const d = clamp(spec.depth / 60, .8, 1.8) * 230;
       const x = (520 - w) / 2;
       const y = (350 - d) / 2;
-      const points = [[260, y], [x + w, y + d], [x, y + d]];
-      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism top view CAD model"><polygon points="' + pointList(points) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / TRIANGLE / ' + spec.width + ' × ' + spec.depth + ' mm</text></svg>';
+      const points = fitPolygonProfile(polygonPointsFor(spec), w, d).map(([px, py]) => [x + px, y + py]);
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism top view CAD model"><polygon points="' + pointList(points) + '" fill="#ddf79b" stroke="#243323" stroke-width="4"/><text x="260" y="380" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">TOP / ' + polygonLabel(spec) + ' / ' + spec.width + ' × ' + spec.depth + ' mm</text></svg>';
     }
     function renderPolygonFront(spec) {
       const w = clamp(spec.width / 60, .8, 1.8) * 280;
@@ -2711,13 +2730,19 @@
     }
     function renderPolygonIso(spec) {
       const w = clamp(spec.width / 60, .8, 1.8) * 230;
-      const d = clamp(spec.depth / 40, .8, 1.8) * 170;
+      const d = clamp(spec.depth / 60, .8, 1.8) * 230;
       const h = clamp(spec.height / 30, .7, 1.8) * 145;
+      const profile = fitPolygonProfile(polygonPointsFor(spec), w, d);
       const project = (x, y, z) => [205 + (x - y) * .72, 215 + (x + y) * .34 - z];
-      const base = [[0, 0, 0], [w, 0, 0], [w / 2, d, 0]];
+      const base = profile.map(([x, y]) => [x, y, 0]);
       const top = base.map(([x, y]) => [x, y, h]);
       const face = (vertices, fill) => '<polygon points="' + pointList(vertices.map(([x, y, z]) => project(x, y, z))) + '" fill="' + fill + '"/>';
-      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism isometric CAD model"><ellipse cx="205" cy="365" rx="150" ry="20" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="3" stroke-linejoin="round">' + face(top, '#ddf79b') + face([base[0], base[2], top[2], top[0]], '#9fca82') + face([base[1], base[0], top[0], top[1]], '#6e9e68') + face([base[2], base[1], top[1], top[2]], '#7fae6f') + '</g><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">ISOMETRIC / TRIANGLE / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
+      const colors = ['#9fca82', '#7fae6f', '#6e9e68', '#86b777'];
+      const sides = base.map((point, index) => {
+        const next = (index + 1) % base.length;
+        return face([point, base[next], top[next], top[index]], colors[index % colors.length]);
+      }).join('');
+      return '<svg class="model-svg" viewBox="0 0 520 410" role="img" aria-label="Generated polygon prism isometric CAD model"><ellipse cx="205" cy="365" rx="150" ry="20" fill="#0d0f0d" opacity=".42"/><g stroke="#243323" stroke-width="3" stroke-linejoin="round">' + face(top, '#ddf79b') + sides + '</g><text x="260" y="390" text-anchor="middle" fill="#9aa893" font-size="12" font-family="Inter, sans-serif">ISOMETRIC / ' + polygonLabel(spec) + ' / ' + spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm</text></svg>';
     }
     function renderModel(spec, view) {
       if (!spec) return;
