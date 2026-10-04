@@ -131,5 +131,5 @@ Astra 建模质量专项建议已落实第一批 P0/P1：
 - 质量门新增面面积、中心点、法向、下向面、悬空初筛以及前端采样摘要；壁厚优先使用 B-Rep 面间距离并记录面索引/方法，内核不支持时回退相对面中心代理。
 - 注塑工艺按可配置拉模方向（默认 +Z）逐面计算拔模偏差；POST /v1/models、/v1/jobs、/v1/ir/compile 和前端注塑控件共用同一向量契约。
 - `/v1/ir/compile` 支持可选 mating `reference_ir` 与 `clearance_target_mm`，通过 B-Rep shape distance 返回两个实体的间隙和测量方法；缺少参考实体或内核 API 时保持 unknown。
-- GLB 预览优先输出 `occt_face_<index>` 节点和 `analysis.glb_face_mapping`，Three.js 可以按 selector 命中索引进行真实面级高亮；不可用时保留整体提示并明确降级。
+- GLB 预览优先输出最终 OCCT 面对应的 `occt_face_<index>` 节点和 `analysis.glb_face_mapping`；selector 只有在输入拓扑身份仍存在于最终输出时才进行真实面级高亮，不满足时保留整体提示并明确降级。
 - P6 验收目标已完成；下一阶段聚焦 OCCT 射线厚度、干涉检查和多实体语义映射。
