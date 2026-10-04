@@ -645,6 +645,11 @@ def test_clearance_classification_distinguishes_interference_contact_and_gap():
     assert clear["status"] == "pass"
     assert clear["state"] == "clear"
 
+    touching = app._classify_clearance(0.0, 0.3, 0.1, intersection_volume_mm3=0.0)
+    assert touching["status"] == "contact"
+    overlapping = app._classify_clearance(0.0, 0.3, 0.1, intersection_volume_mm3=12.0)
+    assert overlapping["status"] == "interference"
+
 
 def test_ir_validation_accepts_multiple_semantic_outputs():
     ir = {
