@@ -288,3 +288,5 @@ LLM patch 只允许这些操作：`set_parameter`、`replace_node_parameter`、`
 - 面级壁厚分析现在显式返回 wall_thickness_analysis：记录 B-Rep 面距离或相对面中心代理、置信度和 normal_ray_sampling=not_available。这避免把代理测量误报为完整法向射线厚度。
 
 - 当距离落在内核零容差内，编译接口会尝试计算 B-Rep 布尔交集体积：可证明公共体积时标为 interference；零公共体积则标为 contact；内核不支持交集时保持保守的 interference 解释并记录方法。
+
+- P8.2 增加可选 OCCT 法向射线采样；运行时若 OCP 射线接口可用，face sample 会带 normal_ray_thickness_mm，wall_thickness_analysis.status=ray_sampled，并在 /health 暴露 occt_normal_ray_available。不可用时仍安全回退到代理。
