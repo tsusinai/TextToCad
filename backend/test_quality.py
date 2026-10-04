@@ -415,6 +415,12 @@ def test_cache_key_separates_generation_strategies():
     assert app._cache_key(legacy) != app._cache_key(ir)
 
 
+def test_cache_key_separates_mold_pull_direction():
+    plus_z = app.GenerateRequest(prompt="a mold insert", process="injection", mold_pull_direction=[0, 0, 1])
+    plus_x = app.GenerateRequest(prompt="a mold insert", process="injection", mold_pull_direction=[1, 0, 0])
+    assert app._cache_key(plus_z) != app._cache_key(plus_x)
+
+
 def test_ir_validator_accepts_path_and_pattern_features():
     ir = {
         "schema_version": "0.2",
