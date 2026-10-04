@@ -52,6 +52,12 @@ def main() -> None:
                 },
             },
             {
+                "id": "regular_heptagon",
+                "kind": "primitive",
+                "operation": "regular_polygon",
+                "parameters": {"sides": 7, "width": 60, "depth": 40, "height": 12},
+            },
+            {
                 "id": "octagon",
                 "kind": "primitive",
                 "operation": "polygon_prism",
@@ -72,15 +78,19 @@ def main() -> None:
             {"id": "cavity_output", "node": "cavity", "format": ["step"]},
             {"id": "triangle_output", "node": "triangle", "format": ["step"]},
             {"id": "octagon_output", "node": "octagon", "format": ["step"]},
+            {"id": "heptagon_output", "node": "regular_heptagon", "format": ["step"]},
         ],
     }
     execution = execute_ir(app.validate_ir(ir))
-    assert execution["output_nodes"] == ["base", "cavity", "triangle", "octagon"]
+    assert execution["output_nodes"] == ["base", "cavity", "regular_heptagon", "triangle", "octagon"]
     triangle_metrics = app.shape_metrics(execution["output_shapes"]["triangle"])
     assert triangle_metrics["valid_brep"] is True
     assert triangle_metrics["bbox_mm"]["x"] == 60.0
     assert triangle_metrics["bbox_mm"]["y"] == 40.0
     assert triangle_metrics["bbox_mm"]["z"] == 30.0
+    heptagon_metrics = app.shape_metrics(execution["output_shapes"]["regular_heptagon"])
+    assert heptagon_metrics["valid_brep"] is True
+    assert heptagon_metrics["bbox_mm"] == {"x": 60.0, "y": 40.0, "z": 12.0}
     octagon_metrics = app.shape_metrics(execution["output_shapes"]["octagon"])
     assert octagon_metrics["valid_brep"] is True
     assert octagon_metrics["bbox_mm"]["x"] == 110.864
@@ -88,7 +98,7 @@ def main() -> None:
     assert octagon_metrics["bbox_mm"]["z"] == 42.0
     quality = app._output_quality(execution["output_shapes"])
     assert quality["valid"] is True
-    assert quality["entity_count"] == 4
+    assert quality["entity_count"] == 5
 
     print("kernel smoke passed", {
         "face_count": dfm["face_count"],
