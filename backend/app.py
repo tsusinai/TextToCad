@@ -536,7 +536,7 @@ def parse_prompt_detailed(
     if footprint is not None:
         width = width or footprint
         depth = depth or footprint
-    pair_found = len(dimension_pair) == 2 and kind == "angle"
+    pair_found = len(dimension_pair) == 2 and kind in {"angle", "polygon_prism"}
     if triplet_found and width is None and depth is None and height is None:
         width, depth, height = dimension_triplet
     elif pair_found and width is None and depth is None:
@@ -553,6 +553,10 @@ def parse_prompt_detailed(
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
     depth_found = depth is not None or square_base or triplet_found or pair_found
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else (140.0 if kind == "airplane" else width * 0.67)))
+    polygon_extrusion = _number_after(text, [
+        r"(?:thickness|厚度|挤出长度|挤出厚度)s*(?:is|为|是|[:=])?s*(d+(?:.d+)?)",
+        r"(d+(?:.d+)?)s*(?:mm)?s*(?:thickness|厚度|挤出长度|挤出厚度)",
+    ]) if kind == "polygon_prism" else None
     default_height = (
         40.0 if kind == "angle"
         else 80.0 if kind == "rounded_cube"
@@ -567,8 +571,8 @@ def parse_prompt_detailed(
         else 24.0
     )
     generic_height = generic_numbers[2] if len(generic_numbers) >= 3 else None
-    height_found = height is not None or triplet_found or generic_height is not None
-    height = height or (generic_height if generic_height is not None else default_height)
+    height_found = height is not None or triplet_found or generic_height is not None or polygon_extrusion is not None
+    height = height or polygon_extrusion or (generic_height if generic_height is not None else default_height)
     if cube_shape and not triplet_found and not diameter_found and not any((width_found, depth_found, height_found)):
         edge = cube_edge or (generic_numbers[0] if generic_numbers else 80.0)
         width = depth = height = edge
@@ -589,6 +593,8 @@ def parse_prompt_detailed(
 
     wall_value = _number_after(text, [
         r"(?:wall|壁厚|板厚|厚度|plate\s*thickness|thickness)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+    ]) if kind != "polygon_prism" else _number_after(text, [
+        r"(?:wall|壁厚|板厚)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
     ])
     wall_found = wall_value is not None
     wall = wall_value if wall_value is not None else (3.0 if kind in ("tray", "organizer", "angle") else (1.6 if kind == "airplane" else 2.0))
