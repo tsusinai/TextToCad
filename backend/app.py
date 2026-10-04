@@ -1702,6 +1702,8 @@ def _face_level_dfm(
         draft_status = "not_applicable"
         draft_reason = "draft is only required for injection molding"
 
+    wall_method = (wall_candidate or {}).get("method")
+    wall_analysis_status = "measured" if wall_candidate is not None else "unavailable"
     return {
         "status": "partial",
         "face_count": len(faces),
@@ -1714,6 +1716,13 @@ def _face_level_dfm(
         "wall_thickness_proxy_mm": round(wall_proxy, 6) if wall_proxy is not None else None,
         "wall_thickness_proxy_status": wall_proxy_status,
         "wall_thickness_measurement": wall_candidate,
+        "wall_thickness_analysis": {
+            "status": wall_analysis_status,
+            "method": wall_method or "opposing_face_center_proxy",
+            "normal_ray_sampling": "not_available",
+            "confidence": "medium" if wall_method == "brep_face_distance" else "low",
+            "reason": "OCCT face distance is used when available; a normal ray solver is not enabled in this runtime",
+        },
         "overhang_status": "warning" if overhang_faces else "pass",
         "draft_status": draft_status,
         "draft_reason": draft_reason,
@@ -1726,6 +1735,7 @@ def _face_level_dfm(
         "samples": samples[:64],
         "limitations": [
             "wall thickness uses B-Rep face distance when available and otherwise opposing-face center distance",
+            "normal ray thickness sampling is not enabled; treat this result as a conservative proxy",
             "clearance is unknown without a mating part or explicit clearance faces",
             "overhang uses face-normal screening, not support simulation",
             "draft uses the configured pull direction but does not solve mold split or undercuts",
@@ -2283,7 +2293,9 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
     required_clearance = float(request.clearance_target_mm or profile["clearance"])
     clearance: dict[str, Any] = {
         "status": "unknown",
+        "state": "unknown",
         "required_mm": round(required_clearance, 6),
+        "contact_tolerance_mm": round(float(profile.get("tolerance", 0.1)), 6),
         "reason": "reference_ir is required to prove mating clearance",
     }
     reference_metrics: dict[str, Any] | None = None
@@ -2328,7 +2340,9 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         if distance_mm is None:
             clearance = {
                 "status": "unknown",
+                "state": "unknown",
                 "required_mm": round(required_clearance, 6),
+                "contact_tolerance_mm": round(float(profile.get("tolerance", 0.1)), 6),
                 "reason": "kernel did not expose a shape distance method",
             }
         else:
