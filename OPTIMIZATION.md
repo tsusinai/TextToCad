@@ -153,3 +153,8 @@ P7 后续聚焦：多实体预览语义、OCCT 射线/法向厚度，以及更�
 - 后续需在完整 CAD 镜像中补充薄壁、壳体、凹腔和相切面的回归样本。
 
 - 多输出不再只返回 metrics；每个实体都经过 B-Rep/体积/面数/单实体校验，编译失败时返回 output_quality.entities，便于定位具体坏实体。
+
+## P8 多实体预览产物（2026-10-04）
+
+- 生成多个 Semantic CAD IR outputs 时，现在输出可选的 model_entities.glb，按 output 节点和 OCCT 面拆分 GLB 节点。
+- 通过 glb_output_mapping 和 glb_entities 下载入口，前端可以在后续迭代中实现实体级显示、隐藏和选择。
