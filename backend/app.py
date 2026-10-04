@@ -2490,6 +2490,8 @@ def health() -> dict[str, Any]:
         "cadquery_error": CADQUERY_ERROR or None,
         "trimesh_available": trimesh is not None,
         "trimesh_error": TRIMESH_ERROR or None,
+        "occt_normal_ray_available": OCCT_RAY_AVAILABLE,
+        "occt_normal_ray_error": OCCT_RAY_ERROR or None,
         "advanced_mode_available": bool(LLM_API_KEY),
         "llm_provider": urllib.parse.urlparse(LLM_API_URL).netloc or None,
         "llm_model": LLM_MODEL,
