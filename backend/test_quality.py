@@ -625,3 +625,40 @@ def test_selector_mapping_requires_final_topology_identity():
     ir_executor._finalize_selector_metadata(missing, Shape([Entity(10)]))
     assert missing["mapping_status"] == "unmapped"
     assert missing["output_indices"] == []
+
+
+
+def test_clearance_classification_distinguishes_interference_contact_and_gap():
+    interference = app._classify_clearance(0.0, 0.3, 0.1)
+    assert interference["status"] == "interference"
+    assert interference["interference"] is True
+
+    contact = app._classify_clearance(0.05, 0.3, 0.1)
+    assert contact["status"] == "contact"
+    assert contact["state"] == "contact"
+
+    insufficient = app._classify_clearance(0.2, 0.3, 0.1)
+    assert insufficient["status"] == "warning"
+    assert insufficient["state"] == "insufficient_clearance"
+
+    clear = app._classify_clearance(0.4, 0.3, 0.1)
+    assert clear["status"] == "pass"
+    assert clear["state"] == "clear"
+
+
+def test_ir_validation_accepts_multiple_semantic_outputs():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "left", "kind": "primitive", "operation": "box",
+             "parameters": {"size": [10, 10, 10]}},
+            {"id": "right", "kind": "primitive", "operation": "box",
+             "parameters": {"size": [8, 8, 8]}},
+        ],
+        "outputs": [
+            {"id": "left_output", "node": "left", "format": ["step"]},
+            {"id": "right_output", "node": "right", "format": ["step"]},
+        ],
+    }
+    normalized = app.validate_ir(ir)
+    assert [item["node"] for item in normalized["outputs"]] == ["left", "right"]
