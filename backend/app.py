@@ -773,6 +773,9 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "Do not return Python, CadQuery, code, markdown, or explanations. "
         "Do not use a model-family field. Express the design with registered primitives, features, datums, "
         "constraints, and explicit node dependencies. Keep all numeric dimensions in millimetres. "
+        "Only add a fillet, chamfer, shell, hole, or other feature when the user explicitly requests it. "
+        "For a plain, regular, sharp, or unrounded cube/block, emit a box primitive with no edge treatment. "
+        "Do not infer rounded edges from generic words such as model, part, body, or solid. "
         f"Selected process: {process}. Requested input units: {units}. "
         f"Allowed IR shape: {json.dumps(schema)}"
     )
