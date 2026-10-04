@@ -81,3 +81,15 @@ The backend now attempts an optional OCCT normal-ray thickness sample from each 
 All declared semantic outputs are now checked individually for valid B-Rep, positive volume, non-zero faces, and single-solid topology. The compiler rejects the request with per-entity output_quality details if any output fails.
 
 When an IR declares multiple outputs and the mesh stack is available, generation also emits model_entities.glb (download format glb_entities). Its nodes are named output_<node>_occt_face_<index>, with analysis.glb_output_mapping preserving the semantic entity mapping.
+
+
+## CadQuery/OCCT 镜像回归
+
+Dockerfile 使用 CadQuery 2.4.0，并安装 VTK/OCCT 在 slim Linux 中所需的无桌面运行库。它会复制 backend 下全部 Python 模块，而不是只复制入口文件。构建后可运行：
+
+~~~bash
+docker build -t texttocad-backend ./backend
+docker run --rm texttocad-backend python kernel_smoke.py
+~~~
+
+kernel_smoke.py 会实际构造薄壁凹腔，执行面级 DFM/法向射线能力检查，并验证两个独立 Semantic CAD IR 输出都通过 B-Rep 质量门。相同检查由 GitHub Actions 的 kernel-smoke job 自动执行。
