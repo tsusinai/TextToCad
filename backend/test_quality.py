@@ -493,4 +493,6 @@ def test_face_level_dfm_records_normals_and_areas():
     assert report["face_count"] == 2
     assert report["min_face_area_mm2"] == 100.0
     assert report["downward_face_count"] == 1
+    assert report["wall_thickness_proxy_mm"] == 10.0
+    assert report["wall_thickness_proxy_status"] == "pass"
     assert report["overhang_status"] == "warning"
