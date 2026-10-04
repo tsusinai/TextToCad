@@ -1445,7 +1445,7 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
 
 
 def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
-    """Collect conservative face-level samples without claiming full DFM coverage."""
+    """Collect conservative face-level DFM measurements with explicit confidence."""
     profile = PROCESS_PROFILES[process]
     try:
         faces = list(shape.val().Faces())
@@ -1455,12 +1455,38 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
             "reason": str(exc)[:180],
             "limitations": ["face enumeration unavailable"],
         }
+
+    def _unit(vector: tuple[float, float, float]) -> tuple[float, float, float] | None:
+        length = math.sqrt(sum(component * component for component in vector))
+        if length <= 1e-9:
+            return None
+        return tuple(component / length for component in vector)
+
+    def _face_distance(first: Any, second: Any) -> tuple[float | None, str | None]:
+        """Prefer OCCT/CadQuery face distance, then leave the caller to use a proxy."""
+        for method_name in ("distToShape", "distance"):
+            method = getattr(first, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                result = method(second)
+                if isinstance(result, (tuple, list)):
+                    result = result[0] if result else None
+                if hasattr(result, "Value") and callable(result.Value):
+                    result = result.Value()
+                value = float(result)
+                if math.isfinite(value) and value > 1e-6:
+                    return value, "brep_face_distance"
+            except Exception:
+                continue
+        return None, None
+
     areas: list[float] = []
     downward_faces = 0
     overhang_faces = 0
     side_faces = 0
     samples: list[dict[str, Any]] = []
-    face_records: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
+    face_records: list[dict[str, Any]] = []
     threshold = math.cos(math.radians(float(profile["max_overhang"])))
     for index, face in enumerate(faces):
         try:
@@ -1469,64 +1495,101 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
             continue
         areas.append(area)
         normal = None
-        try:
-            vector = face.normalAt()
-            normal = (float(vector.x), float(vector.y), float(vector.z))
-        except Exception:
-            pass
+        for normal_args in ((), (0.5, 0.5)):
+            try:
+                vector = face.normalAt(*normal_args)
+                normal = (float(vector.x), float(vector.y), float(vector.z))
+                break
+            except Exception:
+                continue
         center = None
         try:
             point = face.Center()
-            center = [round(float(point.x), 4), round(float(point.y), 4), round(float(point.z), 4)]
+            center = (float(point.x), float(point.y), float(point.z))
         except Exception:
             pass
         sample: dict[str, Any] = {
             "index": index,
             "area_mm2": round(area, 6),
-            "center_mm": center,
+            "center_mm": [round(value, 4) for value in center] if center is not None else None,
         }
-        if normal is not None:
-            normal_z = max(-1.0, min(1.0, normal[2]))
-            sample["normal"] = [round(component, 5) for component in normal]
+        unit_normal = _unit(normal) if normal is not None else None
+        if unit_normal is not None:
+            normal_z = max(-1.0, min(1.0, unit_normal[2]))
+            sample["normal"] = [round(component, 5) for component in unit_normal]
             if normal_z < -0.05:
                 downward_faces += 1
             if normal_z < -threshold:
                 overhang_faces += 1
             if abs(normal_z) < 0.15:
                 side_faces += 1
-        if normal is not None and center is not None:
-            face_records.append((normal, tuple(center)))
+        face_records.append({
+            "index": index,
+            "face": face,
+            "normal": unit_normal,
+            "center": center,
+        })
         samples.append(sample)
-    wall_candidates: list[float] = []
-    for index, (normal_a, center_a) in enumerate(face_records):
-        normal_length = math.sqrt(sum(component * component for component in normal_a))
-        if normal_length <= 1e-9:
+
+    wall_candidates: list[dict[str, Any]] = []
+    draft_measurements: list[dict[str, Any]] = []
+    pull = (0.0, 0.0, 1.0)
+    required_draft = float(profile["draft_angle"])
+    for position, record_a in enumerate(face_records):
+        normal_a = record_a["normal"]
+        center_a = record_a["center"]
+        if normal_a is not None and process == "injection":
+            pull_dot = max(-1.0, min(1.0, abs(sum(normal_a[axis] * pull[axis] for axis in range(3)))))
+            angle_to_pull = math.degrees(math.acos(pull_dot))
+            # Faces parallel to the pull direction are end faces, not draft-bearing walls.
+            if angle_to_pull > 5.0 and angle_to_pull < 175.0:
+                draft_deviation = abs(90.0 - angle_to_pull)
+                draft_measurements.append({
+                    "face_index": record_a["index"],
+                    "draft_angle_deg": round(draft_deviation, 4),
+                    "required_deg": round(required_draft, 4),
+                    "status": "pass" if draft_deviation + 1e-6 >= required_draft else "warning",
+                })
+        if normal_a is None or center_a is None:
             continue
-        unit_a = tuple(component / normal_length for component in normal_a)
-        for normal_b, center_b in face_records[index + 1:]:
-            length_b = math.sqrt(sum(component * component for component in normal_b))
-            if length_b <= 1e-9:
+        for record_b in face_records[position + 1:]:
+            normal_b = record_b["normal"]
+            center_b = record_b["center"]
+            if normal_b is None or center_b is None:
                 continue
-            unit_b = tuple(component / length_b for component in normal_b)
-            opposite = sum(unit_a[axis] * unit_b[axis] for axis in range(3)) <= -0.98
+            opposite = sum(normal_a[axis] * normal_b[axis] for axis in range(3)) <= -0.98
             if not opposite:
                 continue
             delta = tuple(center_b[axis] - center_a[axis] for axis in range(3))
-            distance = abs(sum(delta[axis] * unit_a[axis] for axis in range(3)))
+            center_distance = abs(sum(delta[axis] * normal_a[axis] for axis in range(3)))
+            measured_distance, method = _face_distance(record_a["face"], record_b["face"])
+            distance = measured_distance or center_distance
             if distance > 1e-3 and math.isfinite(distance):
-                wall_candidates.append(distance)
-    wall_proxy = min(wall_candidates) if wall_candidates else None
+                wall_candidates.append({
+                    "distance_mm": distance,
+                    "face_a": record_a["index"],
+                    "face_b": record_b["index"],
+                    "method": method or "opposing_face_center_proxy",
+                })
+
+    wall_candidate = min(wall_candidates, key=lambda item: item["distance_mm"]) if wall_candidates else None
+    wall_proxy = wall_candidate["distance_mm"] if wall_candidate else None
     wall_proxy_status = (
         "pass" if wall_proxy is not None and wall_proxy >= float(profile["min_wall"])
         else "warning" if wall_proxy is not None
         else "unknown"
     )
     if process == "injection":
-        draft_status = "review"
-        draft_reason = "face normals are sampled, but datum and draft angle are not solved"
+        if not draft_measurements:
+            draft_status = "unknown"
+            draft_reason = "no draft-bearing side faces could be measured"
+        else:
+            draft_status = "warning" if any(item["status"] == "warning" for item in draft_measurements) else "pass"
+            draft_reason = "side-face normals compared with +Z pull direction"
     else:
         draft_status = "not_applicable"
         draft_reason = "draft is only required for injection molding"
+
     return {
         "status": "partial",
         "face_count": len(faces),
@@ -1538,14 +1601,21 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
         "side_face_count": side_faces,
         "wall_thickness_proxy_mm": round(wall_proxy, 6) if wall_proxy is not None else None,
         "wall_thickness_proxy_status": wall_proxy_status,
+        "wall_thickness_measurement": wall_candidate,
         "overhang_status": "warning" if overhang_faces else "pass",
         "draft_status": draft_status,
         "draft_reason": draft_reason,
+        "draft_pull_direction": list(pull),
+        "draft_measurements": draft_measurements[:64],
+        "clearance_status": "unknown",
+        "clearance_nominal_mm": round(float(profile["clearance"]), 6),
+        "clearance_reason": "assembly reference geometry is required; a single solid cannot prove mating clearance",
         "samples": samples[:64],
         "limitations": [
-            "wall thickness uses opposing-face center distance as a proxy, not ray casting",
-            "clearance remains nominal",
+            "wall thickness uses B-Rep face distance when available and otherwise opposing-face center distance",
+            "clearance is unknown without a mating part or explicit clearance faces",
             "overhang uses face-normal screening, not support simulation",
+            "draft assumes a +Z pull direction and does not solve mold split or undercuts",
         ],
     }
 
