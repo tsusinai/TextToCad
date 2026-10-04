@@ -2863,7 +2863,9 @@ def health() -> dict[str, Any]:
         "process_profiles": list(PROCESS_PROFILES),
         "ir_schema_version": "0.2",
         "ir_compile_available": cq is not None,
-        "ir_generation_available": cq is not None and bool(LLM_API_KEY),
+        "ir_generation_available": cq is not None,
+        "ir_llm_planner_available": bool(LLM_API_KEY),
+        "ir_deterministic_primitive_planner": cq is not None,
     }
 
 
