@@ -195,3 +195,19 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 增加 `POST /v1/ir/plan`：高级模式下让 LLM 直接生成 v0.2 IR 草案；服务端执行大小限制、JSON 校验、IR 校验和约束检查。
 - 现有 `POST /v1/generate` 仍走兼容路径，通用 IR 先通过 plan/validate/compile 独立验证，待指标对齐后切换主生成策略。
 
+
+
+## P4 实现进度（2026-10-04）
+
+已将通用 IR 接入主生成链路：
+
+- GenerateRequest.generation_strategy 支持 legacy、ir、auto，并纳入缓存键，避免不同执行策略复用错误结果。
+- legacy 保持原有解析器和确定性构建器；ir 使用 LLM 生成并校验 Semantic CAD IR v0.2，执行约束求解、CadQuery/OCCT 编译、B-Rep 质量门和导出。
+- auto（高级模式默认）先走通用 IR；LLM 未配置、IR 无效、约束失败或内核执行失败时回退 legacy，并将回退原因写入 provenance、assumptions 与 generation trace。
+- 异步 jobs、步骤快照、manifest、STEP/STL/GLB/3MF 导出共用同一策略字段，前端高级模式已发送 generation_strategy=auto。
+- 增加策略默认值与缓存隔离回归测试；CadQuery 不可用时 IR 编译仍返回明确的 503，而标准模式不受影响。
+
+下一步：
+
+- 在 Docker 中接入真实 DeepSeek Flash/兼容 API，采集 IR 成功率、回退率、内核耗时和 B-Rep 失败原因。
+- 用真实模型样本扩充 primitive/feature/constraint 覆盖，并将约束修复循环接入 auto 的有限重试。
