@@ -88,7 +88,7 @@ v0.2 保留 `ModelParameters` 作为兼容响应，但将 `design_ir` 变成新�
 第一批原语保持小而稳定：
 
 - `box`、`cylinder`、`sphere`、`cone`、`torus`
-- `polygon_prism`、`profile`
+- `polygon_prism`、`regular_polygon`、`profile`
 - `sketch`（line、arc、circle、rectangle、polygon）
 - `component`（装配阶段使用）
 
