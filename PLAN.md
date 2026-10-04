@@ -218,8 +218,9 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 自动 IR 路径在 CadQuery/OCCT 执行前接入已有约束修复器，最多尝试两轮受限参数 patch；每轮都重新验证 IR 与工艺约束。
 - 修复事件进入 generation trace，patch、最终约束报告进入 checks、provenance 和 manifest；修复失败仍会由 auto 策略回退 legacy。
 - 通用 IR 的节点 ID 会转换为安全的步骤预览 ID，避免自然语言生成的短横线、数字或特殊字符破坏步骤 GLB 路径。
+- 执行器已扩充 sweep、loft、linear_pattern、polar_pattern，并由 IR schema 提示词公开这些操作。
 
 下一步：
 
 - 将 IR 编译错误按节点和操作分类，形成可观测指标并用于提示词反馈。
-- 扩充 sweep、loft、pattern、面级选择器的 CadQuery 执行覆盖，并建立真实 LLM 语料回归集。
+- 完善面级选择器与 DFM 测量，并建立真实 LLM 语料回归集。
