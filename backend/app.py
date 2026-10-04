@@ -2170,9 +2170,7 @@ def _generate_model(
     request: GenerateRequest,
     report: Callable[[dict[str, Any]], None] | None = None,
 ) -> GenerateResponse:
-    if request.generation_strategy in {"ir", "auto"} and (
-        request.generation_strategy == "ir" or request.mode == "advanced"
-    ):
+    if request.generation_strategy in {"ir", "auto"}:
         try:
             return _generate_ir_model(request, report)
         except Exception as exc:
