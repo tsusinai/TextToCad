@@ -396,3 +396,20 @@ def test_ir_repair_returns_and_applies_explicit_patch():
     repaired = app.apply_patches(normalized, patches)
     assert repaired["parameters"]["wall"]["value"] == 1.2
     assert app.solve_constraints(repaired)["valid"] is True
+
+
+def test_generation_strategy_defaults_to_legacy_and_accepts_ir_modes():
+    default_request = app.GenerateRequest(prompt="a 20 mm block")
+    ir_request = app.GenerateRequest(
+        prompt="a 20 mm block",
+        mode="advanced",
+        generation_strategy="auto",
+    )
+    assert default_request.generation_strategy == "legacy"
+    assert ir_request.generation_strategy == "auto"
+
+
+def test_cache_key_separates_generation_strategies():
+    legacy = app.GenerateRequest(prompt="a 20 mm block", generation_strategy="legacy")
+    ir = app.GenerateRequest(prompt="a 20 mm block", generation_strategy="ir")
+    assert app._cache_key(legacy) != app._cache_key(ir)
