@@ -1448,9 +1448,27 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
     }
 
 
-def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
+def _face_level_dfm(
+    shape: Any,
+    process: str,
+    pull_direction: list[float] | tuple[float, float, float] | None = None,
+) -> dict[str, Any]:
     """Collect conservative face-level DFM measurements with explicit confidence."""
     profile = PROCESS_PROFILES[process]
+    pull_source = "default"
+    pull = (0.0, 0.0, 1.0)
+    if pull_direction is not None:
+        try:
+            if len(pull_direction) != 3:
+                raise ValueError("pull direction must contain three values")
+            raw_pull = tuple(float(value) for value in pull_direction)
+            raw_length = math.sqrt(sum(component * component for component in raw_pull))
+            if raw_length <= 1e-9 or not all(math.isfinite(component) for component in raw_pull):
+                raise ValueError("pull direction must be finite and non-zero")
+            pull = tuple(component / raw_length for component in raw_pull)
+            pull_source = "request"
+        except (TypeError, ValueError):
+            pull_source = "invalid_defaulted"
     try:
         faces = list(shape.val().Faces())
     except Exception as exc:
@@ -1537,7 +1555,6 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
 
     wall_candidates: list[dict[str, Any]] = []
     draft_measurements: list[dict[str, Any]] = []
-    pull = (0.0, 0.0, 1.0)
     required_draft = float(profile["draft_angle"])
     for position, record_a in enumerate(face_records):
         normal_a = record_a["normal"]
@@ -1589,7 +1606,10 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
             draft_reason = "no draft-bearing side faces could be measured"
         else:
             draft_status = "warning" if any(item["status"] == "warning" for item in draft_measurements) else "pass"
-            draft_reason = "side-face normals compared with +Z pull direction"
+            draft_reason = "side-face normals compared with configured mold pull direction"
+        if pull_source == "invalid_defaulted":
+            draft_status = "warning" if draft_status == "pass" else draft_status
+            draft_reason += "; invalid pull direction defaulted to +Z"
     else:
         draft_status = "not_applicable"
         draft_reason = "draft is only required for injection molding"
@@ -1610,6 +1630,7 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
         "draft_status": draft_status,
         "draft_reason": draft_reason,
         "draft_pull_direction": list(pull),
+        "draft_pull_direction_source": pull_source,
         "draft_measurements": draft_measurements[:64],
         "clearance_status": "unknown",
         "clearance_nominal_mm": round(float(profile["clearance"]), 6),
