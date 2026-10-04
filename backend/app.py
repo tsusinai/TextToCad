@@ -2757,6 +2757,57 @@ def _ir_error_code(error: Exception) -> str:
     return "ir_generation_error"
 
 
+def _polygon_points_are_planar(value: Any) -> bool:
+    if not isinstance(value, list) or len(value) < 3:
+        return False
+    for point in value:
+        if not isinstance(point, (list, tuple)) or len(point) not in {2, 3}:
+            return False
+        try:
+            coordinates = [float(component) for component in point]
+        except (TypeError, ValueError):
+            return False
+        if not all(math.isfinite(component) for component in coordinates):
+            return False
+        if len(coordinates) == 3 and abs(coordinates[2]) > 1e-6:
+            return False
+    return True
+
+
+def _enforce_explicit_polygon_profile(
+    normalized_ir: dict[str, Any],
+    prompt: str,
+    params: ModelParameters,
+    process: str,
+    mode: str,
+    provenance: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Keep an explicit polygon request faithful when an LLM emits a box or wrong profile."""
+    if params.kind != "polygon_prism":
+        return normalized_ir, False
+    expected_points = params.profile_points or _polygon_profile_points(3, params.width, params.depth)
+    polygon_nodes = [
+        node for node in normalized_ir.get("nodes", [])
+        if node.get("operation") == "polygon_prism"
+    ]
+    if polygon_nodes:
+        node = polygon_nodes[0]
+        values = node.setdefault("parameters", {})
+        current_points = values.get("points")
+        changed = (
+            not _polygon_points_are_planar(current_points)
+            or len(current_points) != len(expected_points)
+        )
+        if changed:
+            values["points"] = copy.deepcopy(expected_points)
+        values["height"] = params.height
+        return validate_ir(normalized_ir), changed
+    # If the provider ignored the explicit polygon request, use the deterministic
+    # generic IR profile instead of silently showing a triangle or box.
+    canonical = build_design_ir(prompt, params, mode, False, [], provenance)
+    return canonical, True
+
+
 def _generate_ir_model(
     request: GenerateRequest,
     report: Callable[[dict[str, Any]], None] | None = None,
@@ -2788,6 +2839,23 @@ def _generate_ir_model(
         recorder.emit("planning", "ir_plan", "running", schema_version="0.2")
         raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
         normalized_ir = validate_ir(raw_ir)
+        normalized_ir, polygon_profile_enforced = _enforce_explicit_polygon_profile(
+            normalized_ir,
+            request.prompt,
+            params,
+            request.process,
+            request.mode,
+            provenance,
+        )
+        if polygon_profile_enforced:
+            baseline_assumptions.append("Explicit polygon profile was enforced from the parsed geometric intent.")
+            recorder.emit(
+                "planning",
+                "polygon_profile_guard",
+                "succeeded",
+                sides=len(params.profile_points),
+                point_count=len(params.profile_points),
+            )
         plain_shape_requested = bool(re.search(
             r"(正方体|立方体|方块|block|cube|plain|sharp|unrounded|直角|锐边)",
             request.prompt,
