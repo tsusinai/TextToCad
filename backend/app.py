@@ -1451,6 +1451,37 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
     }
 
 
+def _shape_distance(first: Any, second: Any) -> tuple[float | None, str | None]:
+    """Measure the minimum distance between two B-Rep shapes when the kernel exposes it."""
+    candidates: list[Any] = [first, second]
+    for owner in candidates:
+        for method_name in ("distToShape", "distance"):
+            method = getattr(owner, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                other = second if owner is first else first
+                result = method(other)
+                if isinstance(result, (tuple, list)):
+                    result = result[0] if result else None
+                if hasattr(result, "Value") and callable(result.Value):
+                    result = result.Value()
+                value = float(result)
+                if math.isfinite(value) and value >= 0:
+                    return value, "brep_shape_distance"
+            except Exception:
+                continue
+    # CadQuery Workplane wrappers expose the underlying solid through val().
+    for owner, other in ((first, second), (second, first)):
+        try:
+            value, method = _shape_distance(owner.val(), other.val())
+            if value is not None:
+                return value, method
+        except Exception:
+            continue
+    return None, None
+
+
 def _face_level_dfm(
     shape: Any,
     process: str,
