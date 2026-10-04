@@ -346,12 +346,22 @@ def _polygon_profile_points(sides: int, width: float, depth: float) -> list[list
     half_width = float(width) / 2.0
     half_depth = float(depth) / 2.0
     rotation = math.pi / 2.0 + math.pi / (2.0 * sides)
-    return [
+    raw_points = [
         [
-            round(half_width * math.cos(rotation + (2.0 * math.pi * index / sides)), 6),
-            round(half_depth * math.sin(rotation + (2.0 * math.pi * index / sides)), 6),
+            half_width * math.cos(rotation + (2.0 * math.pi * index / sides)),
+            half_depth * math.sin(rotation + (2.0 * math.pi * index / sides)),
         ]
         for index in range(sides)
+    ]
+    min_x = min(point[0] for point in raw_points)
+    max_x = max(point[0] for point in raw_points)
+    min_y = min(point[1] for point in raw_points)
+    max_y = max(point[1] for point in raw_points)
+    scale_x = float(width) / max(max_x - min_x, 1e-9)
+    scale_y = float(depth) / max(max_y - min_y, 1e-9)
+    return [
+        [round(point[0] * scale_x, 6), round(point[1] * scale_y, 6)]
+        for point in raw_points
     ]
 
 
