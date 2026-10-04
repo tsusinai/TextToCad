@@ -3477,7 +3477,7 @@
         mode: selectedMode,
         material: selectedMaterial,
         include_steps: true,
-        generation_strategy: selectedMode === 'advanced' ? 'auto' : 'legacy',
+        generation_strategy: 'ir',
         mold_pull_direction: activeProcess === 'injection' ? selectedPullDirection.split(',').map(Number) : undefined
       };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
