@@ -3085,46 +3085,13 @@
           return [op + (id ? ' · ' + id : ''), summary];
         });
       } else {
-        features = spec.kind === 'airplane'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? '机身' : 'Fuselage', spec.width + ' mm'],
-            [currentLang === 'zh' ? '机翼' : 'Wings', spec.depth + ' mm span'],
-            [currentLang === 'zh' ? '尾翼' : 'Tailplane', Math.round(spec.depth * .22) + ' mm']
-          ]
-        : spec.kind === 'cup'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? '杯壁' : 'Cup wall', (spec.wall || 2) + ' mm'],
-            [currentLang === 'zh' ? '开口' : 'Opening', 'Ø' + Math.min(spec.width, spec.depth) + ' mm'],
-            [currentLang === 'zh' ? '握柄' : 'Handle', currentLang === 'zh' ? '环形握柄' : 'loop handle']
-          ]
-        : spec.kind === 'rounded_cube'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? '圆角实体' : 'Rounded solid', (spec.chamfer || 4) + ' mm ' + (currentLang === 'zh' ? '圆角半径' : 'fillet radius')],
-            [currentLang === 'zh' ? '边界样式' : 'Edge style', currentLang === 'zh' ? '全边圆角' : 'all-edge fillet'],
-            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '圆角' : 'fillet')]
-          ]
-        : spec.kind === 'angle'
-        ? [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [currentLang === 'zh' ? 'L 形外轮廓' : 'L profile', (spec.width || 0) + ' × ' + (spec.depth || 0) + ' mm'],
-            [currentLang === 'zh' ? '板厚' : 'Plate thickness', (spec.wall || 3) + ' mm'],
-            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
-          ]
-        : [
-            [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
-            [copy[currentLang].shellFeature, (spec.wall || 3) + ' mm ' + (currentLang === 'zh' ? '壁厚' : 'wall')],
-            [copy[currentLang].dividerFeature, spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments')],
-            [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
-          ];
-        if (spec.kind === 'plant' && Number(spec.drainage_holes || 0) > 0) {
-          features.push([copy[currentLang].drainageFeature, spec.drainage_holes + (currentLang === 'zh' ? ' 个' : ' ')]);
-        }
-        if (spec.kind === 'lamp' && spec.cable_channel) {
-          features.push([copy[currentLang].cableFeature, currentLang === 'zh' ? '底部隐藏通道' : 'underside recess']);
-        }
+        const profileCount = Array.isArray(spec.profile_points) ? spec.profile_points.length : 0;
+        features = [
+          [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
+          [currentLang === 'zh' ? '自然语言意图' : 'Natural-language intent', spec.title || (currentLang === 'zh' ? '未命名实体' : 'Untitled solid')],
+          [currentLang === 'zh' ? '轮廓与特征' : 'Profile and features', profileCount >= 3 ? profileCount + (currentLang === 'zh' ? ' 个轮廓顶点' : ' profile vertices') : (currentLang === 'zh' ? '由 IR 规划' : 'planned by IR')],
+          [currentLang === 'zh' ? '制造参数' : 'Manufacturing parameters', (spec.process || selectedProcess).toUpperCase() + ' · ' + (spec.chamfer || 0) + ' mm edge treatment']
+        ];
       }
       features.forEach((feature, index) => {
         const node = document.createElement('div');
@@ -3477,7 +3444,7 @@
         mode: selectedMode,
         material: selectedMaterial,
         include_steps: true,
-        generation_strategy: selectedMode === 'advanced' ? 'auto' : 'legacy',
+        generation_strategy: 'ir',
         mold_pull_direction: activeProcess === 'injection' ? selectedPullDirection.split(',').map(Number) : undefined
       };
       const jobResponse = await backendFetch(backendUrl + '/v1/jobs', {
@@ -3488,10 +3455,22 @@
       });
       if (jobResponse.status === 404) {
         const response = await backendFetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
-        if (!response.ok) throw new Error('geometry backend returned ' + response.status);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          const detail = payload && payload.detail
+            ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
+            : '';
+          throw new Error('geometry backend returned ' + response.status + (detail ? ': ' + detail : ''));
+        }
         return response.json();
       }
-      if (!jobResponse.ok) throw new Error('geometry job endpoint returned ' + jobResponse.status);
+      if (!jobResponse.ok) {
+        const payload = await jobResponse.json().catch(() => ({}));
+        const detail = payload && payload.detail
+          ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
+          : '';
+        throw new Error('geometry job endpoint returned ' + jobResponse.status + (detail ? ': ' + detail : ''));
+      }
       const job = await jobResponse.json();
       const jobId = job.job_id;
       if (onProgress) onProgress({ stage: 'queued', current_step: null, elapsed_ms: 0, events: [] });
@@ -3500,7 +3479,13 @@
       try {
         while (true) {
           const statusResponse = await backendFetch(backendUrl + '/v1/jobs/' + jobId, { signal });
-          if (!statusResponse.ok) throw new Error('geometry job status returned ' + statusResponse.status);
+          if (!statusResponse.ok) {
+            const payload = await statusResponse.json().catch(() => ({}));
+            const detail = payload && payload.detail
+              ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
+              : '';
+            throw new Error('geometry job status returned ' + statusResponse.status + (detail ? ': ' + detail : ''));
+          }
           const status = await statusResponse.json();
           if (status.progress && onProgress) onProgress(status.progress);
           if (status.status === 'succeeded') return status.result;
@@ -3542,9 +3527,9 @@
         const nextSpec = editing ? applyEdit(value, previousSpec) : parseModel(value);
         modelSpec = Object.assign({}, nextSpec);
         const canonical = canonicalPrompt(nextSpec);
-        const backendPrompt = selectedMode === 'advanced'
-          ? value.slice(0, 3200) + '\n\nBaseline CAD parameters: ' + canonical
-          : value.slice(0, 3200) + '\n\nParsed CAD parameters: ' + canonical;
+        // The backend receives the user's natural language verbatim. Local parsing
+        // remains an offline preview only and is never injected as a model-family hint.
+        const backendPrompt = value.slice(0, 3200);
         modelState.textContent = copy[currentLang].solving;
         solved.textContent = copy[currentLang].parsing;
         solved.classList.remove('warn');
@@ -3554,7 +3539,6 @@
         renderGenerationTrace(localGenerationTrace('preview'), 'running');
         let remote = null;
         let backendError = null;
-        let backendMismatch = false;
         try {
           remote = await requestBackend(backendPrompt, selectedProcess, generationController.signal, updateGenerationProgress);
         } catch (error) {
@@ -3569,16 +3553,6 @@
           console.warn('Geometry backend unavailable; using local preview.', error);
         }
         if (sequence !== generationSeq) return;
-        if (remote && remote.generation_strategy !== 'ir' && nextSpec.kind && nextSpec.kind !== 'block') {
-          const remoteKind = remote.parameters && remote.parameters.kind
-            ? remote.parameters.kind
-            : kindForTitle(remote.title || '');
-          if (remoteKind && remoteKind !== nextSpec.kind) {
-            backendMismatch = true;
-            backendError = new Error('backend model family mismatch: expected ' + nextSpec.kind + ', received ' + remoteKind);
-            remote = null;
-          }
-        }
         modelState.textContent = copy[currentLang].building;
         solved.textContent = copy[currentLang].building;
         solved.classList.remove('warn');
@@ -3627,17 +3601,18 @@
         updateProcessHint(remote && remote.profile);
         updateChecks(modelSpec, remote && remote.checks);
         updateExportButtons();
-        if (backendMismatch) {
-          setGenerationError(currentLang === 'zh'
-            ? '后端返回的模型类型与输入不一致，已阻止错误模型；请重建后端服务后重试。'
-            : 'The backend returned the wrong model family; the incorrect result was blocked. Rebuild the backend and retry.');
+        if (remote && remote.needs_clarification && Array.isArray(remote.clarification_questions) && remote.clarification_questions.length) {
+          setGenerationError((currentLang === 'zh' ? '需要补充：' : 'Please clarify: ') + remote.clarification_questions.join(' · '));
         } else if (backendError && backendUrl) {
           if (isMixedContent) {
             setGenerationError(currentLang === 'zh'
               ? '当前为 HTTPS 页面，受浏览器限制无法调用 HTTP 云端服务；请使用 <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">云端工作台 (点此打开)</a> 或在本地运行。'
               : 'Mixed Content blocked: HTTPS cannot call HTTP backend. Please open the <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">Cloud Web App</a> directly.', true);
           } else {
-            setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+            const backendDetail = backendError && backendError.message ? backendError.message : '';
+            setGenerationError(currentLang === 'zh'
+              ? '后端生成失败：' + (backendDetail || '服务暂时不可用') + '。已显示本地预览。'
+              : 'Backend generation failed: ' + (backendDetail || 'service unavailable') + '. Showing a local preview.');
           }
         }
         if (selectedMode === 'advanced' && !backendUrl) setGenerationError(copy[currentLang].advancedRequiresBackend);
