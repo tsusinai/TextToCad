@@ -839,7 +839,7 @@
     .model-svg .accent { stroke: var(--lime); }
     .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 28px 20px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 18px rgba(212, 255, 79, 0.6)); }
     .model-wrap.selector-matched .model-svg,
-    .model-wrap.selector-matched .three-viewport canvas { filter: drop-shadow(0 0 16px rgba(212, 255, 79, 0.34)); }
+    .model-stage.selector-matched .three-viewport canvas { filter: drop-shadow(0 0 16px rgba(212, 255, 79, 0.34)); }
     .viewport-footer {
       position: absolute;
       bottom: 20px;
@@ -3111,6 +3111,7 @@
           : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · draft ' + (faceMeasurement.draft_status || 'unknown') + ' · clearance ' + (faceMeasurement.clearance_status || 'unknown') + (selectorCount ? ' · selector matches ' + selectorCount : ''))
         : null;
       if (modelWrap) modelWrap.classList.toggle('selector-matched', selectorCount > 0);
+      if (modelStage) modelStage.classList.toggle('selector-matched', selectorCount > 0);
       if (viewportSelection && selectorCount > 0) {
         viewportSelection.textContent = currentLang === 'zh'
           ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体'
