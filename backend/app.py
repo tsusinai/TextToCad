@@ -2075,6 +2075,72 @@ def _export_face_mapped_glb(shape: Any, glb_path: Path) -> dict[str, Any] | None
     }
 
 
+def _export_multi_entity_glb(
+    output_shapes: dict[str, Any],
+    glb_path: Path,
+) -> dict[str, Any] | None:
+    """Export each semantic output as face-addressable GLB nodes."""
+    if trimesh is None or len(output_shapes) < 2:
+        return None
+    scene = trimesh.Scene()
+    outputs: list[dict[str, Any]] = []
+    faces_mapping: list[dict[str, Any]] = []
+    for output_node, shape in output_shapes.items():
+        try:
+            faces = list(shape.val().Faces())
+        except Exception:
+            return None
+        safe_node = re.sub(r"[^a-zA-Z0-9_]+", "_", str(output_node)).strip("_").lower() or "output"
+        mapped_count = 0
+        for face_index, face in enumerate(faces):
+            tessellate = getattr(face, "tessellate", None)
+            if not callable(tessellate):
+                return None
+            try:
+                vertices, triangles = tessellate(0.1)
+                coords: list[tuple[float, float, float]] = []
+                for vertex in vertices:
+                    value = vertex.toTuple() if hasattr(vertex, "toTuple") and callable(vertex.toTuple) else (vertex.x, vertex.y, vertex.z)
+                    if len(value) != 3:
+                        raise ValueError("face tessellation vertex is not 3D")
+                    coords.append(tuple(float(component) for component in value))
+                triangle_indices = [tuple(int(component) for component in triangle) for triangle in triangles]
+                if not coords or not triangle_indices:
+                    continue
+                node_name = f"output_{safe_node}_occt_face_{face_index}"
+                mesh = trimesh.Trimesh(vertices=coords, faces=triangle_indices, process=False)
+                mesh.metadata["output_node"] = str(output_node)
+                mesh.metadata["occt_face_index"] = face_index
+                scene.add_geometry(mesh, node_name=node_name, geom_name=node_name)
+                faces_mapping.append({
+                    "output_node": str(output_node),
+                    "face_index": face_index,
+                    "node_name": node_name,
+                    "vertex_count": len(coords),
+                    "triangle_count": len(triangle_indices),
+                })
+                mapped_count += 1
+            except Exception:
+                return None
+        outputs.append({
+            "node": str(output_node),
+            "face_count": len(faces),
+            "mapped_face_count": mapped_count,
+        })
+    if not faces_mapping:
+        return None
+    scene.export(str(glb_path), file_type="glb")
+    if not glb_path.exists() or glb_path.stat().st_size == 0:
+        return None
+    return {
+        "version": "occt-output-face-glb-v1",
+        "coordinate_system": "Z-up",
+        "output_count": len(outputs),
+        "outputs": outputs,
+        "faces": faces_mapping,
+    }
+
+
 def _write_artifacts(
     model_id: str,
     shape: Any,
@@ -2087,6 +2153,7 @@ def _write_artifacts(
     provenance: dict[str, Any] | None = None,
     recorder: GenerationRecorder | None = None,
     snapshots: list[tuple[str, Any]] | None = None,
+    output_shapes: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
     model_dir.mkdir(parents=True, exist_ok=False)
@@ -2136,6 +2203,12 @@ def _write_artifacts(
                 checks["selector_face_mapping"] = "pass"
             _write_3mf(mesh, three_mf_path)
             preview_files = {"glb": glb_path, "3mf": three_mf_path}
+            if output_shapes and len(output_shapes) > 1:
+                entities_glb_path = model_dir / "model_entities.glb"
+                entities_mapping = _export_multi_entity_glb(output_shapes, entities_glb_path)
+                if entities_mapping is not None:
+                    analysis["glb_output_mapping"] = entities_mapping
+                    preview_files["glb_entities"] = entities_glb_path
         except Exception as exc:
             mesh_validation = {"status": "failed", "reason": str(exc)[:240]}
             preview_files = {}
@@ -3115,11 +3188,11 @@ def get_manifest(model_id: str) -> dict[str, Any]:
 @app.get("/v1/models/{model_id}/download")
 def download_model(
     model_id: str,
-    format: Literal["step", "stl", "3mf", "glb"] = Query(default="step"),
+    format: Literal["step", "stl", "3mf", "glb", "glb_entities"] = Query(default="step"),
 ) -> FileResponse:
     if not re.fullmatch(r"[0-9a-f]{32}", model_id):
         raise HTTPException(status_code=400, detail="invalid model id")
-    suffixes = {"step": ".step", "stl": ".stl", "3mf": ".3mf", "glb": ".glb"}
+    suffixes = {"step": ".step", "stl": ".stl", "3mf": ".3mf", "glb": ".glb", "glb_entities": "_entities.glb"}
     file_path = ARTIFACT_ROOT / model_id / f"model{suffixes[format]}"
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="model artifact not found")
@@ -3128,5 +3201,6 @@ def download_model(
         "stl": "application/vnd.ms-pki.stl",
         "3mf": "application/vnd.ms-package.3dmanufacturing-3mf",
         "glb": "model/gltf-binary",
+        "glb_entities": "model/gltf-binary",
     }[format]
     return FileResponse(file_path, media_type=media_type, filename=file_path.name)
