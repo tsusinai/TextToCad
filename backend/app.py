@@ -1492,6 +1492,50 @@ def _shape_distance(
     return None, None
 
 
+def _classify_clearance(
+    distance_mm: float | None,
+    required_mm: float,
+    contact_tolerance_mm: float,
+) -> dict[str, Any]:
+    """Classify measured mating distance without hiding contact or interference."""
+    required = max(0.0, float(required_mm))
+    tolerance = max(1e-6, float(contact_tolerance_mm))
+    if distance_mm is None or not math.isfinite(float(distance_mm)):
+        return {
+            "status": "unknown",
+            "state": "unknown",
+            "required_mm": round(required, 6),
+            "contact_tolerance_mm": round(tolerance, 6),
+            "reason": "kernel did not expose a finite shape distance",
+        }
+    distance = max(0.0, float(distance_mm))
+    if distance <= 1e-6:
+        status = "interference"
+        state = "interference"
+        reason = "entities overlap or are coincident within kernel tolerance"
+    elif distance <= tolerance:
+        status = "contact"
+        state = "contact"
+        reason = "measured distance is within the contact tolerance"
+    elif distance < required:
+        status = "warning"
+        state = "insufficient_clearance"
+        reason = "distance is positive but below the required manufacturing clearance"
+    else:
+        status = "pass"
+        state = "clear"
+        reason = "measured distance meets the required manufacturing clearance"
+    return {
+        "status": status,
+        "state": state,
+        "distance_mm": round(distance, 6),
+        "required_mm": round(required, 6),
+        "contact_tolerance_mm": round(tolerance, 6),
+        "interference": status == "interference",
+        "reason": reason,
+    }
+
+
 def _face_level_dfm(
     shape: Any,
     process: str,
@@ -2220,6 +2264,13 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
     try:
         execution = execute_ir(normalized)
         metrics = shape_metrics(execution["shape"])
+        output_metrics = [
+            {
+                "node": node_id,
+                "metrics": shape_metrics(output_shape),
+            }
+            for node_id, output_shape in execution.get("output_shapes", {}).items()
+        ]
         face_measurements = _face_level_dfm(
             execution["shape"],
             str(normalized.get("process") or "fdm"),
@@ -2236,6 +2287,7 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         "reason": "reference_ir is required to prove mating clearance",
     }
     reference_metrics: dict[str, Any] | None = None
+    reference_output_metrics: list[dict[str, Any]] | None = None
     reference_output_node: str | None = None
     if request.reference_ir is not None:
         try:
@@ -2261,6 +2313,13 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         try:
             reference_execution = execute_ir(reference_normalized)
             reference_metrics = shape_metrics(reference_execution["shape"])
+            reference_output_metrics = [
+                {
+                    "node": node_id,
+                    "metrics": shape_metrics(output_shape),
+                }
+                for node_id, output_shape in reference_execution.get("output_shapes", {}).items()
+            ]
             reference_output_node = reference_execution["output_node"]
             distance_mm, method = _shape_distance(execution["shape"], reference_execution["shape"])
         except IRExecutionError as exc:
@@ -2273,19 +2332,22 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
                 "reason": "kernel did not expose a shape distance method",
             }
         else:
-            clearance = {
-                "status": "pass" if distance_mm >= required_clearance else "warning",
-                "distance_mm": round(distance_mm, 6),
-                "required_mm": round(required_clearance, 6),
-                "method": method or "brep_shape_distance",
-                "reference_output_node": reference_output_node,
-            }
+            clearance = _classify_clearance(
+                distance_mm,
+                required_clearance,
+                float(profile.get("tolerance", 0.1)),
+            )
+            clearance["method"] = method or "brep_shape_distance"
+            clearance["reference_output_node"] = reference_output_node
     return {
         "valid": True,
         "schema_version": "0.2",
         "output_node": execution["output_node"],
+        "output_nodes": execution.get("output_nodes", [execution["output_node"]]),
         "metrics": metrics,
+        "output_metrics": output_metrics,
         "reference_metrics": reference_metrics,
+        "reference_output_metrics": reference_output_metrics,
         "constraints": constraint_report,
         "face_measurements": face_measurements,
         "clearance": clearance,
