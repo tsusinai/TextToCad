@@ -68,3 +68,10 @@ pytest -q test_quality.py
 ~~~
 
 The Docker image should additionally be used for CadQuery/OCCT export smoke tests. The strict quality gate checks OCCT validity, non-zero faces, single-solid topology, STEP re-import metrics, and mesh watertightness when the optional mesh stack is available.
+
+
+## P7 multi-output and assembly clearance
+
+The v0.2 executor now preserves every node listed in outputs. POST /v1/ir/compile remains backward compatible (shape, output_node, metrics) and additionally returns output_nodes and output_metrics for all semantic entities. A mating reference_ir exposes reference_output_metrics and classifies measured distance as pass, warning, contact, or interference with the process tolerance.
+
+Face DFM output includes wall_thickness_analysis. It records whether the result came from an OCCT B-Rep face distance or an opposing-face center proxy, with confidence and an explicit normal_ray_sampling=not_available flag. Consumers should treat this as a conservative measurement until a kernel-backed normal-ray solver is enabled.
