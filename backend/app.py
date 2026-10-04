@@ -1938,6 +1938,28 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
     return _generate_model(request)
 
 
+def _ir_error_code(error: Exception) -> str:
+    """Map IR failures to stable, user-visible telemetry categories."""
+    message = str(error).lower()
+    if "llm provider" in message or "semantic cad ir json" in message:
+        return "llm_invalid_ir"
+    if "cadquery is not installed" in message or "cadquery is unavailable" in message:
+        return "cadquery_unavailable"
+    if "constraint" in message:
+        return "constraint_violation"
+    if "edge treatment" in message:
+        return "implicit_edge_treatment"
+    if "dependency" in message or "cycle" in message:
+        return "dependency_graph"
+    if "operation '" in message or "not implemented" in message:
+        return "unsupported_operation"
+    if "selector" in message:
+        return "selector_resolution"
+    if "brep" in message or "geometry validation" in message:
+        return "kernel_validation"
+    return "ir_generation_error"
+
+
 def _generate_ir_model(
     request: GenerateRequest,
     report: Callable[[dict[str, Any]], None] | None = None,
@@ -2187,6 +2209,7 @@ def _generate_model(
             provenance["effective_strategy"] = "legacy"
             provenance["ir_fallback_reason"] = str(exc)[:240]
             provenance["fallback_reason"] = provenance["ir_fallback_reason"]
+            provenance["ir_fallback_code"] = _ir_error_code(exc)
             assumptions = (list(response.assumptions) + [
                 f"Generic IR path fell back to the deterministic builder: {str(exc)[:180]}"
             ])[:6]
