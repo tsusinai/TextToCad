@@ -2413,6 +2413,11 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
             for node_id, output_shape in execution.get("output_shapes", {}).items()
         ]
         output_quality = _output_quality(execution.get("output_shapes", {}))
+        if not output_quality["valid"]:
+            raise HTTPException(status_code=422, detail={
+                "valid": False,
+                "output_quality": output_quality,
+            })
         face_measurements = _face_level_dfm(
             execution["shape"],
             str(normalized.get("process") or "fdm"),
