@@ -533,7 +533,7 @@ def parse_prompt_detailed(
     ])
     triplet_found = len(dimension_triplet) == 3
     diameter_found = diameter is not None
-    if footprint is not None:
+    if footprint is not None and not (kind == "polygon_prism" and len(dimension_pair) == 2):
         width = width or footprint
         depth = depth or footprint
     pair_found = len(dimension_pair) == 2 and kind in {"angle", "polygon_prism"}
