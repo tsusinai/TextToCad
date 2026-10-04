@@ -54,7 +54,7 @@ LLM_API_URL=https://api.deepseek.com/chat/completions
 LLM_MODEL=deepseek-chat
 ~~~
 
-The backend keeps both keys server-side, sends only the natural-language intent to the LLM, and validates the returned JSON before any geometry operation. Providers that reject `response_format=json_object` receive one compatibility retry without that field. Missing keys or provider failures fall back to the deterministic parser.
+The backend keeps both keys server-side, sends only the natural-language intent to the LLM, and validates the returned JSON before any geometry operation. Providers that reject `response_format=json_object` receive one compatibility retry without that field. Missing keys or provider failures use the deterministic primitive planner only when the prompt explicitly names a registered primitive; free-form descriptions fail clearly and never fall back to a model-family template.
 
 The parser includes an L-bracket family (`angle`) for prompts such as `20x20 L-shaped profile, plate thickness 3`; the deterministic baseline wins when an advanced LLM proposes an unrelated family. The generated revision includes Semantic CAD IR in `manifest.json` and exposes it at `GET /v1/models/{model_id}/ir`. Manufacturing analysis is nominal: `review_required` stays true and `manufacturing_ready` stays false until face-level measurement is available. Export manifests record geometry metrics, checksums, axis/unit metadata, and STEP/mesh validation.
 
@@ -93,3 +93,10 @@ docker run --rm texttocad-backend python kernel_smoke.py
 ~~~
 
 kernel_smoke.py 会实际构造薄壁凹腔，执行面级 DFM/法向射线能力检查，并验证两个独立 Semantic CAD IR 输出都通过 B-Rep 质量门。相同检查由 GitHub Actions 的 kernel-smoke job 自动执行。
+
+
+## IR-first product contract
+
+The production path is now `natural language -> Semantic CAD IR -> static validation -> constraint solve/repair -> CadQuery/OCCT -> B-Rep/DFM verification`. The frontend always requests `generation_strategy: "ir"`. The IR contains primitives, features, datums, parameters, constraints, and outputs; it does not contain a required model-family enum. `ModelParameters.kind` remains only as a response compatibility field.
+
+When no LLM key is configured, the backend can compile explicit primitive prompts (box/cube, sphere, cylinder, cone, and regular polygons) with the deterministic primitive planner. A free-form description without an LLM returns a clear 503 explaining how to configure the provider. This prevents a missing provider from producing a misleading default model.
