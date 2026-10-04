@@ -3642,7 +3642,10 @@
               ? '当前为 HTTPS 页面，受浏览器限制无法调用 HTTP 云端服务；请使用 <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">云端工作台 (点此打开)</a> 或在本地运行。'
               : 'Mixed Content blocked: HTTPS cannot call HTTP backend. Please open the <a href="http://118.31.184.221/cad/web/" target="_blank" style="color:var(--ink);font-weight:700;text-decoration:underline;">Cloud Web App</a> directly.', true);
           } else {
-            setGenerationError(currentLang === 'zh' ? '后端暂时不可用，已显示本地预览。' : 'Backend unavailable; showing a local preview.');
+            const backendDetail = backendError && backendError.message ? backendError.message : '';
+            setGenerationError(currentLang === 'zh'
+              ? '后端生成失败：' + (backendDetail || '服务暂时不可用') + '。已显示本地预览。'
+              : 'Backend generation failed: ' + (backendDetail || 'service unavailable') + '. Showing a local preview.');
           }
         }
         if (selectedMode === 'advanced' && !backendUrl) setGenerationError(copy[currentLang].advancedRequiresBackend);
