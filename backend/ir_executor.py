@@ -454,12 +454,22 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
         inputs = [shapes[reference] for reference in node.get("inputs", [])]
         shape = _node_shape(node, inputs, parameters)
         shapes[node_id] = _as_shape(shape, node_id)
-        trace.append({
+        trace_event = {
             "id": node_id,
             "operation": node.get("operation"),
             "status": "succeeded",
             "inputs": list(node.get("inputs", [])),
-        })
+        }
+        selector = (node.get("parameters") or {}).get("selector")
+        if not isinstance(selector, dict):
+            selector = (node.get("parameters") or {}).get("face_selector") or (node.get("parameters") or {}).get("edge_selector")
+        if isinstance(selector, dict):
+            trace_event["selector"] = {
+                "entity": selector.get("entity"),
+                "topology": selector.get("topology", "face"),
+                "where": selector.get("where", []),
+            }
+        trace.append(trace_event)
     output_nodes = ir.get("outputs") or ([{"node": ordered[-1]["id"]}] if ordered else [])
     output_id = output_nodes[0].get("node") if output_nodes else None
     if not output_id or output_id not in shapes:
