@@ -558,14 +558,17 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
                 trace_event["selector_matches"] = selector_metadata
         trace.append(trace_event)
     output_nodes = ir.get("outputs") or ([{"node": ordered[-1]["id"]}] if ordered else [])
-    output_id = output_nodes[0].get("node") if output_nodes else None
-    if not output_id or output_id not in shapes:
+    output_ids = [item.get("node") for item in output_nodes if isinstance(item, dict)]
+    if not output_ids or any(not output_id or output_id not in shapes for output_id in output_ids):
         raise IRExecutionError("IR has no valid output node")
+    output_shapes = {output_id: shapes[output_id] for output_id in output_ids}
     return {
-        "shape": shapes[output_id],
+        "shape": output_shapes[output_ids[0]],
+        "output_shapes": output_shapes,
+        "output_nodes": output_ids,
         "node_shapes": shapes,
         "trace": trace,
-        "output_node": output_id,
+        "output_node": output_ids[0],
     }
 
 
