@@ -603,7 +603,7 @@ def parse_prompt_detailed(
     square_base = any(token in text for token in ("footprint", "见方", "占地", "底面"))
     depth_found = depth is not None or square_base or triplet_found or pair_found
     depth = depth or (width if square_base else (generic_numbers[1] if len(generic_numbers) >= 3 else (140.0 if kind == "airplane" else width * 0.67)))
-    if kind == "polygon_prism" and not polygon_dimensions_explicit:
+    if kind == "polygon_prism" and (polygon_sides or 3) != 3 and not polygon_dimensions_explicit:
         if len(generic_numbers) == 1 and height is None:
             width = depth = generic_numbers[0]
             width_found = depth_found = True
