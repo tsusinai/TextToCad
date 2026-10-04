@@ -953,6 +953,121 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
 
 
 
+
+def _normalize_ir_draft(
+    payload: dict[str, Any],
+    prompt: str,
+    process: str,
+    units: str,
+) -> dict[str, Any]:
+    """Normalize provider-shaped JSON into the canonical, data-only IR contract."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("LLM provider returned a non-object Semantic CAD IR")
+    candidate = copy.deepcopy(payload)
+    if isinstance(candidate.get("ir"), dict):
+        candidate = copy.deepcopy(candidate["ir"])
+    candidate.setdefault("schema_version", "0.2")
+    document = candidate.setdefault("document", {})
+    if not isinstance(document, dict):
+        document = {}
+        candidate["document"] = document
+    document.setdefault("id", "llm-design")
+    document.setdefault("intent", prompt[:400])
+    document.setdefault("units", units)
+    candidate["units"] = "mm"
+    candidate["process"] = process
+
+    raw_parameters = candidate.get("parameters") or {}
+    if not isinstance(raw_parameters, dict):
+        raise RuntimeError("IR parameters must be an object")
+    normalized_parameters: dict[str, Any] = {}
+    for name, raw_value in raw_parameters.items():
+        if isinstance(raw_value, dict) and "value" in raw_value:
+            value = copy.deepcopy(raw_value)
+            value.setdefault("unit", "mm")
+            value.setdefault("source", "llm")
+            value.setdefault("role", "dimension")
+            value.setdefault("status", "resolved")
+        else:
+            value = {"value": copy.deepcopy(raw_value), "unit": "mm", "source": "llm", "role": "dimension", "status": "resolved"}
+        normalized_parameters[str(name)] = value
+    candidate["parameters"] = normalized_parameters
+
+    aliases = {
+        "polygon": "polygon_prism",
+        "regular_prism": "regular_polygon",
+        "regular_polygon_prism": "regular_polygon",
+        "rounded_cube": "box",
+        "rectangular_prism": "box",
+        "subtract": "cut",
+        "difference": "cut",
+        "add": "union",
+        "fuse": "union",
+    }
+    raw_nodes = candidate.get("nodes")
+    if not isinstance(raw_nodes, list):
+        raw_nodes = candidate.get("features") if isinstance(candidate.get("features"), list) else []
+    nodes: list[dict[str, Any]] = []
+    for index, raw_node in enumerate(raw_nodes):
+        if not isinstance(raw_node, dict):
+            continue
+        node = copy.deepcopy(raw_node)
+        node.setdefault("id", f"node_{index + 1}")
+        operation = str(node.get("operation") or node.get("actual_operation") or "box").strip().lower()
+        node["operation"] = aliases.get(operation, operation)
+        node.setdefault("kind", "primitive" if node["operation"] in {"box", "cylinder", "sphere", "cone", "torus", "polygon_prism", "regular_polygon", "sketch"} else "feature")
+        inputs = node.get("inputs")
+        if not isinstance(inputs, list):
+            inputs = []
+            for key in ("source", "input", "target"):
+                value = node.get(key)
+                if isinstance(value, str):
+                    inputs.append(value)
+        node["inputs"] = [str(value) for value in inputs if isinstance(value, (str, int))]
+        if not isinstance(node.get("parameters"), dict):
+            node["parameters"] = {}
+        if node.get("frame") is not None:
+            node["frame"] = str(node["frame"])
+        nodes.append(node)
+    candidate["nodes"] = nodes
+    candidate.pop("features", None)
+
+    datums = candidate.get("datums")
+    if not isinstance(datums, list):
+        datums = []
+    known_datums = {str(item.get("id")) for item in datums if isinstance(item, dict) and item.get("id")}
+    frame_ids = {str(node["frame"]) for node in nodes if node.get("frame")}
+    for frame_id in sorted(frame_ids - known_datums):
+        datums.append({"id": frame_id, "type": "plane", "origin": [0, 0, 0], "normal": [0, 0, 1]})
+    candidate["datums"] = datums
+
+    outputs = candidate.get("outputs")
+    if not isinstance(outputs, list):
+        outputs = []
+    normalized_outputs: list[dict[str, Any]] = []
+    for index, raw_output in enumerate(outputs):
+        if not isinstance(raw_output, dict):
+            continue
+        output = copy.deepcopy(raw_output)
+        if isinstance(output.get("format"), str):
+            output["format"] = [output["format"]]
+        output.setdefault("id", f"output_{index + 1}")
+        if output.get("node") is not None:
+            output["node"] = str(output["node"])
+        normalized_outputs.append(output)
+    if not normalized_outputs and nodes:
+        normalized_outputs = [{"id": "main", "node": nodes[-1]["id"], "format": ["step", "stl", "glb"]}]
+    candidate["outputs"] = normalized_outputs
+    provenance = candidate.setdefault("provenance", {})
+    if not isinstance(provenance, dict):
+        provenance = {}
+        candidate["provenance"] = provenance
+    provenance.setdefault("prompt", prompt[:400])
+    provenance.setdefault("planner", "llm_ir")
+    provenance.setdefault("process", process)
+    return candidate
+
+
 def _deterministic_ir_plan(
     prompt: str,
     process: str,
@@ -2994,6 +3109,7 @@ def _generate_ir_model(
             raw_ir = _deterministic_ir_plan(request.prompt, request.process, request.units, params)
             baseline_assumptions.append(str(exc)[:180])
             recorder.emit("planning", "llm_fallback", "warning", reason=str(exc)[:240], planner="deterministic_primitive")
+        raw_ir = _normalize_ir_draft(raw_ir, request.prompt, request.process, request.units)
         normalized_ir = validate_ir(raw_ir)
         normalized_ir, polygon_profile_enforced = _enforce_explicit_polygon_profile(
             normalized_ir,
