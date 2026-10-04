@@ -838,6 +838,8 @@
     .model-svg .solid { transition: fill .3s ease; }
     .model-svg .accent { stroke: var(--lime); }
     .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 28px 20px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 18px rgba(212, 255, 79, 0.6)); }
+    .model-wrap.selector-matched .model-svg,
+    .model-wrap.selector-matched .three-viewport canvas { filter: drop-shadow(0 0 16px rgba(212, 255, 79, 0.34)); }
     .viewport-footer {
       position: absolute;
       bottom: 20px;
@@ -3108,6 +3110,13 @@
           ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚 ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · 拔模 ' + (faceMeasurement.draft_status || '未知') + ' · 间隙 ' + (faceMeasurement.clearance_status || '未知') + (selectorCount ? ' · selector 命中 ' + selectorCount : '')
           : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm · draft ' + (faceMeasurement.draft_status || 'unknown') + ' · clearance ' + (faceMeasurement.clearance_status || 'unknown') + (selectorCount ? ' · selector matches ' + selectorCount : ''))
         : null;
+      if (modelWrap) modelWrap.classList.toggle('selector-matched', selectorCount > 0);
+      if (viewportSelection && selectorCount > 0) {
+        viewportSelection.textContent = currentLang === 'zh'
+          ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体'
+          : 'OCCT selector matched ' + selectorCount + ' topology entities';
+        viewportSelection.hidden = false;
+      }
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
       document.getElementById('planDraftMeta').textContent = faceSummary || statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
