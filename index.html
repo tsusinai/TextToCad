@@ -3166,6 +3166,8 @@
           ? 'OCCT selector 命中 ' + selectorCount + ' 个拓扑实体' + (mappedFaces ? ' · 已高亮 ' + mappedFaces + ' 面节点' : ' · 等待面映射')
           : 'OCCT selector matched ' + selectorCount + ' topology entities' + (mappedFaces ? ' · ' + mappedFaces + ' mapped face nodes highlighted' : ' · waiting for face mapping');
         viewportSelection.hidden = false;
+      } else if (viewportSelection && highlightedFeature === null) {
+        viewportSelection.hidden = true;
       }
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
