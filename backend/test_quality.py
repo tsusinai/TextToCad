@@ -381,6 +381,28 @@ def test_ir_selector_is_checked_against_registered_entities():
 
 
 
+def test_geometry_repair_bounds_edge_features():
+    ir = {
+        "schema_version": "0.2",
+        "parameters": {
+            "width": {"value": 40, "unit": "mm"},
+            "depth": {"value": 30, "unit": "mm"},
+            "height": {"value": 20, "unit": "mm"},
+        },
+        "nodes": [{
+            "id": "body", "kind": "primitive", "operation": "box",
+            "parameters": {"size": ["width", "depth", "height"]},
+        }, {
+            "id": "edge", "kind": "feature", "operation": "fillet",
+            "inputs": ["body"], "parameters": {"radius": 25},
+        }],
+        "outputs": [{"id": "main", "node": "edge"}],
+    }
+    patches = app._geometry_repair_patches(ir, "fillet radius is too large")
+    assert patches[0]["op"] == "replace_node_parameter"
+    assert patches[0]["value"] == 2.5
+
+
 def test_ir_repair_returns_and_applies_explicit_patch():
     ir = {
         "schema_version": "0.2",
