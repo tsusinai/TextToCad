@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py .
+COPY *.py ./
 
 ENV ARTIFACT_ROOT=/data/artifacts
 ENV CORS_ORIGINS=https://tsusinai.github.io,http://localhost:5173,http://127.0.0.1:5173
