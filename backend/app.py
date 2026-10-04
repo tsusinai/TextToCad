@@ -1460,6 +1460,7 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
     overhang_faces = 0
     side_faces = 0
     samples: list[dict[str, Any]] = []
+    face_records: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
     threshold = math.cos(math.radians(float(profile["max_overhang"])))
     for index, face in enumerate(faces):
         try:
@@ -1493,7 +1494,33 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
                 overhang_faces += 1
             if abs(normal_z) < 0.15:
                 side_faces += 1
+        if normal is not None and center is not None:
+            face_records.append((normal, tuple(center)))
         samples.append(sample)
+    wall_candidates: list[float] = []
+    for index, (normal_a, center_a) in enumerate(face_records):
+        normal_length = math.sqrt(sum(component * component for component in normal_a))
+        if normal_length <= 1e-9:
+            continue
+        unit_a = tuple(component / normal_length for component in normal_a)
+        for normal_b, center_b in face_records[index + 1:]:
+            length_b = math.sqrt(sum(component * component for component in normal_b))
+            if length_b <= 1e-9:
+                continue
+            unit_b = tuple(component / length_b for component in normal_b)
+            opposite = sum(unit_a[axis] * unit_b[axis] for axis in range(3)) <= -0.98
+            if not opposite:
+                continue
+            delta = tuple(center_b[axis] - center_a[axis] for axis in range(3))
+            distance = abs(sum(delta[axis] * unit_a[axis] for axis in range(3)))
+            if distance > 1e-3 and math.isfinite(distance):
+                wall_candidates.append(distance)
+    wall_proxy = min(wall_candidates) if wall_candidates else None
+    wall_proxy_status = (
+        "pass" if wall_proxy is not None and wall_proxy >= float(profile["min_wall"])
+        else "warning" if wall_proxy is not None
+        else "unknown"
+    )
     if process == "injection":
         draft_status = "review"
         draft_reason = "face normals are sampled, but datum and draft angle are not solved"
@@ -1509,12 +1536,15 @@ def _face_level_dfm(shape: Any, process: str) -> dict[str, Any]:
         "downward_face_count": downward_faces,
         "overhang_face_count": overhang_faces,
         "side_face_count": side_faces,
+        "wall_thickness_proxy_mm": round(wall_proxy, 6) if wall_proxy is not None else None,
+        "wall_thickness_proxy_status": wall_proxy_status,
         "overhang_status": "warning" if overhang_faces else "pass",
         "draft_status": draft_status,
         "draft_reason": draft_reason,
         "samples": samples[:64],
         "limitations": [
-            "wall thickness and clearance are still nominal",
+            "wall thickness uses opposing-face center distance as a proxy, not ray casting",
+            "clearance remains nominal",
             "overhang uses face-normal screening, not support simulation",
         ],
     }
