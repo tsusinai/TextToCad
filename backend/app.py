@@ -127,6 +127,8 @@ class GenerateRequest(BaseModel):
     strict_dimensions: bool = False
     include_steps: bool = False
     material: Literal["pla", "petg", "abs", "resin", "aluminum"] = "pla"
+    # legacy keeps existing behavior; ir uses generic Semantic CAD IR; auto tries IR then falls back safely.
+    generation_strategy: Literal["legacy", "ir", "auto"] = "legacy"
 
 
 class IRValidationRequest(BaseModel):
@@ -178,6 +180,7 @@ class GenerateResponse(BaseModel):
     analysis: dict[str, Any]
     step_schema: str
     mode: str = "standard"
+    generation_strategy: str = "legacy"
     llm_used: bool = False
     assumptions: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
@@ -201,7 +204,7 @@ REQUEST_BUCKETS: dict[str, list[float]] = {}
 def _cache_key(request: GenerateRequest) -> str:
     normalized = " ".join(request.prompt.strip().lower().split())
     return hashlib.sha256(
-        f"{request.mode}\0{request.process}\0{request.units}\0{request.material}\0{request.strict_dimensions}\0{request.include_steps}\0{normalized}".encode("utf-8")
+        f"{request.generation_strategy}\0{request.mode}\0{request.process}\0{request.units}\0{request.material}\0{request.strict_dimensions}\0{request.include_steps}\0{normalized}".encode("utf-8")
     ).hexdigest()
 
 
@@ -1916,6 +1919,7 @@ def health() -> dict[str, Any]:
         "process_profiles": list(PROCESS_PROFILES),
         "ir_schema_version": "0.2",
         "ir_compile_available": cq is not None,
+        "ir_generation_available": cq is not None and bool(LLM_API_KEY),
     }
 
 
@@ -1929,10 +1933,202 @@ def generate_model(request: GenerateRequest) -> GenerateResponse:
     return _generate_model(request)
 
 
+def _generate_ir_model(
+    request: GenerateRequest,
+    report: Callable[[dict[str, Any]], None] | None = None,
+) -> GenerateResponse:
+    """Generate a model through LLM -> generic v0.2 IR -> CadQuery/OCCT."""
+    recorder = GenerationRecorder(report)
+    cleanup_artifacts()
+    cache_key = _cache_key(request)
+    with CACHE_LOCK:
+        cached = MODEL_CACHE.get(cache_key)
+        if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
+            cache_event = recorder.emit("complete", "cache", "succeeded", model_id=cached.model_id)
+            return cached.model_copy(update={
+                "generation_trace": [copy.deepcopy(cache_event)] + copy.deepcopy(cached.generation_trace)
+            })
+
+    model_id: str | None = None
+    try:
+        recorder.emit("parsing", "interpretation", "running", mode=request.mode, units=request.units,
+                      strategy=request.generation_strategy)
+        title, params, _, baseline_assumptions, provenance = parse_prompt_detailed(
+            request.prompt, request.process, request.units, request.material
+        )
+        if request.strict_dimensions and provenance.get("units", {}).get("ambiguous_dimensions"):
+            raise ValueError("ambiguous dimensions; specify width, depth, and height or provide a dimension triplet")
+        recorder.emit("parsing", "interpretation", "succeeded",
+                      llm_used=False, dimensions_mm=[params.width, params.depth, params.height],
+                      assumptions_count=len(baseline_assumptions))
+        recorder.emit("planning", "ir_plan", "running", schema_version="0.2")
+        raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
+        normalized_ir = validate_ir(raw_ir)
+        recorder.emit("planning", "ir_plan", "succeeded",
+                      schema_version=normalized_ir.get("schema_version", "0.2"),
+                      node_count=len(normalized_ir.get("nodes", [])),
+                      constraint_count=len(normalized_ir.get("constraints", [])))
+
+        recorder.emit("validating", "constraint_solve", "running")
+        constraint_report = solve_constraints(
+            normalized_ir,
+            process_profile=PROCESS_PROFILES[request.process],
+        )
+        if not constraint_report["valid"]:
+            raise ValueError(f"IR hard constraints failed: {constraint_report['violations'][:6]}")
+        recorder.emit("validating", "constraint_solve", "succeeded",
+                      evaluated=constraint_report.get("evaluated", 0),
+                      deferred=constraint_report.get("deferred", 0),
+                      violations=len(constraint_report.get("violations", [])))
+
+        recorder.emit("building", "ir_compile", "running")
+        execution = execute_ir(normalized_ir)
+        shape = execution["shape"]
+        for event in execution.get("trace", []):
+            node_id = str(event.get("id", "ir_node"))
+            recorder.emit(
+                "building",
+                node_id,
+                "succeeded",
+                operation=event.get("operation"),
+                inputs=event.get("inputs", []),
+            )
+        recorder.emit("building", "ir_compile", "succeeded",
+                      output_node=execution["output_node"],
+                      node_count=len(execution.get("trace", [])),
+                      metrics=shape_metrics(shape))
+
+        snapshots: list[tuple[str, Any]] | None = None
+        if request.include_steps:
+            snapshots = []
+            for event in execution.get("trace", [])[:6]:
+                node_id = str(event.get("id", ""))
+                intermediate = execution.get("node_shapes", {}).get(node_id)
+                if intermediate is not None:
+                    snapshots.append((node_id, intermediate))
+
+        recorder.emit("validating", "geometry_validation", "running")
+        analysis = analyze_manufacturability(params)
+        checks = _validate_shape(shape, params, analysis)
+        checks["ir_constraints"] = constraint_report
+        checks["ir_execution"] = execution.get("trace", [])
+        hard_checks = {
+            key: checks[key]
+            for key in ("valid_brep", "occt_valid", "nonzero_faces", "single_solid", "positive_volume", "bounded")
+        }
+        if not all(hard_checks.values()):
+            raise ValueError(f"geometry validation failed: {checks}")
+        recorder.emit("validating", "geometry_validation", "succeeded",
+                      solid_count=checks.get("single_solid"), metrics=shape_metrics(shape))
+        recorder.emit("reviewing", "manufacturing_review", "warning",
+                      nominal=True, issue_count=len(analysis["issues"]), review_required=True)
+
+        provenance = copy.deepcopy(provenance)
+        provenance["ir_strategy"] = "llm_generic_v0.2"
+        provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
+        provenance["ir_constraint_report"] = constraint_report
+        assumptions = (list(baseline_assumptions) + [
+            "Generic Semantic CAD IR was compiled by CadQuery/OCCT.",
+            "IR dimensions and feature intent were validated before kernel execution.",
+        ])[:6]
+        model_id = uuid.uuid4().hex
+        artifacts, step_schema = _write_artifacts(
+            model_id,
+            shape,
+            title,
+            params,
+            checks,
+            analysis,
+            {
+                "mode": request.mode,
+                "strategy": "ir",
+                "llm_used": True,
+                "assumptions": assumptions,
+                "constraint_report": constraint_report,
+            },
+            normalized_ir,
+            provenance,
+            recorder,
+            snapshots,
+        )
+        response = GenerateResponse(
+            model_id=model_id,
+            title=title,
+            parameters=params,
+            checks=checks,
+            artifacts=artifacts,
+            process=params.process,
+            profile=PROCESS_PROFILES[params.process],
+            analysis=analysis,
+            step_schema=step_schema,
+            mode=request.mode,
+            generation_strategy="ir",
+            llm_used=True,
+            assumptions=assumptions,
+            provenance=provenance,
+            design_ir=normalized_ir,
+            generation_trace=copy.deepcopy(recorder.events),
+        )
+        with CACHE_LOCK:
+            MODEL_CACHE[cache_key] = response
+        return response
+    except GenerationCancelled:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        raise
+    except IRValidationError as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
+        raise HTTPException(status_code=422, detail={"valid": False, "issues": exc.issues}) from exc
+    except RuntimeError as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        if model_id:
+            shutil.rmtree(ARTIFACT_ROOT / model_id, ignore_errors=True)
+        recorder.fail(str(exc))
+        raise HTTPException(status_code=500, detail=f"IR geometry generation failed: {exc}") from exc
+
+
 def _generate_model(
     request: GenerateRequest,
     report: Callable[[dict[str, Any]], None] | None = None,
 ) -> GenerateResponse:
+    if request.generation_strategy in {"ir", "auto"} and (
+        request.generation_strategy == "ir" or request.mode == "advanced"
+    ):
+        try:
+            return _generate_ir_model(request, report)
+        except Exception as exc:
+            if request.generation_strategy == "ir":
+                if isinstance(exc, HTTPException):
+                    raise
+                status_code = 503 if isinstance(exc, RuntimeError) else 500
+                raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+            # auto is deliberately fail-open: the legacy deterministic builder remains available.
+            fallback_request = request.model_copy(update={"generation_strategy": "legacy"})
+            response = _generate_model(fallback_request, report)
+            provenance = copy.deepcopy(response.provenance)
+            provenance["requested_strategy"] = "auto"
+            provenance["effective_strategy"] = "legacy"
+            provenance["ir_fallback_reason"] = str(exc)[:240]
+            assumptions = (list(response.assumptions) + [
+                f"Generic IR path fell back to the deterministic builder: {str(exc)[:180]}"
+            ])[:6]
+            return response.model_copy(update={
+                "assumptions": assumptions,
+                "provenance": provenance,
+                "generation_strategy": "legacy",
+            })
+
     recorder = GenerationRecorder(report)
     cleanup_artifacts()
     cache_key = _cache_key(request)
@@ -1999,7 +2195,7 @@ def _generate_model(
             params,
             checks,
             analysis,
-            {"mode": request.mode, "llm_used": llm_used, "assumptions": assumptions},
+            {"mode": request.mode, "strategy": request.generation_strategy, "llm_used": llm_used, "assumptions": assumptions},
             design_ir,
             provenance,
             recorder,
@@ -2016,6 +2212,7 @@ def _generate_model(
             analysis=analysis,
             step_schema=step_schema,
             mode=request.mode,
+            generation_strategy=request.generation_strategy,
             llm_used=llm_used,
             assumptions=assumptions,
             provenance=provenance,
