@@ -237,7 +237,8 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - `POST /v1/models`、`POST /v1/jobs` 和 `POST /v1/ir/compile` 共用 `mold_pull_direction` 契约，前端在注塑工艺下提供方向选择。
 - `/v1/ir/compile` 支持可选 `reference_ir` 与 `clearance_target_mm`，对两个独立 IR 实体执行 B-Rep 距离测量；缺少参考实体或内核距离 API 时返回 unknown，不伪造装配通过。
 - 前端质量摘要已显示采样面数、壁厚测量、拔模状态和间隙状态；现有 selector 仍保持无匹配即失败。
+- 执行 trace 与 analysis 现在返回 selector 的源/目标拓扑、命中索引和数量；前端对可见预览提供命中提示和保守整体 glow，无法从 GLB 可靠还原 OCCT 面索引时不会伪装成精确面高亮。
 
 下一步：
 
-- 引入 OCCT 射线/法向厚度采样，并将 selector 命中面映射到 3D 高亮。
+- 引入 OCCT 射线/法向厚度采样，并为 GLB 建立稳定的面索引映射以实现真正的面级高亮。
