@@ -268,3 +268,13 @@ P7 下一步：将多实体输出接入预览场景与选择器语义，并在 O
 
 - 多输出 IR 生成时额外导出合并的 model_entities.glb，每个实体和 OCCT 面保持稳定节点名。
 - 现有 model.glb、STEP、STL 行为保持兼容；新增 glb_entities 下载格式和 analysis.glb_output_mapping。
+
+
+## P8.3 CadQuery/OCCT 运行时回归（2026-10-04）
+
+- backend/requirements.txt 固定 cadquery==2.4.0，保证生产镜像和 CI 使用同一几何内核版本。
+- backend/Dockerfile 复制所有后端 Python 模块，并安装 libgl1、libglib2.0-0、libsm6、libxext6、libxrender1，使 CadQuery/VTK 在 slim 镜像内可无桌面导入。
+- backend/kernel_smoke.py 覆盖真实薄壁/凹腔 B-Rep、面级 DFM 和法向射线能力标记，以及两个独立 Semantic CAD IR 输出的质量门。
+- .github/workflows/quality.yml 增加镜像构建和烟测 job；run 260 已通过，parser regression 与 kernel smoke 均为 success。
+
+验收结论：CadQuery/OCCT 的生产式 Docker 镜像已经具备可重复的最小内核回归门禁；后续新增 IR 操作或 DFM 算法应先扩展该 smoke 样例，再合并到主分支。
