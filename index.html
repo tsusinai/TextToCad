@@ -3048,9 +3048,15 @@
       solved.textContent = passed === 4 ? (currentLang === 'zh' ? '检查已验证' : 'Checks verified') : (currentLang === 'zh' ? '需要复核' : 'Needs review');
       solved.classList.toggle('warn', passed !== 4);
       const statusText = (value, pass, fail) => value === true ? pass : (value === 'unknown' ? copy[currentLang].unknown : fail);
+      const faceMeasurement = analysis && analysis.face_measurements;
+      const faceSummary = faceMeasurement && faceMeasurement.face_count
+        ? (currentLang === 'zh'
+          ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚仍需复核'
+          : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall review remains')
+        : null;
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
-      document.getElementById('planDraftMeta').textContent = statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
+      document.getElementById('planDraftMeta').textContent = faceSummary || statusText(checks.draft, currentLang === 'zh' ? '面级悬空和拔模通过' : 'face-level support and draft pass', currentLang === 'zh' ? '名义估算，需复核' : 'nominal estimate; review required');
       document.getElementById('planExportMeta').textContent = checks.export ? (remoteChecks ? profile.label + ' · STEP · STL' : 'OBJ preview · backend offline') : (currentLang === 'zh' ? '导出未就绪' : 'export not ready');
       updateAnalysis(analysis || localAnalysis(spec));
       Object.entries(checkEls).forEach(([key, element]) => {
