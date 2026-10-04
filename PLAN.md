@@ -232,7 +232,7 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 导出前质量门新增包围盒实测尺寸、目标尺寸、逐轴偏差、工艺公差阈值和 dimension_match；自由形体保留偏差记录，不会因为基线尺寸代理值误阻止导出。
 - 该指标与 valid_brep、OCCT 有效性、单实体、体积和导出回读并列，前端可直接显示尺寸准确度与几何有效性的区别。
 - 结构化面/边 selector 已支持 index、normal、position、area、parallel_to、perpendicular_to 和 axis 基础匹配，并在无匹配时 fail-closed。
-- 面级 DFM 已记录面面积、法向、中心点、下向面与保守悬空筛查；壁厚、间隙和拔模仍明确标记为 nominal/review。
+- 面级 DFM 已记录面面积、法向、中心点、下向面、保守悬空筛查和相对面距离壁厚 proxy；间隙和拔模仍明确标记为 nominal/review。
 
 下一步：
 
