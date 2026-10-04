@@ -1967,6 +1967,26 @@ def _generate_ir_model(
         recorder.emit("planning", "ir_plan", "running", schema_version="0.2")
         raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
         normalized_ir = validate_ir(raw_ir)
+        plain_shape_requested = bool(re.search(
+            r"(正方体|立方体|方块|block|cube|plain|sharp|unrounded|直角|锐边)",
+            request.prompt,
+            flags=re.IGNORECASE,
+        ))
+        explicit_edge_treatment = bool(re.search(
+            r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\\s*edge)",
+            request.prompt,
+            flags=re.IGNORECASE,
+        ))
+        if plain_shape_requested and not explicit_edge_treatment:
+            unexpected_edges = [
+                node.get("id") for node in normalized_ir.get("nodes", [])
+                if node.get("operation") in {"fillet", "chamfer"}
+            ]
+            if unexpected_edges:
+                raise ValueError(
+                    "IR added edge treatment without an explicit request: "
+                    + ", ".join(str(item) for item in unexpected_edges[:4])
+                )
         recorder.emit("planning", "ir_plan", "succeeded",
                       schema_version=normalized_ir.get("schema_version", "0.2"),
                       node_count=len(normalized_ir.get("nodes", [])),
