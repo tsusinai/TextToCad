@@ -3071,7 +3071,21 @@
       if (!featureTree || !spec) return;
       setFeatureHighlight(null, false);
       featureTree.innerHTML = '';
-      const features = spec.kind === 'airplane'
+      let features = [];
+      if (backendArtifact && backendArtifact.design_ir && Array.isArray(backendArtifact.design_ir.nodes) && backendArtifact.design_ir.nodes.length > 0) {
+        features = backendArtifact.design_ir.nodes.map((node) => {
+          const op = String(node.operation || node.kind || 'feature').toUpperCase();
+          const id = String(node.id || '');
+          const params = node.parameters || {};
+          let summary = '';
+          if (params.size) summary = Array.isArray(params.size) ? params.size.join(' × ') + ' mm' : String(params.size);
+          else if (params.radius) summary = 'R ' + params.radius + ' mm' + (params.height ? ' × ' + params.height + ' mm' : '');
+          else if (params.thickness) summary = 't = ' + params.thickness + ' mm';
+          else summary = (node.inputs && node.inputs.length ? '← [' + node.inputs.join(', ') + ']' : (node.kind || 'node'));
+          return [op + (id ? ' · ' + id : ''), summary];
+        });
+      } else {
+        features = spec.kind === 'airplane'
         ? [
             [copy[currentLang].baseFeature, spec.width + ' × ' + spec.depth + ' × ' + spec.height + ' mm'],
             [currentLang === 'zh' ? '机身' : 'Fuselage', spec.width + ' mm'],
@@ -3105,11 +3119,12 @@
             [copy[currentLang].dividerFeature, spec.compartments + (currentLang === 'zh' ? ' 个隔间' : ' compartments')],
             [copy[currentLang].edgeFeature, (spec.chamfer || 0) + ' mm ' + (currentLang === 'zh' ? '倒角' : 'chamfer')]
           ];
-      if (spec.kind === 'plant' && Number(spec.drainage_holes || 0) > 0) {
-        features.push([copy[currentLang].drainageFeature, spec.drainage_holes + (currentLang === 'zh' ? ' 个' : ' ')]);
-      }
-      if (spec.kind === 'lamp' && spec.cable_channel) {
-        features.push([copy[currentLang].cableFeature, currentLang === 'zh' ? '底部隐藏通道' : 'underside recess']);
+        if (spec.kind === 'plant' && Number(spec.drainage_holes || 0) > 0) {
+          features.push([copy[currentLang].drainageFeature, spec.drainage_holes + (currentLang === 'zh' ? ' 个' : ' ')]);
+        }
+        if (spec.kind === 'lamp' && spec.cable_channel) {
+          features.push([copy[currentLang].cableFeature, currentLang === 'zh' ? '底部隐藏通道' : 'underside recess']);
+        }
       }
       features.forEach((feature, index) => {
         const node = document.createElement('div');
@@ -3554,7 +3569,7 @@
           console.warn('Geometry backend unavailable; using local preview.', error);
         }
         if (sequence !== generationSeq) return;
-        if (remote && nextSpec.kind && nextSpec.kind !== 'block') {
+        if (remote && remote.generation_strategy !== 'ir' && nextSpec.kind && nextSpec.kind !== 'block') {
           const remoteKind = remote.parameters && remote.parameters.kind
             ? remote.parameters.kind
             : kindForTitle(remote.title || '');
@@ -3591,7 +3606,7 @@
             ? remoteParams.profile_points
             : (nextSpec.profile_points || []),
         } : nextSpec;
-        backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema }) : null;
+        backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema, design_ir: remote.design_ir }) : null;
         renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
         if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(resolveBackendUrl(backendArtifact.glb), modelSpec);
         else loadLocalThreePreview(modelSpec);

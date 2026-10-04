@@ -1,0 +1,13 @@
+# Local secrets and generated CAD artifacts
+backend/.env
+backend/artifacts/
+.env
+.env.*
+!.env.example
+!backend/.env.example
+.venv/
+backend/.venv/
+__pycache__/
+backend/__pycache__/
+*.pyc
+

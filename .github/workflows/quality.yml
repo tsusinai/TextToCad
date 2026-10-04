@@ -1,0 +1,29 @@
+name: Backend quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  parser-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install lightweight test dependencies
+        run: python -m pip install --upgrade pytest fastapi pydantic
+      - name: Run text-to-CAD contract tests
+        run: pytest -q backend/test_quality.py
+
+  kernel-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build CadQuery/OCCT backend image
+        run: docker build --tag texttocad-backend:kernel-smoke ./backend
+      - name: Run geometry kernel smoke checks
+        run: docker run --rm texttocad-backend:kernel-smoke python kernel_smoke.py
