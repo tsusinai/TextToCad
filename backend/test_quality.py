@@ -680,6 +680,18 @@ def test_triangle_prompt_compiles_to_generic_polygon_prism():
     assert (params.width, params.depth, params.height) == (60.0, 40.0, 30.0)
     assert params.profile_points == [[-30.0, -20.0], [30.0, -20.0], [0.0, 20.0]]
     assert provenance["fields"]["profile_points"]["status"] == "derived"
+    ir = app.build_design_ir(
+        "三角形方块，底面 60 x 40 mm，厚度 30 mm",
+        params,
+        "standard",
+        False,
+        provenance["assumptions"],
+        provenance,
+    )
+    assert ir["nodes"][0]["operation"] == "polygon_prism"
+    assert len(ir["nodes"][0]["parameters"]["points"]) == 3
+    assert app.validate_ir(ir)["nodes"][0]["operation"] == "polygon_prism"
+
 
 def test_regular_octagon_prompt_uses_eight_sided_profile():
     title, params, provenance = app.parse_prompt_detailed("正八边形")
@@ -692,16 +704,6 @@ def test_regular_octagon_prompt_uses_eight_sided_profile():
     ir = app.build_design_ir("正八边形", params, "standard", False, provenance["assumptions"], provenance)
     assert ir["nodes"][0]["operation"] == "polygon_prism"
     assert len(ir["nodes"][0]["parameters"]["points"]) == 8
-    ir = app.build_design_ir(
-        "三角形方块，底面 60 x 40 mm，厚度 30 mm",
-        params,
-        "standard",
-        False,
-        provenance["assumptions"],
-        provenance,
-    )
-    assert ir["nodes"][0]["operation"] == "polygon_prism"
-    assert len(ir["nodes"][0]["parameters"]["points"]) == 3
     assert app.validate_ir(ir)["nodes"][0]["operation"] == "polygon_prism"
 
 
