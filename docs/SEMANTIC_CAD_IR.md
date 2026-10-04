@@ -129,14 +129,14 @@ v0.2 保留 `ModelParameters` 作为兼容响应，但将 `design_ir` 变成新�
     "entity": "outer",
     "topology": "face",
     "where": [
-      {"property": "normal", "equals": [0, 0, 1]},
-      {"property": "position", "equals": "max_z"}
+      {"normal": [0, 0, 1]},
+      {"position": [0, 0, 42]}
     ]
   }
 }
 ```
 
-执行器将选择器解析成 OCCT shape，并记录实际解析到的面、边和顶点。拓扑引用变化时，验证阶段必须报告引用失效。
+执行器将选择器解析成当前 OCC shape 的面、边或顶点集合；支持 index、normal、position、area、parallel_to、perpendicular_to 和 axis 基础匹配。没有匹配或拓扑类型不适配时会 fail-closed，并在 generation trace 中报告 selector_resolution。
 
 ## LLM 输出契约
 
