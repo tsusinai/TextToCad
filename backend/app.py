@@ -141,6 +141,9 @@ class IRCompileRequest(BaseModel):
     ir: dict[str, Any]
     # Optional mold pull direction for face-level draft analysis; defaults to +Z.
     mold_pull_direction: list[float] | None = None
+    # Optional mating/reference IR used for true two-entity clearance measurement.
+    reference_ir: dict[str, Any] | None = None
+    clearance_target_mm: float | None = Field(default=None, gt=0, le=1000)
 
 
 class IRRepairRequest(BaseModel):
