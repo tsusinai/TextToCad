@@ -1640,7 +1640,7 @@ def _face_level_dfm(
             "wall thickness uses B-Rep face distance when available and otherwise opposing-face center distance",
             "clearance is unknown without a mating part or explicit clearance faces",
             "overhang uses face-normal screening, not support simulation",
-            "draft assumes a +Z pull direction and does not solve mold split or undercuts",
+            "draft uses the configured pull direction but does not solve mold split or undercuts",
         ],
     }
 
