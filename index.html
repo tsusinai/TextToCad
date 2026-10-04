@@ -1305,6 +1305,15 @@
               <option value="cnc">CNC Milling</option>
               <option value="injection">Injection Molding</option>
             </select>
+            <div class="process-copy pull-copy" id="pullDirectionWrap" hidden><span class="section-label" id="pullDirectionLabel">MOLD PULL</span><small id="pullDirectionHint">Used for injection draft review</small></div>
+            <select class="process-select" id="pullDirectionSelect" aria-label="Mold pull direction" hidden>
+              <option value="0,0,1">+Z</option>
+              <option value="0,0,-1">−Z</option>
+              <option value="1,0,0">+X</option>
+              <option value="-1,0,0">−X</option>
+              <option value="0,1,0">+Y</option>
+              <option value="0,-1,0">−Y</option>
+            </select>
             <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">SYSTEM UNITS</span><small id="unitHint">Unspecified numeric values automatically assume this unit</small></div>
             <select class="process-select" id="unitSelect" aria-label="Input units">
               <option value="mm">mm</option>
@@ -1409,6 +1418,10 @@
     const featureTree = document.getElementById('featureTree');
     const materialSelect = document.getElementById('materialSelect');
     const processSelect = document.getElementById('processSelect');
+    const pullDirectionWrap = document.getElementById('pullDirectionWrap');
+    const pullDirectionLabel = document.getElementById('pullDirectionLabel');
+    const pullDirectionHint = document.getElementById('pullDirectionHint');
+    const pullDirectionSelect = document.getElementById('pullDirectionSelect');
     const unitSelect = document.getElementById('unitSelect');
     const generationMode = document.getElementById('generationMode');
     const modeHint = document.getElementById('modeHint');
@@ -1561,6 +1574,14 @@
         featureTree: 'PARAMETRIC FEATURE TREE',
         featureMode: 'PARAMETRIC B-REP',
         processLabel: 'MANUFACTURING PROCESS',
+        pullLabel: 'MOLD PULL DIRECTION',
+        pullHint: 'Used for injection draft review',
+        pullOptionZ: '+Z (default)',
+        pullOptionNegZ: '−Z',
+        pullOptionX: '+X',
+        pullOptionNegX: '−X',
+        pullOptionY: '+Y',
+        pullOptionNegY: '−Y',
         processHint: 'Process profile',
         fdmOption: 'FDM / FFF (3D Print)',
         slaOption: 'SLA / DLP (Resin)',
@@ -1690,6 +1711,14 @@
         featureTree: '参数化特征树',
         featureMode: '参数化 B-REP',
         processLabel: '目标制造工艺',
+        pullLabel: '注塑拉模方向',
+        pullHint: '用于注塑拔模复核',
+        pullOptionZ: '+Z（默认）',
+        pullOptionNegZ: '−Z',
+        pullOptionX: '+X',
+        pullOptionNegX: '−X',
+        pullOptionY: '+Y',
+        pullOptionNegY: '−Y',
         processHint: '工艺配置',
         fdmOption: 'FDM / FFF 熔融沉积 (3D打印)',
         slaOption: 'SLA / DLP 光固化成型',
