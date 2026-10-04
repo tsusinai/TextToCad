@@ -233,9 +233,10 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 该指标与 valid_brep、OCCT 有效性、单实体、体积和导出回读并列，前端可直接显示尺寸准确度与几何有效性的区别。
 - 结构化面/边 selector 已支持 index、normal、position、area、parallel_to、perpendicular_to 和 axis 基础匹配，并在无匹配时 fail-closed。
 - 面级 DFM 已记录面面积、法向、中心点、下向面和保守悬空筛查；壁厚优先使用 B-Rep 面间距离，内核不提供距离 API 时回退到相对面中心代理，并记录面索引与测量方法。
-- 注塑工艺现在按 +Z 拉模基准计算侧面的拔模偏差并逐面返回 pass/warning；没有侧面时返回 unknown。单实体模型的装配间隙明确返回 unknown，同时保留工艺建议间隙，避免把名义值误报为验证通过。
+- 注塑工艺按可配置拉模方向（默认 +Z）计算侧面的拔模偏差并逐面返回 pass/warning；非法方向会安全回退并标记 warning。单实体模型的装配间隙明确返回 unknown，同时保留工艺建议间隙，避免把名义值误报为验证通过。
+- `POST /v1/models`、`POST /v1/jobs` 和 `POST /v1/ir/compile` 共用 `mold_pull_direction` 契约，前端在注塑工艺下提供方向选择。
 - 前端质量摘要已显示采样面数、壁厚测量、拔模状态和间隙状态；现有 selector 仍保持无匹配即失败。
 
 下一步：
 
-- 引入可配置拉模方向、OCCT 射线/法向厚度采样、双实体装配间隙检查，并将 selector 命中面映射到 3D 高亮。
+- 引入 OCCT 射线/法向厚度采样、双实体间隙检查，并将 selector 命中面映射到 3D 高亮。
