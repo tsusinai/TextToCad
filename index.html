@@ -3051,8 +3051,8 @@
       const faceMeasurement = analysis && analysis.face_measurements;
       const faceSummary = faceMeasurement && faceMeasurement.face_count
         ? (currentLang === 'zh'
-          ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚仍需复核'
-          : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall review remains')
+          ? '已采样 ' + faceMeasurement.face_count + ' 个面 · 下向面 ' + (faceMeasurement.downward_face_count || 0) + ' · 壁厚代理 ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm'
+          : faceMeasurement.face_count + ' faces sampled · ' + (faceMeasurement.downward_face_count || 0) + ' downward · wall proxy ' + (faceMeasurement.wall_thickness_proxy_mm || '—') + ' mm')
         : null;
       document.getElementById('planWallMeta').textContent = statusText(checks.wall, currentLang === 'zh' ? '壁厚规则通过' : 'wall rule passes', currentLang === 'zh' ? '壁厚需要复核' : 'review wall thickness');
       document.getElementById('planRadiusMeta').textContent = statusText(checks.radius, currentLang === 'zh' ? '边缘处理符合工艺' : 'edge treatment passes', currentLang === 'zh' ? '边缘处理需要复核' : 'review edge treatment');
