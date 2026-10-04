@@ -117,7 +117,8 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 {
   "prompt": "block 120 80",
   "units": "mm",
-  "strict_dimensions": true
+  "strict_dimensions": true,
+  "generation_strategy": "auto"
 }
 ~~~
 
