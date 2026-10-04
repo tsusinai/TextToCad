@@ -399,15 +399,41 @@ def test_ir_repair_returns_and_applies_explicit_patch():
     assert app.solve_constraints(repaired)["valid"] is True
 
 
-def test_generation_strategy_defaults_to_legacy_and_accepts_ir_modes():
+def test_generation_strategy_defaults_to_ir_and_accepts_compatibility_modes():
     default_request = app.GenerateRequest(prompt="a 20 mm block")
     ir_request = app.GenerateRequest(
         prompt="a 20 mm block",
         mode="advanced",
         generation_strategy="auto",
     )
-    assert default_request.generation_strategy == "legacy"
+    assert default_request.generation_strategy == "ir"
     assert ir_request.generation_strategy == "auto"
+
+
+def test_deterministic_primitive_planner_is_family_independent(monkeypatch):
+    params_title, params, _ = app.parse_prompt_detailed("a regular octagon 80 mm wide and 20 mm tall")
+    ir = app._deterministic_ir_plan("a regular octagon 80 mm wide and 20 mm tall", "fdm", "mm", params)
+    assert ir["nodes"][0]["operation"] == "regular_polygon"
+    assert ir["nodes"][0]["parameters"]["sides"] == 8
+    assert app.validate_ir(ir)["outputs"][0]["node"] == "body"
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_executor_builds_regular_polygon():
+    ir = {
+        "schema_version": "0.2",
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [{
+            "id": "body", "kind": "primitive", "operation": "regular_polygon",
+            "parameters": {"sides": 7, "width": 60, "depth": 40, "height": 12},
+            "frame": "xy",
+        }],
+        "outputs": [{"id": "main", "node": "body"}],
+    }
+    execution = app.execute_ir(app.validate_ir(ir))
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["valid_brep"] is True
+    assert metrics["bbox_mm"] == {"x": 60.0, "y": 40.0, "z": 12.0}
 
 
 def test_cache_key_separates_generation_strategies():
