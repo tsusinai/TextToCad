@@ -17,7 +17,8 @@
 | 导出 | STEP、STL，条件支持 3MF、GLB；前端保留 OBJ 概念导出 |
 | 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
 | 高级模式 | OpenAI-compatible LLM、DeepSeek 示例、受限 JSON、失败回退 |
-| 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |\n| 通用建模路线 | 原语 + 特征 + 约束 + 基准的族型无关 IR（方案见 docs/SEMANTIC_CAD_IR.md） |
+| 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |
+| 通用建模路线 | 原语 + 特征 + 约束 + 基准的族型无关 IR（方案见 docs/SEMANTIC_CAD_IR.md） |
 | 建模过程 | 异步 job 实时阶段、真实 CAD 特征事件、导出校验状态、中间 GLB 步骤预览 |
 
 ## Live 预览
@@ -110,7 +111,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 | --- | --- | --- |
 | GET | /health | CadQuery、GLB、LLM 配置状态 |
 | GET | /v1/process-profiles | FDM、SLA、CNC、注塑工艺约束 |
-| POST | /v1/models | 同步生成一个模型 |
+| POST | /v1/models | 同步生成一个模型（默认通用 IR 模式） |
 | POST | /v1/jobs | 创建可轮询、可取消的生成任务 |
 | GET/DELETE | /v1/jobs/{job_id} | 查询或取消任务 |
 | GET | /v1/models/{id}/steps/{step_id} | 查看 `include_steps=true` 生成的中间 GLB |
@@ -118,6 +119,10 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 | GET | /v1/models/{id}/ir | Semantic CAD IR |
 | GET | /v1/models/{id}/analysis | 壁厚采样和制造问题 |
 | GET | /v1/models/{id}/download?format=step | 下载 STEP、STL、3MF 或 GLB |
+| POST | /v1/ir/plan | 自然语言编译为通用 v0.2 IR 草案 |
+| POST | /v1/ir/validate | 静态校验 IR 语法、DAG、原语和约束 |
+| POST | /v1/ir/compile | 内存直接编译执行通用 IR |
+| POST | /v1/ir/repair | 生成受限 IR 参数修复补丁 |
 
 异步任务的 `GET /v1/jobs/{job_id}` 响应会返回 `progress.stage`、`current_step`、`elapsed_ms` 和有序 `events`；最终 response 与 `manifest.json` 也会保存 `generation_trace`。前端因此展示真实后端阶段，而不是按时间猜测进度。请求加入 `include_steps: true` 后，后端会保存有限数量的中间 GLB 快照。
 
@@ -129,19 +134,19 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
   "units": "mm",
   "strict_dimensions": true,
   "mode": "advanced",
-  "generation_strategy": "auto"
+  "generation_strategy": "ir"
 }
 ~~~
 
-高级模式请求示例：
+纯自然语言请求示例：
 
 ~~~json
 {
-  "prompt": "一个带三个隔间、宽 120 毫米、深 80 毫米的桌面收纳盒",
+  "prompt": "A cylinder with radius 16 mm and height 35 mm, with a through-hole of radius 6 mm along the central axis",
   "units": "mm",
   "process": "fdm",
-  "mode": "advanced",
-  "generation_strategy": "auto"
+  "mode": "standard",
+  "generation_strategy": "ir"
 }
 ~~~
 
@@ -152,12 +157,12 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 1. LLM/规则解析层：理解意图，生成受限参数和假设。
 2. 几何确定层：由 Semantic CAD IR、CadQuery/OCCT、验证器和导出器完成实际建模。
 
-每个 revision 会保存参数来源、assumptions、特征规划、约束、检查和导出 manifest。IR 已支持版本化 Schema、Feature DAG、约束求解器、有限自动修复和可回退执行；后续继续扩展面级 DFM、sweep/loft/pattern 和真实语料回归。
+每个 revision 会保存参数来源、assumptions、特征规划、约束、检查和导出 manifest。IR 已支持版本化 Schema、Feature DAG、约束求解器、有限自动修复、面级 DFM、sweep/loft/pattern 与 CSG 布尔差运算。
 
 ## 当前边界
 
 - 壁厚、间隙和拔模仍包含名义估算；当前已增加面面积、法向、中心点和下向面的保守悬空初筛。`manufacturing_ready` 会保持 false。
-- LLM 高级模式需要后端 API key；标准模式无需 API，仍可离线工作。
+- 未配置 LLM API Key 时，支持显式原语及通孔布尔运算的离线生成；任意未知自由形体在无 LLM 时返回 503，避免错误映射到固定模板。
 - 没有后端时可以进行真实参数化预览和 OBJ 概念导出，但 STEP/STL/OCCT 检查必须连接后端。
 - 生产部署应使用 HTTPS、持久化 ARTIFACT_ROOT、严格 CORS、速率限制和进程级任务隔离。
 
