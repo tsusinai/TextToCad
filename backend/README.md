@@ -99,4 +99,10 @@ kernel_smoke.py 会实际构造薄壁凹腔，执行面级 DFM/法向射线能�
 
 The production path is now `natural language -> Semantic CAD IR -> static validation -> constraint solve/repair -> CadQuery/OCCT -> B-Rep/DFM verification`. The frontend always requests `generation_strategy: "ir"`. The IR contains primitives, features, datums, parameters, constraints, and outputs; it does not contain a required model-family enum. `ModelParameters.kind` remains only as a response compatibility field.
 
-When no LLM key is configured, the backend can compile explicit primitive prompts (box/cube, sphere, cylinder, cone, and regular polygons) with the deterministic primitive planner. A free-form description without an LLM returns a clear 503 explaining how to configure the provider. This prevents a missing provider from producing a misleading default model.
+The IR executor (`ir_executor.py`) provides full support for:
+- Primitives: `box`, `cylinder`, `sphere`, `cone`, `torus` (`Solid.makeTorus`), `regular_polygon`, `polygon_prism`, `sketch`.
+- Spatial transformations: inline `position`/`origin`/`center` parameter translation, `translate`, `rotate`, `mirror`.
+- CSG Booleans: `union`, `cut`, `intersect` with multi-node topological inputs.
+- Feature finishing: `fillet`, `chamfer`, `shell`, `linear_pattern`, `polar_pattern`.
+
+When no LLM key is configured, the backend compiles explicit primitive and boolean hole prompts (box/cube, sphere, cylinder, cone, torus, regular polygons, and hollow/through-hole geometry) with the deterministic primitive planner. A free-form description without an LLM returns a clear 503 explaining how to configure the provider. This prevents a missing provider from producing a misleading default model.

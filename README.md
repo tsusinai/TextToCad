@@ -84,6 +84,15 @@ flowchart LR
 
 LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会把 mm/cm/m/in 统一换算为毫米，记录原始单位和逐字段来源，对 IR 参数、特征操作、选择器、尺寸、布尔值、数值范围和响应大小做校验，再交给 CadQuery/OCCT 建模；旧模型族只作为兼容提示，不限制新描述。没有 API key、provider 超时、JSON 无效或 provider 不支持 JSON response format 时，会回退到确定性解析器。
 
+## 纯自然语言驱动与无模板通用 CAD 架构
+
+系统已彻底解除对固定模板族的强依赖，实现纯自然语言到可制造 CAD 实体的端到端编译与渲染：
+
+1. **纯自然语言直通规划**：用户输入任意形式的几何与制造描述（如“带穿孔圆柱套筒”、“中心挖球形空腔的立方体”、“法兰底座与上凸台及中心通孔”），系统直接通过 LLM 或通用解析器生成无族型约束的 `Semantic CAD IR v0.2`。
+2. **多特征与 CSG 布尔运算**：IR 执行器全面支持图原语（`box`, `cylinder`, `sphere`, `cone`, `torus`, `regular_polygon`, `sketch`）及其空间位移（`position/translate`）、旋转（`rotate`）、镜像（`mirror`），以及核心 CSG 布尔操作（`cut` 差集开孔/切削、`union` 并集组合、`intersect` 交集），并结合倒角（`chamfer`）、圆角（`fillet`）和抽壳（`shell`）。
+3. **真实 3D 视口渲染**：CadQuery/OCCT 内核完成 B-Rep 实体构建后生成标准 GLB 产物；前端 Three.js 视口直接加载渲染 3D 实体与 CAD 轮廓线框，支持轨道旋转、平移、缩放、正视/顶视/等轴测多视角切换与视野自适应，不再回退到静态 SVG 占位图。
+4. **动态参数化特征树**：前端工作台直观展示 IR 特征图执行流（例如 `CYLINDER · outer` → `CYLINDER · hole` → `CUT · through-hole`），并实时呈现基于 B-Rep 拓扑的水密实体指标（面数、体积、三维空间包围盒），确保设计完全透明可回溯。
+
 ## 典型示例（非固定模型族）
 
 - Storage tray / organizer：托盘、桌面收纳盒、隔间（示例）
