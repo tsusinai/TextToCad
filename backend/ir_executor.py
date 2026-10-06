@@ -560,6 +560,32 @@ def _node_shape(
             result = result.union(inputs[0].rotate((0, 0, 0), axis, angle * index / count))
         return result
     if operation in {"union", "cut", "intersect"}:
+        if len(inputs) == 1:
+            if operation == "cut" and any(k in values for k in ("radius", "diameter", "hole_radius", "size", "width")):
+                if any(k in values for k in ("radius", "diameter", "hole_radius")):
+                    rad_val = values.get("radius", values.get("hole_radius"))
+                    if rad_val is None and "diameter" in values:
+                        rad_val = _number(parameters, values["diameter"], "cut.diameter") / 2
+                    rad = _number(parameters, rad_val or 5.0, "cut.radius")
+                    depth_val = values.get("depth", values.get("height", values.get("length", 100.0)))
+                    depth = _number(parameters, depth_val, "cut.depth")
+                    tool = _workplane(frame).circle(rad).extrude(depth * 2.0)
+                    x = _number(parameters, values.get("x", 0.0), "cut.x", -1e12)
+                    y = _number(parameters, values.get("y", 0.0), "cut.y", -1e12)
+                    z = _number(parameters, values.get("z", -depth * 0.5), "cut.z", -1e12)
+                    tool = tool.translate((x, y, z))
+                    return inputs[0].cut(tool)
+                elif any(k in values for k in ("size", "width")):
+                    w = _number(parameters, values.get("width", 10.0), "cut.width")
+                    d = _number(parameters, values.get("depth", 10.0), "cut.depth")
+                    h = _number(parameters, values.get("height", values.get("depth", 100.0)), "cut.height")
+                    tool = _workplane(frame).box(w, d, h, centered=(True, True, True))
+                    x = _number(parameters, values.get("x", 0.0), "cut.x", -1e12)
+                    y = _number(parameters, values.get("y", 0.0), "cut.y", -1e12)
+                    z = _number(parameters, values.get("z", 0.0), "cut.z", -1e12)
+                    tool = tool.translate((x, y, z))
+                    return inputs[0].cut(tool)
+            return inputs[0]
         return _combine(inputs, operation)
     if operation == "translate":
         if len(inputs) != 1:

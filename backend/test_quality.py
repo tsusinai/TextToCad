@@ -847,3 +847,30 @@ def test_ir_executor_supports_inline_position_transform():
     metrics = app.shape_metrics(execution["shape"])
     assert metrics["bbox_mm"]["z"] == 10.0
 
+
+def test_ir_executor_supports_single_input_cut_feature():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "plate",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"size": [50, 50, 5]},
+            },
+            {
+                "id": "center_hole",
+                "kind": "feature",
+                "operation": "cut",
+                "inputs": ["plate"],
+                "parameters": {"diameter": 22, "depth": 5},
+            },
+        ],
+        "outputs": [{"id": "main", "node": "center_hole", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["face_count"] >= 7
+
+
