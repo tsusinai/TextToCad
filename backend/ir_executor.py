@@ -49,6 +49,13 @@ def _resolve(value: Any, parameters: dict[str, Any]) -> Any:
     except SyntaxError:
         return value
 
+    if isinstance(tree.body, ast.Name) and tree.body.id not in parameters:
+        if tree.body.id.lower() == "true":
+            return True
+        if tree.body.id.lower() == "false":
+            return False
+        return text
+
     def evaluate(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
             return evaluate(node.body)
@@ -103,7 +110,35 @@ def _number(parameters: dict[str, Any], value: Any, name: str, minimum: float = 
 
 
 def _vector(parameters: dict[str, Any], value: Any, name: str, length: int = 3) -> tuple[float, ...]:
+    if isinstance(value, str):
+        v_str = value.strip().lower()
+        named_axes = {
+            "x": (1.0, 0.0, 0.0), "+x": (1.0, 0.0, 0.0), "-x": (-1.0, 0.0, 0.0),
+            "y": (0.0, 1.0, 0.0), "+y": (0.0, 1.0, 0.0), "-y": (0.0, -1.0, 0.0),
+            "z": (0.0, 0.0, 1.0), "+z": (0.0, 0.0, 1.0), "-z": (0.0, 0.0, -1.0),
+        }
+        if v_str in named_axes:
+            return named_axes[v_str]
+    if isinstance(value, dict):
+        x = _number(parameters, value.get("x", 0.0), f"{name}.x", -1e12)
+        y = _number(parameters, value.get("y", 0.0), f"{name}.y", -1e12)
+        z = _number(parameters, value.get("z", 0.0), f"{name}.z", -1e12)
+        return (x, y, z)
     resolved = _resolve(value, parameters)
+    if isinstance(resolved, str):
+        v_str = resolved.strip().lower()
+        named_axes = {
+            "x": (1.0, 0.0, 0.0), "+x": (1.0, 0.0, 0.0), "-x": (-1.0, 0.0, 0.0),
+            "y": (0.0, 1.0, 0.0), "+y": (0.0, 1.0, 0.0), "-y": (0.0, -1.0, 0.0),
+            "z": (0.0, 0.0, 1.0), "+z": (0.0, 0.0, 1.0), "-z": (0.0, 0.0, -1.0),
+        }
+        if v_str in named_axes:
+            return named_axes[v_str]
+    if isinstance(resolved, dict):
+        x = _number(parameters, resolved.get("x", 0.0), f"{name}.x", -1e12)
+        y = _number(parameters, resolved.get("y", 0.0), f"{name}.y", -1e12)
+        z = _number(parameters, resolved.get("z", 0.0), f"{name}.z", -1e12)
+        return (x, y, z)
     if not isinstance(resolved, (list, tuple)) or len(resolved) != length:
         raise IRExecutionError(f"{name} must contain {length} numbers")
     return tuple(float(item) for item in resolved)
@@ -590,7 +625,10 @@ def _node_shape(
     if operation == "translate":
         if len(inputs) != 1:
             raise IRExecutionError("translate requires exactly one input")
-        return inputs[0].translate(_vector(parameters, values.get("vector", [0, 0, 0]), "translate.vector"))
+        vec = values.get("vector")
+        if vec is None:
+            vec = [values.get("x", 0.0), values.get("y", 0.0), values.get("z", 0.0)]
+        return inputs[0].translate(_vector(parameters, vec, "translate.vector"))
     if operation == "rotate":
         if len(inputs) != 1:
             raise IRExecutionError("rotate requires exactly one input")

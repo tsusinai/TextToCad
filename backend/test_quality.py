@@ -874,3 +874,37 @@ def test_ir_executor_supports_single_input_cut_feature():
     assert metrics["face_count"] >= 7
 
 
+def test_ir_executor_supports_xyz_translate_and_named_axis_rotate():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "arm",
+                "kind": "primitive",
+                "operation": "cylinder",
+                "parameters": {"radius": 3, "height": 10},
+            },
+            {
+                "id": "arm_rot",
+                "kind": "feature",
+                "operation": "rotate",
+                "inputs": ["arm"],
+                "parameters": {"axis": "x", "angle": 90},
+            },
+            {
+                "id": "arm_placed",
+                "kind": "feature",
+                "operation": "translate",
+                "inputs": ["arm_rot"],
+                "parameters": {"x": 5, "y": 10, "z": 15},
+            },
+        ],
+        "outputs": [{"id": "main", "node": "arm_placed", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["bbox_mm"]["z"] == 6.0  # diameter of cylinder
+
+
+
