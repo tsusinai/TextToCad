@@ -12,7 +12,7 @@
 | 能力 | 当前实现 |
 | --- | --- |
 | 自然语言 | 中文/英文尺寸、单位换算、通用 Semantic CAD IR 规划、隔间、壁厚、倒角、排水孔、走线槽 |
-| 3D 预览 | Three.js 参数化预览、GLB/OrbitControls、等距/顶视/前视、旋转/缩放/平移 |
+| 3D 预览 | Three.js 参数化预览、GLB/OrbitControls、等距/顶视/前视、X/Y/Z 90° 旋转反转、XY/XZ/YZ 平面镜像与翻转、一键姿态重置 |
 | 几何内核 | CadQuery/OCCT 参数化 B-Rep |
 | 导出 | STEP、STL，条件支持 3MF、GLB；前端保留 OBJ 概念导出 |
 | 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
@@ -91,7 +91,7 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 
 1. **纯自然语言直通规划**：用户输入任意形式的几何与制造描述（如“带穿孔圆柱套筒”、“中心挖球形空腔的立方体”、“法兰底座与上凸台及中心通孔”），系统直接通过 LLM 或通用解析器生成无族型约束的 `Semantic CAD IR v0.2`。
 2. **多特征与 CSG 布尔运算**：IR 执行器全面支持图原语（`box`, `cylinder`, `sphere`, `cone`, `torus`, `regular_polygon`, `sketch`）及其空间位移（`position/translate`）、旋转（`rotate`）、镜像（`mirror`），以及核心 CSG 布尔操作（`cut` 差集开孔/切削、`union` 并集组合、`intersect` 交集），并结合倒角（`chamfer`）、圆角（`fillet`）和抽壳（`shell`）。
-3. **真实 3D 视口渲染**：CadQuery/OCCT 内核完成 B-Rep 实体构建后生成标准 GLB 产物；前端 Three.js 视口直接加载渲染 3D 实体与 CAD 轮廓线框，支持轨道旋转、平移、缩放、正视/顶视/等轴测多视角切换与视野自适应，不再回退到静态 SVG 占位图。
+3. **真实 3D 视口渲染与交互姿态控制**：CadQuery/OCCT 内核完成 B-Rep 实体构建后生成标准 GLB 产物；前端 Three.js 视口直接加载渲染 3D 实体与 CAD 轮廓线框，不仅支持轨道旋转、平移、缩放、正视/顶视/等轴测多视角切换与视野自适应，还全新集成了 **X/Y/Z 轴 90° 旋转反转、XY/XZ/YZ 平面镜像（双面材质渲染防破损）、XY/XZ/YZ 平面 180° 翻转及一键姿态重置** 工具栏，方便多角度审查与倒装检查。
 4. **动态参数化特征树**：前端工作台直观展示 IR 特征图执行流（例如 `CYLINDER · outer` → `CYLINDER · hole` → `CUT · through-hole`），并实时呈现基于 B-Rep 拓扑的水密实体指标（面数、体积、三维空间包围盒），确保设计完全透明可回溯。
 
 ## 典型示例（非固定模型族）
