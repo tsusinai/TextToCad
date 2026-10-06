@@ -382,8 +382,56 @@
       box-shadow: 0 0 0 3px #fff, 0 0 0 4px #d6e8c2;
     }
     .feature-node strong, .feature-node small { display: block; }
+    .feature-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
     .feature-node strong { font-family: 'Space Grotesk', sans-serif; font-size: 11.5px; color: var(--ink); }
     .feature-node small { margin-top: 2px; color: var(--muted); font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
+    .op-badge {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      padding: 1.5px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      line-height: 1.25;
+      flex-shrink: 0;
+    }
+    .op-box, .op-cylinder, .op-sphere, .op-cone, .op-torus, .op-regular_polygon, .op-polygon_prism, .op-sketch {
+      background: #e6f6f6;
+      color: #0d5f5f;
+      border: 1px solid #b3e6e6;
+    }
+    .op-union, .op-add, .op-fuse {
+      background: #edf2fc;
+      color: #234eb0;
+      border: 1px solid #cad8f8;
+    }
+    .op-cut, .op-subtract, .op-hole, .op-difference {
+      background: #fdf3e7;
+      color: #b45309;
+      border: 1px solid #fbdab3;
+    }
+    .op-intersect {
+      background: #fdf2f8;
+      color: #9d174d;
+      border: 1px solid #fbcfe8;
+    }
+    .op-translate, .op-rotate, .op-mirror, .op-linear_pattern, .op-polar_pattern {
+      background: #f5f0fb;
+      color: #6b21a8;
+      border: 1px solid #e3d2f6;
+    }
+    .op-fillet, .op-chamfer, .op-shell {
+      background: #eef7e9;
+      color: #2d6a1b;
+      border: 1px solid #cbe6bf;
+    }
     .generation-process {
       margin-top: 16px;
       padding: 16px;
@@ -1161,7 +1209,7 @@
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">F</div><div class="brand-name">FORM / AI CAD</div></div>
+      <div class="brand"><div class="brand-mark">F</div><div class="brand-name">FORM / SEMANTIC CAD</div></div>
       <nav class="nav" aria-label="Primary navigation">
         <button class="active" type="button">Workspace</button>
         <button type="button">Templates</button>
@@ -1171,36 +1219,36 @@
     </header>
     <section class="workspace">
       <aside class="prompt-panel">
-        <div class="eyebrow">TEXT-TO-CAD ENGINE</div>
-        <h1>Describe your part.</h1>
-        <p class="helper">Specify parametric geometry, target dimensions, and manufacturing intent.</p>
+        <div class="eyebrow">SEMANTIC CAD ENGINE</div>
+        <h1>Natural Language to CAD</h1>
+        <p class="helper">Prompt-driven B-Rep modeling: specify features, dimensions, CSG booleans, and manufacturing intent.</p>
         <div class="prompt-editor">
-          <textarea id="prompt" aria-label="Describe your part">A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.</textarea>
-          <div class="chip-row"><span class="chip">soft chamfer edges</span><span class="chip neutral">120 × 80 mm</span></div>
+          <textarea id="prompt" aria-label="Describe your part">A precision mounting flange: base cylinder radius 30 mm, height 10 mm, with four 4 mm mounting holes and a 12 mm central bore.</textarea>
+          <div class="chip-row"><span class="chip">four 4 mm holes</span><span class="chip neutral">Ø 60 × 10 mm</span></div>
         </div>
         <div class="interpretation" id="interpretation" aria-live="polite">
-          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">INTERPRETED SPECIFICATIONS</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
-          <strong class="interpretation-summary" id="interpretationSummary">Desk organizer · 120 × 80 × 42 mm</strong>
-          <small class="interpretation-details" id="interpretationDetails">3 compartments · chamfer 4 mm · ENGINE DEFAULTS applied where unspecified</small>
+          <div class="interpretation-head"><span class="section-label" id="interpretationLabel">DESIGN INTENT & IR SPECS</span><span class="interpretation-status" id="interpretationStatus">READY</span></div>
+          <strong class="interpretation-summary" id="interpretationSummary">Precision mounting flange · Ø 60 × 10 mm</strong>
+          <small class="interpretation-details" id="interpretationDetails">Watertight B-Rep solid · 4 mounting holes · 12 mm central bore</small>
         </div>
         <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut" id="generateShortcut">Ctrl ↵</span></button>
         <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
         <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
         <div class="starter">
-          <div class="section-label">PARAMETRIC PRESETS</div>
+          <div class="section-label">ENGINEERING PRESETS</div>
           <div class="starter-buttons">
-            <button type="button" data-prompt="A shallow storage tray with a 160 mm footprint and 12 mm rounded corners.">Storage tray</button>
-            <button type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.">Cable clip</button>
-            <button type="button" data-prompt="A minimal plant pot, 90 mm diameter and 82 mm tall, with drainage holes.">Plant pot</button>
-            <button type="button" data-prompt="A small lamp base, 110 mm wide, with a hidden cable channel.">Lamp base</button>
+            <button type="button" data-prompt="A precision mounting flange: radius 30 mm, thickness 10 mm, with four 4 mm mounting holes and a 12 mm central bore.">Mounting flange</button>
+            <button type="button" data-prompt="An L-shaped angle bracket: horizontal arm 50x30x6 mm, vertical arm 40x30x6 mm, with a 6 mm mounting hole on each arm.">L-bracket</button>
+            <button type="button" data-prompt="A finned heat sink: baseplate 60x60x4 mm with 5 cooling fins of 15 mm height, and a 20x20x2 mm recessed chip pocket on the bottom.">Finned heat sink</button>
+            <button type="button" data-prompt="A stepped transmission shaft: base diameter 30 mm length 40 mm, middle diameter 20 mm length 50 mm, output shaft diameter 14 mm length 30 mm with a keyway slot.">Stepped shaft</button>
           </div>
         </div>
         <div class="recent">
-          <div class="section-label">RECENT SESSIONS</div>
+          <div class="section-label">FEATURED CAD DESIGNS</div>
           <div class="recent-list">
-            <button class="recent-item" type="button" data-prompt="A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge."><strong>Desk organizer</strong><span>3 bodies · edited 2m ago</span></button>
-            <button class="recent-item" type="button" data-prompt="A flexible cable clip for a 6 mm cable, with a 3 mm snap opening."><strong>Cable management clip</strong><span>1 body · edited yesterday</span></button>
-            <button class="recent-item" type="button" data-prompt="A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall."><strong>Minimal pen cup</strong><span>2 bodies · edited Sep 28</span></button>
+            <button class="recent-item" type="button" data-prompt="A precision mounting flange: radius 30 mm, thickness 10 mm, with four 4 mm mounting holes and a 12 mm central bore."><strong>Mounting flange</strong><span>6 faces · watertight manifold</span></button>
+            <button class="recent-item" type="button" data-prompt="An L-shaped angle bracket: horizontal arm 50x30x6 mm, vertical arm 40x30x6 mm, with a 6 mm mounting hole on each arm."><strong>L-shaped bracket</strong><span>11 faces · watertight manifold</span></button>
+            <button class="recent-item" type="button" data-prompt="A finned heat sink: baseplate 60x60x4 mm with 5 cooling fins of 15 mm height, and a 20x20x2 mm recessed chip pocket on the bottom."><strong>Finned heat sink</strong><span>15 faces · watertight manifold</span></button>
           </div>
           <div class="revision-head"><span class="section-label" id="revisionLabel">VERSION HISTORY</span><button class="revision-clear" id="clearRevisions" type="button">Clear</button></div>
           <div class="revision-list" id="revisionList"></div>
@@ -1511,27 +1559,27 @@
         workspace: 'Workspace',
         templates: 'Templates',
         history: 'History',
-        eyebrow: 'TEXT-TO-CAD ENGINE',
-        title: 'Describe your part.',
-        helper: 'Specify parametric geometry, target dimensions, and manufacturing intent.',
+        eyebrow: 'SEMANTIC CAD ENGINE',
+        title: 'Natural Language to 3D CAD',
+        helper: 'Prompt-driven parametric modeling: features, dimensions, CSG booleans, and DFM validation.',
         generate: 'Generate Model',
         regenerate: 'Regenerate Model',
-        generating: 'Generating geometry…',
-        starter: 'PARAMETRIC PRESETS',
-        recent: 'RECENT SESSIONS',
+        generating: 'Compiling B-Rep geometry…',
+        starter: 'ENGINEERING PRESETS',
+        recent: 'FEATURED CAD DESIGNS',
         live: '3D CAD VIEWPORT',
         iso: 'ISOMETRIC',
         top: 'TOP',
         front: 'FRONT',
-        export: 'Export OBJ',
-        exportStep: 'Export STEP',
-        export3mf: 'Export 3MF',
-        exportGlb: 'Export GLB',
+        export: 'Export OBJ (Wireframe)',
+        exportStep: 'Export STEP (AP242)',
+        export3mf: 'Export 3MF (Additive)',
+        exportGlb: 'Export GLB (3D Viewer)',
         exportGlbEntities: 'Export Entities GLB',
         fit: 'FIT',
         grid: 'GRID',
         viewerUnits: 'Viewport Units',
-        interactionHint: 'Left-click drag to orbit · Scroll to zoom · Right-click drag to pan · Double-click to reset',
+        interactionHint: 'Left drag: orbit · Scroll: zoom · Right drag: pan · View buttons: orthographic align',
         localThreeHint: 'Interactive parametric preview · Connect backend for validated B-Rep geometry',
         localConceptHint: 'Concept wireframe preview · Connect backend for full solid model',
         backendFallbackHint: 'SVG wireframe fallback · GLB preview currently unavailable',
@@ -1540,7 +1588,7 @@
         standardMode: 'Standard (Deterministic)',
         advancedMode: 'Advanced (LLM + OCCT)',
         standardModeHint: 'Parametric rule parser · Deterministic, ultra-fast & private',
-        advancedModeHint: 'LLM semantic intent extraction · Solved & validated by OCCT',
+        advancedModeHint: 'DeepSeek semantic intent extraction · Solved & validated by OCCT',
         advancedRequiresBackend: 'Advanced LLM mode requires an active backend connection.',
         advancedUnavailable: 'Backend connected, but LLM API credentials are not configured.',
         unitLabel: 'SYSTEM UNITS',
@@ -1550,7 +1598,7 @@
         mOption: 'Meters (m)',
         inOption: 'Inches (in)',
         backendAuthRequired: 'Backend authentication required: configure server API token.',
-        generationProcessLabel: 'BUILD SEQUENCE TRACE',
+        generationProcessLabel: 'KERNEL EXECUTION TRACE',
         readyStatus: 'READY',
         runningStatus: 'BUILDING',
         completedStatus: 'SOLVED',
@@ -1572,7 +1620,7 @@
         verified: 'VERIFIED',
         noIssues: 'All DFM constraints satisfied',
         issueCount: 'DFM warnings detected',
-        interpretation: 'INTERPRETED SPECIFICATIONS',
+        interpretation: 'DESIGN INTENT & IR SPECS',
         interpretationReady: 'Ready for Generation',
         assumptions: 'ENGINE DEFAULTS',
         revision: 'VERSION HISTORY',
@@ -1582,7 +1630,7 @@
         revisionLocal: 'Client Preview',
         checksPassed: 'checks passed',
         checksReview: 'requires inspection',
-        featureTree: 'PARAMETRIC FEATURE TREE',
+        featureTree: 'FEATURE BUILD SEQUENCE',
         featureMode: 'PARAMETRIC B-REP',
         processLabel: 'MANUFACTURING PROCESS',
         pullLabel: 'MOLD PULL DIRECTION',
@@ -1609,16 +1657,16 @@
         diffNone: 'No parameter variance',
         params: 'PARAMETRIC CONSTRAINTS',
         solved: 'All constraints fully resolved',
-        body: 'SOLID CLASSIFICATION',
-        size: 'BOUNDING BOX',
-        material: 'MATERIAL PRESET',
+        body: 'TOPOLOGY CLASSIFICATION',
+        size: 'OUTER BOUNDING BOX',
+        material: 'MATERIAL & FINISH',
         materialValue: 'Matte PLA · Warm White',
         materialMeta: 'Production-ready surface standard',
-        planEyebrow: 'DFM MANUFACTURING AUDIT',
-        planTitle: 'Design for Manufacturability',
-        planSubtitle: 'Rule-based DFM gate. Validates wall limits, tooling draft, and export geometry.',
+        planEyebrow: 'MANUFACTURING DFM AUDIT',
+        planTitle: 'Design for Manufacturability (DFM)',
+        planSubtitle: 'Multi-physics validation: B-Rep manifold validity, minimum wall limits, tooling draft, and AP242 STEP conformance.',
         readiness: 'DFM PASSED',
-        state: 'PARAMETRIC SOLID',
+        state: 'B-REP MANIFOLD',
         backendState: 'OCCT B-REP SOLID',
         advancedState: 'GENERIC LLM IR + OCCT B-REP',
         irState: 'GENERIC CAD IR + OCCT',
@@ -1627,12 +1675,12 @@
         failed: 'Generation Failed',
         solving: 'SOLVING CONSTRAINTS',
         parsing: 'PARSING INTENT',
-        defaultMeta: '3 solids · 12 mm wall · chamfer 4 mm',
+        defaultMeta: '1 solid · 10 mm height · 4 mounting holes',
         cableMeta: '1 solid · 6 mm cable clip · snap-fit',
         promptLabel: 'Describe your part or assembly',
         viewportAria: 'Interactive 3D CAD model preview',
         rounded: 'soft chamfer edges',
-        dimension: '120 × 80 mm',
+        dimension: 'Ø 60 × 10 mm',
         bodyMeta: 'Watertight solid manifold',
         bounding: 'Outer Bounding Box',
         wall: 'Wall Thickness',
@@ -1649,27 +1697,27 @@
         workspace: '工作台',
         templates: '设计模板',
         history: '版本历史',
-        eyebrow: '自然语言 CAD 几何引擎',
-        title: '描述你的零件。',
-        helper: '输入形状特征、尺寸参数和制造用途。',
+        eyebrow: '语义 CAD 几何引擎',
+        title: '纯自然语言三维建模',
+        helper: '直接描述工程结构、特征尺寸、CSG 布尔切削/融合与制造工艺，由工业内核精确求解构建。',
         generate: '生成三维模型',
         regenerate: '重新生成模型',
         generating: '正在构建几何实体…',
-        starter: '快速设计模板',
-        recent: '最近设计会话',
-        live: '3D 实时视口',
+        starter: '工程基准示例',
+        recent: '经典 CAD 设计',
+        live: '3D CAD 实时视口',
         iso: '轴测投影 (ISO)',
         top: '俯视图 (TOP)',
         front: '主视图 (FRONT)',
-        export: '导出 OBJ',
-        exportStep: '导出工业级 STEP',
-        export3mf: '导出 3MF 打印文件',
-        exportGlb: '导出 GLB 预览',
+        export: '导出 OBJ (几何网格)',
+        exportStep: '导出 STEP (工业级 B-Rep)',
+        export3mf: '导出 3MF (增材制造数据)',
+        exportGlb: '导出 GLB (交互三维模型)',
         exportGlbEntities: '导出多实体 GLB',
         fit: '视角复位',
         grid: '参考网格',
         viewerUnits: '视口显示单位',
-        interactionHint: '左键拖拽旋转 · 滚轮缩放 · 右键平移 · 双击视角居中',
+        interactionHint: '左键旋转 · 滚轮缩放 · 右键平移 · 视角按钮快速对齐',
         localThreeHint: '本地交互式参数化预览 · 连接后端生成精确 B-Rep 实体',
         localConceptHint: '几何概念线框 · 启动后端服务可获得完整 3D 实体',
         backendFallbackHint: '矢量线框降级显示 · GLB 视口暂未就绪',
@@ -1688,7 +1736,7 @@
         mOption: '米 (m)',
         inOption: '英寸 (in)',
         backendAuthRequired: '后端服务启用了身份鉴权，请配置访问密钥。',
-        generationProcessLabel: '特征构建追踪',
+        generationProcessLabel: '几何内核执行时序',
         readyStatus: '就绪',
         runningStatus: '构建中',
         completedStatus: '已求解',
@@ -1710,7 +1758,7 @@
         verified: '已通过验证',
         noIssues: '完全符合当前制造工艺规范',
         issueCount: '项工艺警告',
-        interpretation: '参数解析结果',
+        interpretation: '设计意图与特征规划',
         interpretationReady: '参数完备 · 可直接生成',
         assumptions: '引擎缺省推导',
         revision: '本地版本历史',
@@ -1720,8 +1768,8 @@
         revisionLocal: '本地参数化预览',
         checksPassed: '项检查通过',
         checksReview: '项需要复核',
-        featureTree: '参数化特征树',
-        featureMode: '参数化 B-REP',
+        featureTree: '参数化特征构建树',
+        featureMode: 'OCCT B-REP 实体',
         processLabel: '目标制造工艺',
         pullLabel: '注塑拉模方向',
         pullHint: '用于注塑拔模复核',
@@ -1745,18 +1793,18 @@
         editHint: '继续输入自然语言指令即可递进修改模型',
         diffInitial: '初始基准版本',
         diffNone: '参数无变动',
-        params: '几何约束与参数',
+        params: '几何尺寸约束',
         solved: '几何约束求解完全收敛',
-        body: '实体拓扑类型',
-        size: '空间外轮廓包围盒',
-        material: '材质与工艺预设',
+        body: '实体流形拓扑',
+        size: '空间尺寸包围盒',
+        material: '材质与表面工艺',
         materialValue: '哑光工程 PLA · 暖白',
         materialMeta: '满足量产打印的标准工件表面',
-        planEyebrow: 'DFM 可制造性评审',
+        planEyebrow: '可制造性工程审计 (DFM)',
         planTitle: '可制造性设计分析 (DFM)',
-        planSubtitle: '基于工艺规则的几何审查，确保满足壁厚、拔模斜度及格式导出要求。',
+        planSubtitle: '多物理规则审查：流形水密性验证、最小壁厚测算、成型方向拔模角与导出质量。',
         readiness: 'DFM 验证通过',
-        state: '参数化实体',
+        state: 'B-REP 水密流形',
         backendState: 'OCCT B-REP 实体',
         advancedState: '通用 LLM IR + OCCT 实体',
         irState: '通用 CAD IR + OCCT',
@@ -1765,12 +1813,12 @@
         failed: '几何生成失败',
         solving: '正在求解几何约束',
         parsing: '正在解析自然语言语义',
-        defaultMeta: '3 个实体 · 壁厚 12 mm · 倒角 4 mm',
+        defaultMeta: '1 个实体 · 厚度 10 mm · 4 个安装孔',
         cableMeta: '1 个实体 · 6 mm 线缆卡扣 · 弹性装配',
         promptLabel: '描述你的零件或装配件',
         viewportAria: '可交互 3D CAD 模型预览视口',
-        rounded: '圆角/倒角边缘',
-        dimension: '120 × 80 mm',
+        rounded: '精密倒角过渡',
+        dimension: 'Ø 60 × 10 mm',
         bodyMeta: '水密流形实体 (Watertight Manifold)',
         bounding: '外轮廓空间包围盒',
         wall: '最小壁厚',
@@ -1842,14 +1890,24 @@
       generateLabel.textContent = generate.classList.contains('loading') ? t.generating : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
       document.querySelector('.starter .section-label').textContent = t.starter;
       document.querySelector('.recent .section-label').textContent = t.recent;
-      const starterLabels = currentLang === 'zh' ? ['收纳托盘', '线缆夹', '花盆', '灯座'] : ['Storage tray', 'Cable clip', 'Plant pot', 'Lamp base'];
-      document.querySelectorAll('.starter-buttons button').forEach((item, index) => { item.textContent = starterLabels[index]; });
-      const recentLabels = currentLang === 'zh' ? ['桌面收纳盒', '线缆管理夹', '极简笔筒'] : ['Desk organizer', 'Cable management clip', 'Minimal pen cup'];
-      document.querySelectorAll('.recent-item strong').forEach((item, index) => { item.textContent = recentLabels[index]; });
-      const recentMeta = currentLang === 'zh' ? ['3 个实体 · 2 分钟前编辑', '1 个实体 · 昨天编辑', '2 个实体 · 9 月 28 日编辑'] : ['3 bodies · edited 2m ago', '1 body · edited yesterday', '2 bodies · edited Sep 28'];
-      document.querySelectorAll('.recent-item span').forEach((item, index) => { item.textContent = recentMeta[index]; });
-      const localizedPrompts = currentLang === 'zh' ? ['一个浅的收纳托盘，160 毫米见方，圆角半径 12 毫米。', '适配 6 毫米线缆的柔性卡扣，开口 3 毫米。', '一个直径 90 毫米、高 82 毫米并带排水孔的极简花盆。', '一个宽 110 毫米并隐藏走线槽的小型灯座。', '一个带三个圆角隔间的桌面收纳盒，宽 120 毫米、深 80 毫米，所有边缘做柔和倒角。', '一个适配 6 毫米线缆、开口 3 毫米的柔性线缆夹。', '一个直径 72 毫米、高 95 毫米、壁厚 4 毫米的极简笔筒。'] : ['A shallow storage tray with a 160 mm footprint and 12 mm rounded corners.', 'A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.', 'A minimal plant pot, 90 mm diameter and 82 mm tall, with drainage holes.', 'A small lamp base, 110 mm wide, with a hidden cable channel.', 'A compact desk organizer with three rounded compartments, 120 mm wide, 80 mm deep, with a soft chamfer on every edge.', 'A flexible cable clip for a 6 mm cable, with a 3 mm snap opening.', 'A minimal pen cup, 72 mm diameter and 95 mm tall, with a 4 mm wall.'];
-      document.querySelectorAll('[data-prompt]').forEach((item, index) => { item.dataset.prompt = localizedPrompts[index]; });
+      const starterLabels = currentLang === 'zh' ? ['法兰底座', 'L型角码', '散热底板', '阶梯传动轴'] : ['Mounting flange', 'L-bracket', 'Finned heat sink', 'Stepped shaft'];
+      document.querySelectorAll('.starter-buttons button').forEach((item, index) => { item.textContent = starterLabels[index] || item.textContent; });
+      const recentLabels = currentLang === 'zh' ? ['精密安装法兰盘', 'L型角码安装支架', '芯片散热底板'] : ['Mounting flange', 'L-shaped bracket', 'Finned heat sink'];
+      document.querySelectorAll('.recent-item strong').forEach((item, index) => { item.textContent = recentLabels[index] || item.textContent; });
+      const recentMeta = currentLang === 'zh' ? ['6 表面 · 水密流形实体', '11 表面 · 水密流形实体', '15 表面 · 水密流形实体'] : ['6 faces · watertight manifold', '11 faces · watertight manifold', '15 faces · watertight manifold'];
+      document.querySelectorAll('.recent-item span').forEach((item, index) => { item.textContent = recentMeta[index] || item.textContent; });
+      const localizedPrompts = currentLang === 'zh' ? [
+        '一个精密安装法兰盘：半径 30 毫米，厚度 10 毫米，带有 4 个对称的 4 毫米安装孔，中心贯穿 12 毫米通孔。',
+        '一个 L 型角码安装支架：水平臂 50x30x6 毫米，垂直臂 40x30x6 毫米，各带一个 6 毫米安装通孔。',
+        '一个芯片散热器：底板 60x60x4 毫米，顶部均匀排布 5 个高度 15 毫米、厚度 2 毫米的散热鳍片，底部切出 20x20x2 毫米芯片贴合槽。',
+        '一段三级阶梯传动轴：大端直径 30 毫米长 40 毫米，中段直径 20 毫米长 50 毫米，输出端直径 14 毫米长 30 毫米带键槽。'
+      ] : [
+        'A precision mounting flange: radius 30 mm, thickness 10 mm, with four 4 mm mounting holes and a 12 mm central bore.',
+        'An L-shaped angle bracket: horizontal arm 50x30x6 mm, vertical arm 40x30x6 mm, with a 6 mm mounting hole on each arm.',
+        'A finned heat sink: baseplate 60x60x4 mm with 5 cooling fins of 15 mm height, and a 20x20x2 mm recessed chip pocket on the bottom.',
+        'A stepped transmission shaft: base diameter 30 mm length 40 mm, middle diameter 20 mm length 50 mm, output shaft diameter 14 mm length 30 mm with a keyway slot.'
+      ];
+      document.querySelectorAll('[data-prompt]').forEach((item, index) => { item.dataset.prompt = localizedPrompts[index] || item.dataset.prompt; });
       document.querySelector('.viewport-label').textContent = t.live;
       document.querySelector('[data-view="iso"]').textContent = t.iso;
       document.querySelector('[data-view="top"]').textContent = t.top;
@@ -1951,7 +2009,10 @@
       document.getElementById('planExportMeta').textContent = t.exportMeta;
       langToggle.textContent = t.toggle;
       langToggle.setAttribute('aria-pressed', String(currentLang === 'zh'));
-      if (prompt.value === defaultPrompt || prompt.value === '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。') prompt.value = currentLang === 'zh' ? '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。' : defaultPrompt;
+      const defaultPromptZh = '一个精密安装法兰盘：半径 30 毫米，厚度 10 毫米，带有 4 个对称的 4 毫米安装孔，中心贯穿 12 毫米通孔。';
+      if (prompt.value === defaultPrompt || prompt.value === '一个紧凑的桌面收纳盒，宽 120 毫米、深 80 毫米，边缘做柔和倒角。' || prompt.value === defaultPromptZh) {
+        prompt.value = currentLang === 'zh' ? defaultPromptZh : defaultPrompt;
+      }
       if (typeof updateInterpretation === 'function') updateInterpretation(modelSpec || parseModel(prompt.value), modelSpec ? interpretationSource : 'draft');
       if (typeof updateChecks === 'function') updateChecks(modelSpec || parseModel(prompt.value), backendArtifact && backendArtifact.checks);
       if (typeof renderRevisions === 'function') renderRevisions();
@@ -1997,6 +2058,9 @@
     function titleFor(text) {
       const value = String(text || '').toLowerCase();
       if (/rounded cube|rounded block|filleted cube|soft cube|no sharp edges|no sharp corners|圆角立方体|圆角方块|圆润方块|无棱角|没有棱角|没用棱角|不带棱角/.test(value) || ((value.includes('cube') || value.includes('正方体') || value.includes('方块')) && /round|fillet|圆角|圆润|倒圆|棱角/.test(value))) return 'Rounded cube';
+      if (/flange|法兰/.test(value)) return 'Mounting flange';
+      if (/heat sink|finned|散热器|散热底板/.test(value)) return 'Finned heat sink';
+      if (/stepped shaft|shaft|传动轴|阶梯轴|轴/.test(value)) return 'Stepped shaft';
       if (/torus|ring|donut|圆环|环体/.test(value)) return 'Torus';
       if (/sphere|ball|球体|圆球|球/.test(value)) return 'Sphere';
       if (/cone|圆锥|锥体/.test(value)) return 'Cone';
@@ -2033,7 +2097,15 @@
     function displayTitle(title) {
       const normalized = String(title || '').replace(/^Parametric\s+/i, '');
       if (currentLang !== 'zh') return normalized;
-      return ({ 'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座', 'Pen cup': '笔筒', 'Cup': '杯子', 'Airplane model': '飞机模型', 'Storage tray': '收纳托盘', 'L bracket': 'L 形支架', 'Rounded cube': '圆角正方体', 'Polygon prism': '三角形棱柱' })[normalized] || normalized;
+      return ({
+        'Desk organizer': '桌面收纳盒', 'Cable clip': '线缆夹', 'Plant pot': '花盆', 'Lamp base': '灯座',
+        'Pen cup': '笔筒', 'Cup': '杯子', 'Airplane model': '飞机模型', 'Storage tray': '收纳托盘',
+        'L bracket': 'L 形支架', 'Rounded cube': '圆角正方体', 'Polygon prism': '正多边形棱柱',
+        'Mounting flange': '精密安装法兰盘', 'Flange': '法兰底座', 'Finned heat sink': '鳍片散热底板',
+        'Stepped shaft': '阶梯传动轴', 'Shaft': '传动轴', 'Hollow cylinder': '空心圆柱套筒',
+        'Cylinder': '圆柱体', 'Sphere': '球体', 'Box': '基础实体块', 'Torus': '圆环体',
+        'Parametric CAD part': '参数化 CAD 零件'
+      })[normalized] || normalized;
     }
     function canonicalDimensionText(text) {
       const factors = { mm: 1, cm: 10, m: 1000, in: 25.4 };
@@ -2452,7 +2524,11 @@
       const bottom = Math.min(Math.max(Number(spec.bottom) || wall, 1.2), Math.max(height - 1, 1.2));
       const kind = spec.kind || 'block';
 
-      if (kind === 'sphere' || (spec.title && (spec.title.includes('Sphere') || spec.title.includes('球')))) {
+      if (kind === 'flange' || (spec.title && (spec.title.includes('flange') || spec.title.includes('Flange') || spec.title.includes('法兰')))) {
+        const rad = Math.min(width, depth) / 2;
+        cylinder(rad, Math.max(height * 0.4, 4), 0, height * 0.2, 0, body, false);
+        cylinder(rad * 0.5, height, 0, height / 2, 0, side, false);
+      } else if (kind === 'sphere' || (spec.title && (spec.title.includes('Sphere') || spec.title.includes('球')))) {
         const rad = Math.min(width, depth, height) / 2;
         const mesh = new THREE.Mesh(new THREE.SphereGeometry(Math.max(rad, 1), 64, 32), body);
         mesh.position.set(0, rad, 0);
@@ -3118,9 +3194,10 @@
           let summary = '';
           if (params.size) summary = Array.isArray(params.size) ? params.size.join(' × ') + ' mm' : String(params.size);
           else if (params.radius) summary = 'R ' + params.radius + ' mm' + (params.height ? ' × ' + params.height + ' mm' : '');
+          else if (params.diameter) summary = 'Ø ' + params.diameter + ' mm' + (params.height || params.depth ? ' × ' + (params.height || params.depth) + ' mm' : '');
           else if (params.thickness) summary = 't = ' + params.thickness + ' mm';
           else summary = (node.inputs && node.inputs.length ? '← [' + node.inputs.join(', ') + ']' : (node.kind || 'node'));
-          return [op + (id ? ' · ' + id : ''), summary];
+          return [op, id, summary];
         });
       } else {
         const profileCount = Array.isArray(spec.profile_points) ? spec.profile_points.length : 0;
@@ -3141,11 +3218,24 @@
         const dot = document.createElement('span');
         dot.className = 'node-dot';
         const body = document.createElement('div');
-        const title = document.createElement('strong');
-        title.textContent = feature[0];
+        const titleRow = document.createElement('div');
+        titleRow.className = 'feature-title-row';
+        if (feature.length === 3) {
+          const opBadge = document.createElement('span');
+          opBadge.className = 'op-badge op-' + feature[0].toLowerCase();
+          opBadge.textContent = feature[0];
+          const nameSpan = document.createElement('strong');
+          nameSpan.textContent = feature[1] || feature[0];
+          titleRow.appendChild(opBadge);
+          titleRow.appendChild(nameSpan);
+        } else {
+          const nameSpan = document.createElement('strong');
+          nameSpan.textContent = feature[0];
+          titleRow.appendChild(nameSpan);
+        }
         const detail = document.createElement('small');
-        detail.textContent = feature[1];
-        body.appendChild(title);
+        detail.textContent = feature.length === 3 ? feature[2] : feature[1];
+        body.appendChild(titleRow);
         body.appendChild(detail);
         node.appendChild(dot);
         node.appendChild(body);
