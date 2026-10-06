@@ -650,7 +650,8 @@ def _node_shape(
         if len(inputs) != 1:
             raise IRExecutionError(f"{operation} requires exactly one input")
         structured_selector = values.get("selector") or values.get("face_selector") or values.get("edge_selector")
-        radius = _number(parameters, values.get("radius", values.get("distance")), f"{operation}.radius")
+        rad_val = values.get("radius", values.get("distance", values.get("size", values.get("amount", values.get("width", values.get(operation, 2.0))))))
+        radius = _number(parameters, rad_val, f"{operation}.radius")
         if isinstance(structured_selector, dict):
             edges = _topology_selection(inputs[0], structured_selector, "edge", selector_metadata)
         else:
