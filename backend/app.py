@@ -3082,20 +3082,37 @@ def get_process_profiles() -> dict[str, dict[str, Any]]:
 
 @app.get("/v1/models/{model_id}/rounds/{round_idx}/views/{view_name}")
 def get_model_round_view(model_id: str, round_idx: int, view_name: str) -> FileResponse:
-    if not re.match(r"^[0-9a-f]{32}$", model_id):
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
         raise HTTPException(status_code=400, detail="invalid model_id")
+    if round_idx < 0 or round_idx > 1000:
+        raise HTTPException(status_code=400, detail="invalid round_idx")
     safe_name = re.sub(r"[^a-zA-Z0-9_-]", "", view_name)
-    view_path = ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "views" / f"{safe_name}.png"
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="invalid view_name")
+    model_root = (ARTIFACT_ROOT / model_id).resolve()
+    view_path = (ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "views" / f"{safe_name}.png").resolve()
+    if not view_path.is_relative_to(model_root):
+        raise HTTPException(status_code=400, detail="path traversal denied")
     if not view_path.exists():
+        direct_path = (ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / f"{safe_name}.png").resolve()
+        if not direct_path.is_relative_to(model_root):
+            raise HTTPException(status_code=400, detail="path traversal denied")
+        if direct_path.exists():
+            return FileResponse(direct_path, media_type="image/png")
         raise HTTPException(status_code=404, detail="round view image not found")
     return FileResponse(view_path, media_type="image/png")
 
 
 @app.get("/v1/models/{model_id}/rounds/{round_idx}/model.glb")
 def get_model_round_glb(model_id: str, round_idx: int) -> FileResponse:
-    if not re.match(r"^[0-9a-f]{32}$", model_id):
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
         raise HTTPException(status_code=400, detail="invalid model_id")
-    glb_path = ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "model.glb"
+    if round_idx < 0 or round_idx > 1000:
+        raise HTTPException(status_code=400, detail="invalid round_idx")
+    model_root = (ARTIFACT_ROOT / model_id).resolve()
+    glb_path = (ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "model.glb").resolve()
+    if not glb_path.is_relative_to(model_root):
+        raise HTTPException(status_code=400, detail="path traversal denied")
     if not glb_path.exists():
         raise HTTPException(status_code=404, detail="round GLB not found")
     return FileResponse(glb_path, media_type="model/gltf-binary")
@@ -3328,7 +3345,7 @@ def _generate_ir_model(
                     f"agent_r{round_num}_{st}",
                     "succeeded",
                     round=round_num,
-                    stage=st,
+                    agent_step=st,
                     message=ev.get("message", ""),
                 )
 

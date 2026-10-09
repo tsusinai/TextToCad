@@ -998,6 +998,129 @@ def test_agent_modeling_loop_convergence(tmp_path):
     assert len(result["history"]) >= 1
 
 
+def test_apply_patches_advanced_primitives():
+    from ir_repair import apply_patches
+
+    base_ir = {
+        "schema_version": "0.2",
+        "parameters": {"width": {"value": 40.0, "unit": "mm"}},
+        "nodes": [
+            {
+                "id": "base_part",
+                "kind": "primitive",
+                "operation": "cylinder",
+                "inputs": [],
+                "parameters": {"radius": 30.0, "height": 10.0},
+            }
+        ],
+        "outputs": [{"id": "primary", "node": "base_part", "format": ["step", "stl", "glb"]}],
+    }
+
+    # 1. scale_parameter
+    p_scale = [{"op": "scale_parameter", "parameter": "width", "factor": 1.5}]
+    ir_scaled = apply_patches(base_ir, p_scale)
+    assert ir_scaled["parameters"]["width"]["value"] == 60.0
+
+    # 2. add_hole_pattern
+    p_pattern = [{
+        "op": "add_hole_pattern",
+        "target_node": "base_part",
+        "count": 4,
+        "circle_radius": 20.0,
+        "hole_diameter": 4.0,
+        "depth": 50.0,
+    }]
+    ir_pattern = apply_patches(base_ir, p_pattern)
+    pattern_cut = next(n for n in ir_pattern["nodes"] if n["id"] == "cut_hole_pattern_1")
+    assert pattern_cut["operation"] == "cut"
+    assert len(pattern_cut["inputs"]) == 5  # base_part + 4 cutter cylinders
+    assert ir_pattern["outputs"][0]["node"] == "cut_hole_pattern_1"
+
+    # 3. add_chamfer
+    p_chamfer = [{"op": "add_chamfer", "target_node": "base_part", "distance": 1.5}]
+    ir_chamfer = apply_patches(base_ir, p_chamfer)
+    chamfer_node = next(n for n in ir_chamfer["nodes"] if n["operation"] == "chamfer")
+    assert chamfer_node["parameters"]["distance"] == 1.5
+    assert ir_chamfer["outputs"][0]["node"] == chamfer_node["id"]
+
+    # 4. add_fillet
+    p_fillet = [{"op": "add_fillet", "target_node": "base_part", "radius": 2.0}]
+    ir_fillet = apply_patches(base_ir, p_fillet)
+    fillet_node = next(n for n in ir_fillet["nodes"] if n["operation"] == "fillet")
+    assert fillet_node["parameters"]["radius"] == 2.0
+    assert ir_fillet["outputs"][0]["node"] == fillet_node["id"]
+
+    # 5. shell_hollow
+    p_shell = [{"op": "shell_hollow", "target_node": "base_part", "thickness": 2.5}]
+    ir_shell = apply_patches(base_ir, p_shell)
+    shell_node = next(n for n in ir_shell["nodes"] if n["operation"] == "shell")
+    assert shell_node["parameters"]["thickness"] == 2.5
+    assert ir_shell["outputs"][0]["node"] == shell_node["id"]
+
+
+def test_heuristic_fallback_critique_pattern_recognition():
+    from agent_loop import _heuristic_fallback_critique
+
+    sample_ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "flange", "kind": "primitive", "operation": "cylinder", "parameters": {"radius": 35.0, "height": 10.0}}
+        ],
+        "outputs": [{"id": "primary", "node": "flange", "format": ["step", "stl", "glb"]}],
+    }
+
+    # "4 mounting holes"
+    c1 = _heuristic_fallback_critique("round flange with 4 mounting holes", sample_ir, 0)
+    assert any(p["op"] == "add_hole_pattern" for p in c1["proposed_patches"])
+    patch1 = next(p for p in c1["proposed_patches"] if p["op"] == "add_hole_pattern")
+    assert patch1["count"] == 4
+
+    # "6 bolt holes"
+    c2 = _heuristic_fallback_critique("flange plate with 6 bolt holes", sample_ir, 0)
+    patch2 = next(p for p in c2["proposed_patches"] if p["op"] == "add_hole_pattern")
+    assert patch2["count"] == 6
+
+    # "four holes on 40mm circle"
+    c3 = _heuristic_fallback_critique("cylinder base with four holes on 40mm circle", sample_ir, 0)
+    patch3 = next(p for p in c3["proposed_patches"] if p["op"] == "add_hole_pattern")
+    assert patch3["count"] == 4
+    assert patch3["circle_radius"] == 20.0
+
+    # "bolt circle"
+    c4 = _heuristic_fallback_critique("adapter with bolt circle", sample_ir, 0)
+    assert any(p["op"] == "add_hole_pattern" for p in c4["proposed_patches"])
+
+    # Edge treatment: "chamfer 2mm"
+    c5 = _heuristic_fallback_critique("block with 2mm chamfer", sample_ir, 0)
+    patch5 = next(p for p in c5["proposed_patches"] if p["op"] == "add_chamfer")
+    assert patch5["distance"] == 2.0
+
+    # Hollow: "hollow shell with 2mm wall"
+    c6 = _heuristic_fallback_critique("hollow shell box with 2mm wall", sample_ir, 0)
+    patch6 = next(p for p in c6["proposed_patches"] if p["op"] == "shell_hollow")
+    assert patch6["thickness"] == 2.0
+
+
+def test_render_annotated_composite_output(tmp_path):
+    from PIL import Image
+    from multiview_renderer import HeadlessCADRenderer
+
+    renderer = HeadlessCADRenderer(resolution=256)
+    dummy_view = tmp_path / "top.png"
+    Image.new("RGB", (256, 256), color=(220, 220, 220)).save(dummy_view)
+    view_paths = {"top": dummy_view, "iso": dummy_view, "front": dummy_view, "right": dummy_view}
+
+    anno_out = tmp_path / "annotated_composite.png"
+    discrepancies = [
+        {"severity": "high", "feature": "hole_pattern", "issue": "Missing 4-hole pattern on top surface"},
+        {"severity": "medium", "feature": "edge_treatment", "issue": "Missing 1mm chamfer on top edge"}
+    ]
+    res_path = renderer.render_annotated_composite(view_paths, discrepancies, anno_out)
+    assert res_path.exists()
+    assert res_path.stat().st_size > 1000
+
+
+
 
 
 

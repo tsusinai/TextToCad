@@ -10,8 +10,9 @@ import base64
 import copy
 import json
 import logging
-import re
 from pathlib import Path
+import re
+import shutil
 from typing import Any, Callable
 import urllib.request
 import urllib.error
@@ -54,43 +55,167 @@ def _heuristic_fallback_critique(
     discrepancies = []
     patches = []
 
-    # Check for hole intent
-    has_hole_intent = bool(re.search(r"(hole|through[- ]?hole|bore|通孔|内孔|穿孔|带孔)", text))
-    has_cut_op = "cut" in operations
-    if has_hole_intent and not has_cut_op:
+    target_node = nodes[-1]["id"] if nodes else "base"
+    if current_ir.get("outputs"):
+        target_node = current_ir["outputs"][0].get("node", target_node)
+
+    # 1. Check for hole pattern intent (e.g. "4 mounting holes", "6 bolt holes", "four holes on 40mm circle", "bolt circle")
+    word_to_num = {
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+        "seven": 7, "eight": 8, "nine": 9, "ten": 10, "twelve": 12,
+        "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+    }
+
+    pattern_keywords = (
+        r"bolt\s*circle|mounting\s*holes?|bolt\s*holes?|hole\s*pattern|"
+        r"pitch\s*circle|pcd|holes?\s+on\s+.*?circle|flange\s*holes?|"
+        r"安装孔|螺栓孔|均布孔|分度圆|法兰孔|螺栓圆"
+    )
+    has_pattern_intent = bool(re.search(pattern_keywords, text))
+    if not has_pattern_intent:
+        if bool(re.search(r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s*(?:mounting|bolt)?\s*holes?", text)) and any(k in text for k in ("circle", "cylinder", "disc", "flange", "圆", "法兰", "盘")):
+            has_pattern_intent = True
+
+    has_pattern_in_ir = any(
+        "pattern" in str(n.get("id", "")).lower() or
+        "pattern" in str(n.get("operation", "")).lower() or
+        "cutter" in str(n.get("id", "")).lower() or
+        (str(n.get("operation", "")).lower() == "cut" and len(n.get("inputs", [])) > 2)
+        for n in nodes
+    )
+
+    if has_pattern_intent and not has_pattern_in_ir:
+        count = 4
+        count_match = re.search(
+            r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve|[一二两三四五六七八九十])\s*(?:x\s*)?"
+            r"(?:mounting\s+holes?|bolt\s+holes?|holes?|screws?|个?(?:安装孔|螺栓孔|均布孔|孔))",
+            text
+        )
+        if count_match:
+            tok = count_match.group(1).lower()
+            if tok.isdigit():
+                count = int(tok)
+            elif tok in word_to_num:
+                count = word_to_num[tok]
+        else:
+            cnt_fallback = re.search(r"(\d+)\s*(?:holes?|孔)", text)
+            if cnt_fallback:
+                count = int(cnt_fallback.group(1))
+        count = max(2, min(count, 32))
+
+        circle_radius = 20.0
+        pcd_match = re.search(
+            r"(?:on|pcd|pitch\s*(?:circle\s*)?(?:diameter|radius)?|circle\s*(?:radius|diameter|of)?|分度圆|圆周)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?",
+            text
+        )
+        if not pcd_match:
+            pcd_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:pcd|pitch\s*circle|bolt\s*circle|circle|分度圆|圆周)", text)
+
+        if pcd_match:
+            dim_val = float(pcd_match.group(1))
+            if re.search(r"(?:radius|半径)\s*[:=]?\s*" + re.escape(pcd_match.group(1)), text):
+                circle_radius = dim_val
+            else:
+                circle_radius = dim_val / 2.0 if dim_val >= 10.0 else dim_val
+
+        hole_diameter = 4.0
+        dia_match = re.search(r"(?:hole\s*(?:diameter|size)|diameter|dia|孔径|直孔)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?", text)
+        if not dia_match:
+            dia_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:diameter|dia|孔径)", text)
+        if not dia_match:
+            m_match = re.search(r"m(\d+(?:\.\d+)?)\s*(?:holes?|螺栓|螺丝)?", text)
+            if m_match:
+                hole_diameter = float(m_match.group(1))
+        elif dia_match:
+            hole_diameter = float(dia_match.group(1))
+
+        depth = 50.0
+        depth_match = re.search(r"(?:depth|deep|thickness|深[度]?|厚[度]?)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?", text)
+        if depth_match:
+            depth = float(depth_match.group(1))
+
         discrepancies.append({
             "severity": "high",
-            "feature": "hole",
-            "issue": "Prompt explicitly requests a hole or bore, but no boolean cut operation exists in the IR.",
+            "feature": "hole_pattern",
+            "issue": f"Prompt requests a {count}-hole pattern (circle radius {circle_radius}mm, hole dia {hole_diameter}mm), but no pattern cut operations exist in the IR.",
         })
-        # Suggest adding a cutter cylinder
-        hole_rad = 3.0
-        rad_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:hole|bore|通孔|孔)", text)
-        if rad_match:
-            try:
-                hole_rad = float(rad_match.group(1)) / 2.0
-            except ValueError:
-                pass
         patches.append({
-            "op": "add_node",
-            "node": {
-                "id": "agent_auto_hole",
-                "kind": "feature",
-                "operation": "cut",
-                "inputs": [nodes[-1]["id"]] if nodes else [],
-                "parameters": {"radius": hole_rad, "depth": 100.0},
-            },
-            "reason": "VLM heuristic identified missing through-hole feature.",
+            "op": "add_hole_pattern",
+            "target_node": target_node,
+            "count": count,
+            "circle_radius": circle_radius,
+            "hole_diameter": hole_diameter,
+            "depth": depth,
+            "reason": f"VLM heuristic identified missing {count}-hole pattern.",
         })
+    elif not has_pattern_intent:
+        has_hole_intent = bool(re.search(r"(hole|through[- ]?hole|bore|通孔|内孔|穿孔|带孔)", text))
+        has_cut_op = "cut" in operations
+        if has_hole_intent and not has_cut_op:
+            discrepancies.append({
+                "severity": "high",
+                "feature": "hole",
+                "issue": "Prompt explicitly requests a hole or bore, but no boolean cut operation exists in the IR.",
+            })
+            hole_rad = 3.0
+            rad_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:hole|bore|通孔|孔)", text)
+            if rad_match:
+                try:
+                    hole_rad = float(rad_match.group(1)) / 2.0
+                except ValueError:
+                    pass
+            patches.append({
+                "op": "add_node",
+                "node": {
+                    "id": "agent_auto_hole",
+                    "kind": "feature",
+                    "operation": "cut",
+                    "inputs": [target_node] if target_node else [],
+                    "parameters": {"radius": hole_rad, "depth": 100.0},
+                },
+                "reason": "VLM heuristic identified missing through-hole feature.",
+            })
 
-    # Check for chamfer / fillet intent
+    # 2. Check for chamfer / fillet intent
     has_edge_intent = bool(re.search(r"(chamfer|fillet|round|倒角|圆角)", text))
     has_edge_op = any(op in operations for op in ("chamfer", "fillet"))
     if has_edge_intent and not has_edge_op:
+        is_chamfer = bool(re.search(r"(chamfer|倒角)", text))
+        dim_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:chamfer|fillet|round|倒角|圆角)", text)
+        if not dim_match:
+            dim_match = re.search(r"(?:chamfer|fillet|round|倒角|圆角)\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
+        edge_val = float(dim_match.group(1)) if dim_match else 1.0
+
         discrepancies.append({
             "severity": "medium",
             "feature": "edge_treatment",
-            "issue": "Edge treatment (chamfer or fillet) was requested but is not in the feature graph.",
+            "issue": f"Edge treatment ({'chamfer' if is_chamfer else 'fillet'}) was requested but is not in the feature graph.",
+        })
+        patches.append({
+            "op": "add_chamfer" if is_chamfer else "add_fillet",
+            "target_node": target_node,
+            "radius": edge_val,
+            "distance": edge_val,
+            "reason": f"VLM heuristic identified missing {'chamfer' if is_chamfer else 'fillet'} edge treatment.",
+        })
+
+    # 3. Check for shell / hollow intent
+    has_shell_intent = bool(re.search(r"(hollow|shell|pocket|掏空|抽壳|空心)", text))
+    has_shell_op = any(op in operations for op in ("shell", "cut_inner_volume"))
+    if has_shell_intent and not has_shell_op:
+        thick_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:wall|thickness|shell|壁厚)", text)
+        thickness = float(thick_match.group(1)) if thick_match else 2.0
+        discrepancies.append({
+            "severity": "medium",
+            "feature": "shell_hollow",
+            "issue": f"Hollow shell feature (wall {thickness}mm) was requested but is not in the feature graph.",
+        })
+        patches.append({
+            "op": "shell_hollow",
+            "target_node": target_node,
+            "thickness": thickness,
+            "open_face": ">Z",
+            "reason": "VLM heuristic identified missing shell hollow feature.",
         })
 
     score = 9.2 if not discrepancies else max(6.5, 8.8 - len(discrepancies) * 1.2 + round_idx * 0.8)
@@ -140,10 +265,21 @@ def call_vlm_critic(
         "  ],\n"
         '  "proposed_patches": [\n'
         '    {"op": "set_parameter", "parameter": "<name>", "value": <number>},\n'
+        '    {"op": "scale_parameter", "parameter": "<name>", "factor": <float>},\n'
         '    {"op": "replace_node_parameter", "node": "<node_id>", "parameter": "<key>", "value": <value>},\n'
+        '    {"op": "add_hole_pattern", "target_node": "<node_id>", "count": <int 4|6|8>, "circle_radius": <float>, "hole_diameter": <float>, "depth": <float>},\n'
+        '    {"op": "add_chamfer", "target_node": "<node_id>", "distance": <float>},\n'
+        '    {"op": "add_fillet", "target_node": "<node_id>", "radius": <float>},\n'
+        '    {"op": "shell_hollow", "target_node": "<node_id>", "thickness": <float>, "open_face": ">Z"},\n'
         '    {"op": "add_node", "node": {"id": "...", "kind": "feature", "operation": "cut|union|chamfer|...", "inputs": ["..."], "parameters": {...}}}\n'
         "  ]\n"
         "}\n"
+        "Supported High-Level Patch Operations Guide:\n"
+        "- 'scale_parameter': scales an existing parameter value by factor (e.g. factor 1.25 enlarges by 25%, factor 0.8 shrinks).\n"
+        "- 'add_hole_pattern': expands into polar array cut nodes: generating count cutter cylinders placed at (circle_radius * cos(theta), circle_radius * sin(theta)) and subtracting them from target_node.\n"
+        "- 'add_chamfer' / 'add_fillet': bevels or rounds edges of target_node with specified distance or radius.\n"
+        "- 'shell_hollow': adds a shell or inner pocket cut node to create a hollow cavity with specified wall thickness.\n"
+        "- 'set_parameter' / 'replace_node_parameter': edits specific scalar parameters directly.\n"
         "Give a score >= 9.0 and verdict ACCEPT when all requested functional features, holes, cuts, and proportions match the prompt."
     )
 
@@ -188,9 +324,13 @@ def call_vlm_critic(
         with urllib.request.urlopen(req, timeout=35) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             content = data["choices"][0]["message"]["content"]
-            if content.startswith("```"):
-                content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content, flags=re.IGNORECASE | re.DOTALL).strip()
-            parsed = json.loads(content)
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, flags=re.DOTALL | re.IGNORECASE)
+            if match:
+                json_str = match.group(1)
+            else:
+                brace_match = re.search(r"(\{.*\})", content, flags=re.DOTALL)
+                json_str = brace_match.group(1) if brace_match else content.strip()
+            parsed = json.loads(json_str)
             parsed.setdefault("score", 8.5)
             parsed.setdefault("verdict", "ACCEPT" if parsed["score"] >= 9.0 else "REVISE")
             parsed.setdefault("summary", "Visual inspection completed.")
@@ -286,13 +426,26 @@ def run_agent_modeling_loop(
             round_idx=round_idx,
         )
 
+        discrepancies = critique.get("discrepancies", [])
+        annotated_view_path = round_dir / "views" / "annotated_composite.png"
+        try:
+            renderer.render_annotated_composite(views, discrepancies, annotated_view_path)
+            views["annotated_composite"] = annotated_view_path
+            round_annotated_file = round_dir / "annotated_composite.png"
+            if annotated_view_path.exists():
+                shutil.copyfile(annotated_view_path, round_annotated_file)
+        except Exception as anno_err:
+            logger.warning(f"Failed to generate annotated_composite: {anno_err}")
+            if "composite" in views:
+                views["annotated_composite"] = views["composite"]
+
         score = float(critique.get("score", 8.5))
         round_record = {
             "round": round_idx,
             "score": score,
             "verdict": critique.get("verdict", "ACCEPT"),
             "summary": critique.get("summary", ""),
-            "discrepancies": critique.get("discrepancies", []),
+            "discrepancies": discrepancies,
             "proposed_patches": critique.get("proposed_patches", []),
             "views": {k: str(v) for k, v in views.items()},
             "glb_available": temp_glb.exists(),

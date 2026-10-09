@@ -938,6 +938,71 @@
       font-weight: 800;
       box-shadow: 0 0 12px rgba(212, 255, 79, 0.35);
     }
+    .score-trajectory {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      background: rgba(14, 18, 24, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .score-trajectory:empty { display: none; }
+    .trajectory-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .trajectory-pill:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      border-color: rgba(212, 255, 79, 0.3);
+    }
+    .trajectory-pill.active {
+      background: rgba(212, 255, 79, 0.15);
+      color: var(--lime);
+      border-color: rgba(212, 255, 79, 0.5);
+      font-weight: 700;
+    }
+    .trajectory-arrow {
+      color: #64748b;
+      font-size: 11px;
+      user-select: none;
+    }
+    .trajectory-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      margin-left: 2px;
+    }
+    .trajectory-status.converged {
+      background: rgba(22, 101, 52, 0.35);
+      color: #4ade80;
+      border: 1px solid rgba(74, 222, 128, 0.4);
+    }
+    .trajectory-status.unconverged {
+      background: rgba(154, 52, 18, 0.25);
+      color: #fb923c;
+      border: 1px solid rgba(251, 146, 60, 0.4);
+    }
     .critic-card {
       margin-top: 14px;
       padding: 16px;
@@ -948,6 +1013,27 @@
     }
     .critic-card.hidden { display: none !important; }
     .critic-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .critic-badges { display: flex; align-items: center; gap: 6px; }
+    .critic-verdict {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .critic-verdict.verdict-accept {
+      color: #15803d;
+      background: #dcfce7;
+      border: 1px solid #86efac;
+    }
+    .critic-verdict.verdict-revise,
+    .critic-verdict.verdict-rework {
+      color: #c2410c;
+      background: #ffedd5;
+      border: 1px solid #fed7aa;
+    }
     .critic-score {
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
@@ -970,13 +1056,85 @@
       border-radius: 8px;
       overflow: hidden;
       border: 1px solid var(--line);
-      max-height: 200px;
+      background: #0f172a;
     }
-    .critic-views-preview img {
+    .critic-view-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+    }
+    .critic-view-caption {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink-muted);
+      letter-spacing: 0.02em;
+    }
+    .critic-view-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      background: #e2e8f0;
+      padding: 2px;
+      border-radius: 6px;
+      gap: 2px;
+    }
+    .critic-mode-btn {
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .critic-mode-btn:hover {
+      color: var(--ink);
+    }
+    .critic-mode-btn.active {
+      background: #ffffff;
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .critic-img-wrap {
+      position: relative;
+      cursor: zoom-in;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 120px;
+      background: #0b1120;
+    }
+    .critic-composite-img {
       width: 100%;
       height: auto;
+      max-height: 220px;
+      object-fit: contain;
       display: block;
-      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      cursor: zoom-in;
+    }
+    .critic-composite-img:hover {
+      transform: scale(1.01);
+    }
+    .critic-img-hint {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      opacity: 0.9;
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
     .critic-discrepancies { display: grid; gap: 6px; margin-top: 10px; }
     .critic-item {
@@ -985,6 +1143,193 @@
       font-size: 11px;
       background: var(--panel);
       color: var(--ink-subtle);
+    }
+    .critic-item.severity-high {
+      background: #fef2f2;
+      color: #991b1b;
+      border-left: 3px solid #ef4444;
+    }
+    .critic-item.severity-medium {
+      background: #fffbeb;
+      color: #92400e;
+      border-left: 3px solid #f59e0b;
+    }
+    .critic-patches {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fafc;
+    }
+    .critic-patches-summary {
+      padding: 7px 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink);
+      cursor: pointer;
+      user-select: none;
+      background: #f1f5f9;
+      border-bottom: 1px solid transparent;
+      transition: background 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .critic-patches[open] .critic-patches-summary {
+      border-bottom-color: var(--line);
+    }
+    .critic-patches-summary:hover {
+      background: #e2e8f0;
+    }
+    .critic-patches-content {
+      padding: 8px 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .critic-patch-item {
+      padding: 6px 8px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .critic-patch-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .critic-patch-op {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #e0e7ff;
+      color: #3730a3;
+      text-transform: uppercase;
+    }
+    .critic-patch-param {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .critic-patch-reason {
+      font-size: 10.5px;
+      color: var(--ink-subtle);
+    }
+    .critic-patches-json {
+      margin: 4px 0 0;
+      padding: 6px;
+      background: #0f172a;
+      color: #94a3b8;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .critic-no-patches {
+      font-size: 11px;
+      color: var(--ink-subtle);
+      font-style: italic;
+      padding: 4px 0;
+    }
+    .critic-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .critic-lightbox[hidden] {
+      display: none !important;
+    }
+    .critic-lightbox-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 14, 18, 0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .critic-lightbox-dialog {
+      position: relative;
+      z-index: 2;
+      max-width: 92vw;
+      max-height: 92vh;
+      background: #181d24;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: criticLightboxFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes criticLightboxFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .critic-lightbox-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: #1e242d;
+    }
+    .critic-lightbox-title {
+      color: #f1f5f9;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .critic-lightbox-close {
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .critic-lightbox-close:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: #ef4444;
+    }
+    .critic-lightbox-body {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      background: #0d1117;
+    }
+    #criticLightboxImg {
+      max-width: 86vw;
+      max-height: 80vh;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     }
     .transform-section { display: flex; align-items: center; gap: 3px; }
     .transform-bar-label {
@@ -1478,6 +1823,7 @@
             <span class="timeline-label" id="timelineLabel">AGENT REWORK TIMELINE</span>
             <span class="timeline-badge" id="timelineScoreBadge">SCORE: --</span>
           </div>
+          <div class="score-trajectory" id="scoreTrajectory"></div>
           <div class="timeline-rounds" id="timelineRounds"></div>
         </div>
         <section class="viewport" aria-label="3D model preview">
@@ -1652,11 +1998,30 @@
           <div class="critic-card" id="criticCard" hidden>
             <div class="critic-head">
               <span class="section-label" id="criticLabel">VLM VISION CRITIQUE</span>
-              <span class="critic-score" id="criticScore">--</span>
+              <div class="critic-badges">
+                <span class="critic-verdict" id="criticVerdict">--</span>
+                <span class="critic-score" id="criticScore">--</span>
+              </div>
             </div>
             <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
-            <div class="critic-views-preview" id="criticViewsPreview"></div>
+            <div class="critic-views-preview" id="criticViewsPreview">
+              <div class="critic-view-toolbar">
+                <span class="critic-view-caption" id="criticViewCaption">4-View CAD Inspection</span>
+                <div class="critic-view-mode-toggle" id="criticViewToggle" role="group" aria-label="View Mode">
+                  <button type="button" class="critic-mode-btn active" id="criticModeClean" data-mode="clean">Clean</button>
+                  <button type="button" class="critic-mode-btn" id="criticModeAnnotated" data-mode="annotated">Annotated</button>
+                </div>
+              </div>
+              <div class="critic-img-wrap" id="criticImgWrap">
+                <img id="criticCompositeImg" class="critic-composite-img" src="" alt="4-View CAD Inspection" title="Click to view full inspection sheet" />
+                <div class="critic-img-hint" id="criticImgHint">🔍 Click to zoom</div>
+              </div>
+            </div>
             <div class="critic-discrepancies" id="criticDiscrepancies"></div>
+            <details class="critic-patches" id="criticPatchesDetails">
+              <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
+              <div class="critic-patches-content" id="criticPatchesContent"></div>
+            </details>
           </div>
         </section>
       </div>
@@ -1966,7 +2331,23 @@
         timelineScore: 'SCORE: ',
         criticLabel: 'VLM VISION CRITIQUE',
         round: 'Round ',
-        finalRound: 'Final'
+        finalRound: 'Final',
+        verdictAccept: 'ACCEPT',
+        verdictRevise: 'REVISE',
+        verdictRework: 'REWORK',
+        cleanView: 'Clean View',
+        annotatedView: 'Annotated View',
+        toggleViewClean: 'Clean',
+        toggleViewAnnotated: 'Annotated',
+        scoreTrajectory: 'Score Trajectory',
+        converged: 'Converged',
+        maxRounds: 'Max Rounds',
+        appliedPatches: 'Applied Patches',
+        noPatches: 'No patches applied in this round (Optimal geometry achieved)',
+        lightboxTitle: '4-View CAD Inspection Suite',
+        clickToZoom: '🔍 Click to zoom',
+        allFeaturesMatch: '✓ All features match design intent',
+        criticViewCaption: '4-View CAD Inspection'
       },
       zh: {
         toggle: 'EN',
@@ -2119,7 +2500,23 @@
         timelineScore: '综合评分: ',
         criticLabel: 'VLM 视觉评审诊断报告',
         round: '第 ',
-        finalRound: '最终成品'
+        finalRound: '最终成品',
+        verdictAccept: '合格 (ACCEPT)',
+        verdictRevise: '返工 (REVISE)',
+        verdictRework: '重构 (REWORK)',
+        cleanView: '原图视向',
+        annotatedView: '批注视向',
+        toggleViewClean: '原图',
+        toggleViewAnnotated: '标注',
+        scoreTrajectory: '评分演化轨迹',
+        converged: '已收敛',
+        maxRounds: '达上限',
+        appliedPatches: '应用补丁',
+        noPatches: '本轮未应用补丁（已达最佳设计状态）',
+        lightboxTitle: '4 视向 CAD 评审全览图',
+        clickToZoom: '🔍 点击全屏放大',
+        allFeaturesMatch: '✓ 所有几何特征与尺寸要求完全符合设计意图',
+        criticViewCaption: '4 视向 CAD 评审图'
       }
     };
 
@@ -2266,6 +2663,18 @@
       }
       if (document.getElementById('timelineLabel')) document.getElementById('timelineLabel').textContent = t.timelineLabel;
       if (document.getElementById('criticLabel')) document.getElementById('criticLabel').textContent = t.criticLabel;
+      if (document.getElementById('criticViewCaption')) document.getElementById('criticViewCaption').textContent = t.criticViewCaption;
+      if (document.getElementById('criticModeClean')) document.getElementById('criticModeClean').textContent = t.toggleViewClean;
+      if (document.getElementById('criticModeAnnotated')) document.getElementById('criticModeAnnotated').textContent = t.toggleViewAnnotated;
+      if (document.getElementById('criticImgHint')) document.getElementById('criticImgHint').textContent = t.clickToZoom;
+      if (document.getElementById('criticLightboxTitle')) document.getElementById('criticLightboxTitle').textContent = t.lightboxTitle;
+      if (document.getElementById('criticPatchesSummary')) {
+        const patchesCount = (currentAgentSummary && currentAgentSummary.history && currentAgentSummary.history[currentAgentRoundIdx] && (currentAgentSummary.history[currentAgentRoundIdx].applied_patches || currentAgentSummary.history[currentAgentRoundIdx].proposed_patches || currentAgentSummary.history[currentAgentRoundIdx].patches || []).length) || 0;
+        document.getElementById('criticPatchesSummary').textContent = t.appliedPatches + (patchesCount ? ' (' + patchesCount + ')' : '');
+      }
+      if (currentAgentSummary && Array.isArray(currentAgentSummary.history) && currentAgentSummary.history.length > 0) {
+        renderAgentSummary(currentAgentSummary, currentAgentModelId);
+      }
       updateModeHint();
       processSelect.setAttribute('aria-label', t.processLabel);
       processSelect.options[0].textContent = t.fdmOption;
@@ -4014,7 +4423,15 @@
         button.setAttribute('aria-disabled', String(!available));
       });
     }
+    let currentAgentSummary = null;
+    let currentAgentModelId = null;
+    let currentAgentRoundIdx = 0;
+    let currentCriticViewMode = 'clean';
+
     function renderAgentSummary(summary, modelId) {
+      const isNewModel = currentAgentModelId !== modelId;
+      currentAgentSummary = summary;
+      currentAgentModelId = modelId;
       const timelineEl = document.getElementById('agentTimeline');
       const criticCard = document.getElementById('criticCard');
       if (!summary || !Array.isArray(summary.history) || summary.history.length === 0) {
@@ -4026,41 +4443,148 @@
       if (criticCard) criticCard.hidden = false;
       const t = copy[currentLang];
       const scoreBadge = document.getElementById('timelineScoreBadge');
-      if (scoreBadge) scoreBadge.textContent = (t.timelineScore || 'SCORE: ') + summary.final_score + ' / 10';
+      if (scoreBadge) scoreBadge.textContent = (t.timelineScore || 'SCORE: ') + (summary.final_score !== undefined ? summary.final_score : '--') + ' / 10';
+
+      if (isNewModel || currentAgentRoundIdx < 0 || currentAgentRoundIdx >= summary.history.length) {
+        currentAgentRoundIdx = summary.history.length - 1;
+      }
+
+      renderScoreTrajectory(summary);
+
       const roundsContainer = document.getElementById('timelineRounds');
       if (roundsContainer) {
         roundsContainer.innerHTML = '';
         summary.history.forEach((round, idx) => {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'timeline-round-btn' + (idx === summary.history.length - 1 ? ' active' : '');
+          btn.className = 'timeline-round-btn' + (idx === currentAgentRoundIdx ? ' active' : '');
           const label = idx === summary.history.length - 1 ? (t.finalRound || 'Final') : ((t.round || 'Round ') + idx);
-          btn.innerHTML = '<strong>' + label + '</strong><span>' + round.score + '★</span>';
+          btn.innerHTML = '<strong>' + label + '</strong><span>(' + (round.score !== undefined ? round.score : '--') + ')</span>';
+          btn.setAttribute('aria-label', label + ' (' + (round.score !== undefined ? round.score : '--') + ')');
           btn.addEventListener('click', () => {
-            roundsContainer.querySelectorAll('.timeline-round-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            updateCriticView(round, idx, modelId);
-            if (modelId && round.glb_available && backendUrl) {
-              loadThreePreview(resolveBackendUrl('/v1/models/' + modelId + '/rounds/' + idx + '/model.glb'));
-            }
+            selectAgentRound(idx);
           });
           roundsContainer.appendChild(btn);
         });
       }
-      const lastRound = summary.history[summary.history.length - 1];
-      updateCriticView(lastRound, summary.history.length - 1, modelId);
+
+      const activeRound = summary.history[currentAgentRoundIdx] || summary.history[summary.history.length - 1];
+      updateCriticView(activeRound, currentAgentRoundIdx, modelId);
     }
+
+    function selectAgentRound(idx) {
+      if (!currentAgentSummary || !Array.isArray(currentAgentSummary.history) || !currentAgentSummary.history[idx]) return;
+      currentAgentRoundIdx = idx;
+      const roundsContainer = document.getElementById('timelineRounds');
+      if (roundsContainer) {
+        roundsContainer.querySelectorAll('.timeline-round-btn').forEach((b, i) => {
+          b.classList.toggle('active', i === idx);
+        });
+      }
+      const trajectoryContainer = document.getElementById('scoreTrajectory');
+      if (trajectoryContainer) {
+        trajectoryContainer.querySelectorAll('.trajectory-pill').forEach((p, i) => {
+          p.classList.toggle('active', i === idx);
+        });
+      }
+      const round = currentAgentSummary.history[idx];
+      updateCriticView(round, idx, currentAgentModelId);
+      if (currentAgentModelId && backendUrl) {
+        const glbUrl = resolveBackendUrl('/v1/models/' + currentAgentModelId + '/rounds/' + idx + '/model.glb');
+        loadThreePreview(glbUrl, modelSpec);
+      }
+    }
+
+    function renderScoreTrajectory(summary) {
+      const container = document.getElementById('scoreTrajectory');
+      if (!container) return;
+      container.innerHTML = '';
+      if (!summary || !Array.isArray(summary.history) || summary.history.length === 0) return;
+      const t = copy[currentLang];
+      summary.history.forEach((round, idx) => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'trajectory-pill' + (idx === currentAgentRoundIdx ? ' active' : '');
+        pill.textContent = 'R' + idx + ': ' + (round.score !== undefined ? round.score : '--');
+        pill.title = (t.round || 'Round ') + idx + ' (' + (round.score !== undefined ? round.score : '--') + ' / 10)';
+        pill.setAttribute('aria-label', pill.title);
+        pill.addEventListener('click', () => selectAgentRound(idx));
+        container.appendChild(pill);
+        if (idx < summary.history.length - 1) {
+          const arrow = document.createElement('span');
+          arrow.className = 'trajectory-arrow';
+          arrow.textContent = '➜';
+          container.appendChild(arrow);
+        }
+      });
+      const statusBadge = document.createElement('span');
+      if (summary.converged) {
+        statusBadge.className = 'trajectory-status converged';
+        statusBadge.textContent = '✓ ' + (t.converged || 'Converged');
+      } else {
+        statusBadge.className = 'trajectory-status unconverged';
+        statusBadge.textContent = '⟳ ' + (t.maxRounds || 'Max Rounds');
+      }
+      container.appendChild(statusBadge);
+    }
+
+    function setCriticViewMode(mode, refreshImg = true) {
+      currentCriticViewMode = mode;
+      const cleanBtn = document.getElementById('criticModeClean');
+      const annotatedBtn = document.getElementById('criticModeAnnotated');
+      if (cleanBtn) cleanBtn.classList.toggle('active', mode === 'clean');
+      if (annotatedBtn) annotatedBtn.classList.toggle('active', mode === 'annotated');
+      if (refreshImg && currentAgentModelId && backendUrl) {
+        const targetView = mode === 'annotated' ? 'annotated_composite' : 'composite';
+        const img = document.getElementById('criticCompositeImg');
+        if (img) {
+          const targetUrl = resolveBackendUrl('/v1/models/' + currentAgentModelId + '/rounds/' + currentAgentRoundIdx + '/views/' + targetView);
+          img.onerror = () => {
+            if (currentCriticViewMode === 'annotated') {
+              img.onerror = null;
+              img.src = resolveBackendUrl('/v1/models/' + currentAgentModelId + '/rounds/' + currentAgentRoundIdx + '/views/composite');
+              setCriticViewMode('clean', false);
+            }
+          };
+          img.src = targetUrl;
+        }
+      }
+    }
+
     function updateCriticView(round, roundIdx, modelId) {
       if (!round) return;
       const t = copy[currentLang];
       const criticScore = document.getElementById('criticScore');
-      if (criticScore) criticScore.textContent = round.score + ' / 10';
-      const criticSummary = document.getElementById('criticSummary');
-      if (criticSummary) criticSummary.textContent = round.summary || (round.critique && round.critique.summary) || (t.verified || 'Visual critique verified.');
-      const previewContainer = document.getElementById('criticViewsPreview');
-      if (previewContainer && modelId && backendUrl) {
-        previewContainer.innerHTML = '<img src="' + resolveBackendUrl('/v1/models/' + modelId + '/rounds/' + roundIdx + '/views/composite') + '" alt="4-View CAD Inspection" title="4-View CAD Inspection (ISO, TOP, FRONT, RIGHT)" />';
+      if (criticScore) criticScore.textContent = (round.score !== undefined ? round.score : '--') + ' / 10';
+
+      const criticVerdict = document.getElementById('criticVerdict');
+      if (criticVerdict) {
+        const rawVerdict = (round.verdict || (round.score >= 9.0 ? 'ACCEPT' : 'REWORK')).toUpperCase();
+        const isAccept = rawVerdict === 'ACCEPT';
+        criticVerdict.textContent = isAccept ? (t.verdictAccept || 'ACCEPT') : (t.verdictRework || 'REWORK');
+        criticVerdict.className = 'critic-verdict ' + (isAccept ? 'verdict-accept' : 'verdict-rework');
       }
+
+      const criticSummary = document.getElementById('criticSummary');
+      if (criticSummary) {
+        criticSummary.textContent = round.summary || (round.critique && round.critique.summary) || (t.verified || 'Visual critique verified.');
+      }
+
+      const criticCompositeImg = document.getElementById('criticCompositeImg');
+      if (criticCompositeImg && modelId && backendUrl) {
+        const targetView = currentCriticViewMode === 'annotated' ? 'annotated_composite' : 'composite';
+        criticCompositeImg.onerror = () => {
+          if (currentCriticViewMode === 'annotated') {
+            criticCompositeImg.onerror = null;
+            criticCompositeImg.src = resolveBackendUrl('/v1/models/' + modelId + '/rounds/' + roundIdx + '/views/composite');
+            setCriticViewMode('clean', false);
+          }
+        };
+        criticCompositeImg.src = resolveBackendUrl('/v1/models/' + modelId + '/rounds/' + roundIdx + '/views/' + targetView);
+        criticCompositeImg.alt = '4-View CAD Inspection (Round ' + roundIdx + ')';
+        criticCompositeImg.title = t.clickToZoom || 'Click to zoom';
+      }
+
       const discContainer = document.getElementById('criticDiscrepancies');
       if (discContainer) {
         discContainer.innerHTML = '';
@@ -4068,17 +4592,132 @@
         if (list.length === 0) {
           const item = document.createElement('div');
           item.className = 'critic-item';
-          item.textContent = currentLang === 'zh' ? '✓ 所有几何特征与尺寸要求完全符合设计意图' : '✓ All features match design intent';
+          item.textContent = t.allFeaturesMatch || '✓ All features match design intent';
           discContainer.appendChild(item);
         } else {
           list.forEach(d => {
             const item = document.createElement('div');
-            item.className = 'critic-item';
-            item.textContent = '• ' + (d.issue || d.description || JSON.stringify(d));
+            const severity = (d.severity || '').toLowerCase();
+            item.className = 'critic-item' + (severity ? ' severity-' + severity : '');
+            const issueText = d.issue || d.description || (typeof d === 'string' ? d : JSON.stringify(d));
+            const bullet = document.createTextNode('• ');
+            item.appendChild(bullet);
+            if (d.feature) {
+              const strong = document.createElement('strong');
+              strong.textContent = '[' + d.feature + '] ';
+              item.appendChild(strong);
+            }
+            const issueNode = document.createTextNode(issueText);
+            item.appendChild(issueNode);
             discContainer.appendChild(item);
           });
         }
       }
+
+      const patchesDetails = document.getElementById('criticPatchesDetails');
+      const patchesSummary = document.getElementById('criticPatchesSummary');
+      const patchesContent = document.getElementById('criticPatchesContent');
+      if (patchesContent && patchesSummary) {
+        const patches = round.applied_patches || round.proposed_patches || round.patches || [];
+        patchesSummary.textContent = (t.appliedPatches || 'Applied Patches') + (patches.length ? ' (' + patches.length + ')' : '');
+        patchesContent.innerHTML = '';
+        if (patches.length === 0) {
+          const noPatch = document.createElement('div');
+          noPatch.className = 'critic-no-patches';
+          noPatch.textContent = t.noPatches || 'No patches applied in this round (Optimal geometry achieved)';
+          patchesContent.appendChild(noPatch);
+          if (patchesDetails) patchesDetails.open = false;
+        } else {
+          patches.forEach((p, pIdx) => {
+            if (!p || typeof p !== 'object') return;
+            const patchEl = document.createElement('div');
+            patchEl.className = 'critic-patch-item';
+            const op = p.op || 'patch';
+            const param = p.parameter || (p.node && (p.node.id || p.node.operation)) || p.path || ('Patch #' + (pIdx + 1));
+            const val = p.value !== undefined ? (' = ' + (typeof p.value === 'object' ? JSON.stringify(p.value) : p.value)) : '';
+            const reason = p.reason || p.description || '';
+
+            const head = document.createElement('div');
+            head.className = 'critic-patch-item-head';
+            const opSpan = document.createElement('span');
+            opSpan.className = 'critic-patch-op';
+            opSpan.textContent = op;
+            const paramSpan = document.createElement('span');
+            paramSpan.className = 'critic-patch-param';
+            paramSpan.textContent = param + val;
+            head.appendChild(opSpan);
+            head.appendChild(paramSpan);
+            patchEl.appendChild(head);
+
+            if (reason) {
+              const reasonDiv = document.createElement('div');
+              reasonDiv.className = 'critic-patch-reason';
+              reasonDiv.textContent = reason;
+              patchEl.appendChild(reasonDiv);
+            }
+            patchesContent.appendChild(patchEl);
+          });
+          const jsonPre = document.createElement('pre');
+          jsonPre.className = 'critic-patches-json';
+          jsonPre.textContent = JSON.stringify(patches, null, 2);
+          patchesContent.appendChild(jsonPre);
+          if (patchesDetails) patchesDetails.open = true;
+        }
+      }
+
+      const cleanBtn = document.getElementById('criticModeClean');
+      const annotatedBtn = document.getElementById('criticModeAnnotated');
+      if (cleanBtn) cleanBtn.classList.toggle('active', currentCriticViewMode === 'clean');
+      if (annotatedBtn) annotatedBtn.classList.toggle('active', currentCriticViewMode === 'annotated');
+    }
+
+    function openCriticLightbox() {
+      const lightbox = document.getElementById('criticLightbox');
+      const lightboxImg = document.getElementById('criticLightboxImg');
+      const lightboxTitle = document.getElementById('criticLightboxTitle');
+      const compositeImg = document.getElementById('criticCompositeImg');
+      if (!lightbox || !lightboxImg || !compositeImg || !compositeImg.src) return;
+      lightboxImg.src = compositeImg.src;
+      const t = copy[currentLang];
+      const roundLabel = (t.round || 'Round ') + currentAgentRoundIdx;
+      const modeLabel = currentCriticViewMode === 'annotated' ? (t.toggleViewAnnotated || 'Annotated') : (t.toggleViewClean || 'Clean');
+      if (lightboxTitle) {
+        lightboxTitle.textContent = (t.lightboxTitle || '4-View CAD Inspection Suite') + ' · ' + roundLabel + ' (' + modeLabel + ')';
+      }
+      lightbox.hidden = false;
+    }
+
+    function closeCriticLightbox() {
+      const lightbox = document.getElementById('criticLightbox');
+      if (lightbox) lightbox.hidden = true;
+    }
+
+    function initCriticWorkspace() {
+      const cleanBtn = document.getElementById('criticModeClean');
+      const annotatedBtn = document.getElementById('criticModeAnnotated');
+      const toggleWrapper = document.getElementById('criticViewToggle');
+      if (cleanBtn) cleanBtn.addEventListener('click', (e) => { e.stopPropagation(); setCriticViewMode('clean'); });
+      if (annotatedBtn) annotatedBtn.addEventListener('click', (e) => { e.stopPropagation(); setCriticViewMode('annotated'); });
+      if (toggleWrapper) {
+        toggleWrapper.addEventListener('click', (e) => {
+          if (e.target === toggleWrapper) {
+            setCriticViewMode(currentCriticViewMode === 'clean' ? 'annotated' : 'clean');
+          }
+        });
+      }
+
+      const imgWrap = document.getElementById('criticImgWrap');
+      const compositeImg = document.getElementById('criticCompositeImg');
+      if (imgWrap) imgWrap.addEventListener('click', openCriticLightbox);
+      if (compositeImg) compositeImg.addEventListener('click', (e) => { e.stopPropagation(); openCriticLightbox(); });
+
+      const lightboxClose = document.getElementById('criticLightboxClose');
+      const lightboxBackdrop = document.getElementById('criticLightboxBackdrop');
+      if (lightboxClose) lightboxClose.addEventListener('click', closeCriticLightbox);
+      if (lightboxBackdrop) lightboxBackdrop.addEventListener('click', closeCriticLightbox);
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeCriticLightbox();
+      });
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
@@ -4164,6 +4803,7 @@
       backendArtifact = null;
       llmAssumptions = [];
       hideThreePreview();
+      renderAgentSummary(null, null);
       updateExportButtons();
       generateLabel.textContent = copy[currentLang].generating;
       try {
@@ -4460,6 +5100,7 @@
       URL.revokeObjectURL(url);
     });
     translate();
+    initCriticWorkspace();
     processSelect.value = selectedProcess;
     modelSpec = parseModel(prompt.value);
     renderModel(modelSpec, currentView);
@@ -4504,5 +5145,17 @@
     }
     checkBackendConnectivity();
   </script>
+  <div class="critic-lightbox" id="criticLightbox" hidden aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="critic-lightbox-backdrop" id="criticLightboxBackdrop"></div>
+    <div class="critic-lightbox-dialog">
+      <div class="critic-lightbox-header">
+        <div class="critic-lightbox-title" id="criticLightboxTitle">4-View CAD Inspection Suite</div>
+        <button class="critic-lightbox-close" id="criticLightboxClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="critic-lightbox-body">
+        <img id="criticLightboxImg" src="" alt="4-View High-Resolution Inspection Sheet" />
+      </div>
+    </div>
+  </div>
 </body>
 </html>
