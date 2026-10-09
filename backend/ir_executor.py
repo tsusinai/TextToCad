@@ -648,14 +648,18 @@ def _node_shape(
             raise IRExecutionError("translate requires exactly one input")
         vec = values.get("vector")
         if vec is None:
+            vec = values.get("position") or values.get("offset")
+        if vec is None:
             vec = [values.get("x", 0.0), values.get("y", 0.0), values.get("z", 0.0)]
         return inputs[0].translate(_vector(parameters, vec, "translate.vector"))
     if operation == "rotate":
         if len(inputs) != 1:
             raise IRExecutionError("rotate requires exactly one input")
         axis = _vector(parameters, values.get("axis", [0, 0, 1]), "rotate.axis")
-        angle = _number(parameters, values.get("angle", 0.01), "rotate.angle", -360.0)
-        return inputs[0].rotate((0, 0, 0), axis, angle)
+        ang_val = values.get("angle", values.get("degrees", 0.01))
+        angle = _number(parameters, ang_val, "rotate.angle", -360.0)
+        origin = _vector(parameters, values.get("origin", [0, 0, 0]), "rotate.origin")
+        return inputs[0].rotate(origin, axis, angle)
     if operation == "revolve":
         if len(inputs) != 1:
             raise IRExecutionError("revolve requires exactly one input")
