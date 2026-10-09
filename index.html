@@ -439,7 +439,7 @@
     }
     @media (max-width: 768px) {
       .viewport-transform-bar {
-        max-width: calc(100% - 32px);
+        max-width: calc(100% - 130px);
         font-size: 9px;
         padding: 4px 6px;
       }
@@ -1070,7 +1070,7 @@
       font-family: 'Space Grotesk', sans-serif;
       font-size: 11px;
       font-weight: 700;
-      color: var(--ink-muted);
+      color: var(--ink-subtle);
       letter-spacing: 0.02em;
     }
     .critic-view-mode-toggle {
@@ -1428,7 +1428,7 @@
       position: absolute;
       left: 20px;
       bottom: 20px;
-      color: #64748b;
+      color: #cbd5e1;
       font-family: 'JetBrains Mono', monospace;
       font-size: 10px;
       letter-spacing: 0.03em;
@@ -2012,7 +2012,7 @@
                   <button type="button" class="critic-mode-btn" id="criticModeAnnotated" data-mode="annotated">Annotated</button>
                 </div>
               </div>
-              <div class="critic-img-wrap" id="criticImgWrap">
+              <div class="critic-img-wrap" id="criticImgWrap" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open 4-View CAD inspection modal">
                 <img id="criticCompositeImg" class="critic-composite-img" src="" alt="4-View CAD Inspection" title="Click to view full inspection sheet" />
                 <div class="critic-img-hint" id="criticImgHint">🔍 Click to zoom</div>
               </div>
@@ -2967,16 +2967,39 @@
     }
     function disposeThreeObject(object) {
       if (!object) return;
+      const geometries = new Set();
+      const materials = new Set();
+      const textures = new Set();
+      const textureKeys = [
+        'map', 'alphaMap', 'aoMap', 'bumpMap', 'displacementMap',
+        'emissiveMap', 'envMap', 'lightMap', 'metalnessMap', 'normalMap',
+        'roughnessMap', 'specularMap', 'clearcoatMap', 'clearcoatNormalMap',
+        'clearcoatRoughnessMap', 'sheenColorMap', 'sheenRoughnessMap',
+        'transmissionMap', 'specularIntensityMap', 'specularColorMap'
+      ];
       object.traverse((node) => {
-        if (node.geometry && typeof node.geometry.dispose === 'function') node.geometry.dispose();
-        const materials = Array.isArray(node.material) ? node.material : [node.material];
-        materials.filter(Boolean).forEach((material) => {
-          ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'].forEach((key) => {
-            if (material[key] && typeof material[key].dispose === 'function') material[key].dispose();
+        if (node.geometry) geometries.add(node.geometry);
+        if (node.material) {
+          const matList = Array.isArray(node.material) ? node.material : [node.material];
+          matList.filter(Boolean).forEach((mat) => {
+            materials.add(mat);
+            textureKeys.forEach((key) => {
+              if (mat[key] && typeof mat[key].dispose === 'function') textures.add(mat[key]);
+            });
           });
-          if (typeof material.dispose === 'function') material.dispose();
-        });
+        }
+        if (node.userData) {
+          delete node.userData._baseEmissive;
+          delete node.userData._selectorBaseEmissive;
+          delete node.userData.edgeOverlay;
+        }
       });
+      textures.forEach((tex) => { try { tex.dispose(); } catch (e) {} });
+      materials.forEach((mat) => { try { mat.dispose(); } catch (e) {} });
+      geometries.forEach((geom) => { try { geom.dispose(); } catch (e) {} });
+      while (object.children && object.children.length > 0) {
+        object.remove(object.children[0]);
+      }
     }
     function stopThreeRenderLoop() {
       if (threeState.animationFrame) cancelAnimationFrame(threeState.animationFrame);
@@ -3483,7 +3506,10 @@
         const gltf = await new Promise((resolve, reject) => {
           loader.parse(arrayBuffer, resourcePath, resolve, reject);
         });
-        if (sequence !== threeState.loadSeq || requestController.signal.aborted) return;
+        if (sequence !== threeState.loadSeq || requestController.signal.aborted) {
+          if (gltf && gltf.scene) disposeThreeObject(gltf.scene);
+          return;
+        }
         if (threeState.model) {
           threeState.scene.remove(threeState.model);
           disposeThreeObject(threeState.model);
@@ -4671,12 +4697,17 @@
       if (annotatedBtn) annotatedBtn.classList.toggle('active', currentCriticViewMode === 'annotated');
     }
 
+    let lastFocusedTrigger = null;
+
     function openCriticLightbox() {
       const lightbox = document.getElementById('criticLightbox');
       const lightboxImg = document.getElementById('criticLightboxImg');
       const lightboxTitle = document.getElementById('criticLightboxTitle');
       const compositeImg = document.getElementById('criticCompositeImg');
+      const closeBtn = document.getElementById('criticLightboxClose');
+      const appShell = document.querySelector('.app-shell');
       if (!lightbox || !lightboxImg || !compositeImg || !compositeImg.src) return;
+      lastFocusedTrigger = document.activeElement;
       lightboxImg.src = compositeImg.src;
       const t = copy[currentLang];
       const roundLabel = (t.round || 'Round ') + currentAgentRoundIdx;
@@ -4685,11 +4716,21 @@
         lightboxTitle.textContent = (t.lightboxTitle || '4-View CAD Inspection Suite') + ' · ' + roundLabel + ' (' + modeLabel + ')';
       }
       lightbox.hidden = false;
+      lightbox.setAttribute('aria-hidden', 'false');
+      if (appShell) appShell.setAttribute('inert', '');
+      if (closeBtn) closeBtn.focus();
     }
 
     function closeCriticLightbox() {
       const lightbox = document.getElementById('criticLightbox');
-      if (lightbox) lightbox.hidden = true;
+      const appShell = document.querySelector('.app-shell');
+      if (!lightbox || lightbox.hidden) return;
+      lightbox.hidden = true;
+      lightbox.setAttribute('aria-hidden', 'true');
+      if (appShell) appShell.removeAttribute('inert');
+      if (lastFocusedTrigger && typeof lastFocusedTrigger.focus === 'function') {
+        lastFocusedTrigger.focus();
+      }
     }
 
     function initCriticWorkspace() {
@@ -4708,7 +4749,15 @@
 
       const imgWrap = document.getElementById('criticImgWrap');
       const compositeImg = document.getElementById('criticCompositeImg');
-      if (imgWrap) imgWrap.addEventListener('click', openCriticLightbox);
+      if (imgWrap) {
+        imgWrap.addEventListener('click', openCriticLightbox);
+        imgWrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openCriticLightbox();
+          }
+        });
+      }
       if (compositeImg) compositeImg.addEventListener('click', (e) => { e.stopPropagation(); openCriticLightbox(); });
 
       const lightboxClose = document.getElementById('criticLightboxClose');
@@ -5075,7 +5124,7 @@
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(objectUrl);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
     }
     function bindArtifactExport(button, format) {
       if (!button) return;
@@ -5097,7 +5146,8 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url; link.download = 'form-cad-model.obj'; link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
     });
     translate();
     initCriticWorkspace();
@@ -5145,7 +5195,7 @@
     }
     checkBackendConnectivity();
   </script>
-  <div class="critic-lightbox" id="criticLightbox" hidden aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="critic-lightbox" id="criticLightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="criticLightboxTitle">
     <div class="critic-lightbox-backdrop" id="criticLightboxBackdrop"></div>
     <div class="critic-lightbox-dialog">
       <div class="critic-lightbox-header">

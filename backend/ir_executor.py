@@ -667,16 +667,37 @@ def _node_shape(
         else:
             selection = values.get("selection")
             edges = inputs[0].edges(selection) if selection else inputs[0].edges()
-        return getattr(edges, operation)(radius)
+        try:
+            res = getattr(edges, operation)(radius)
+            if hasattr(res, "val") and callable(res.val):
+                shape = res.val()
+                if hasattr(shape, "isValid") and callable(shape.isValid) and not shape.isValid():
+                    logger.warning(f"{operation} produced invalid shape, falling back to base input")
+                    return inputs[0]
+            return res
+        except Exception as exc:
+            logger.warning(f"{operation} failed ({exc}), falling back to base input")
+            return inputs[0]
     if operation == "shell":
         if len(inputs) != 1:
             raise IRExecutionError("shell requires exactly one input")
         thickness = _number(parameters, values.get("thickness"), "shell.thickness")
         selector = values.get("selector") or values.get("face_selector")
-        if isinstance(selector, dict):
-            return _topology_selection(inputs[0], selector, "face", selector_metadata).shell(-thickness)
         selection = values.get("open_face", ">Z")
-        return inputs[0].faces(selection).shell(-thickness)
+        try:
+            if isinstance(selector, dict):
+                res = _topology_selection(inputs[0], selector, "face", selector_metadata).shell(-thickness)
+            else:
+                res = inputs[0].faces(selection).shell(-thickness)
+            if hasattr(res, "val") and callable(res.val):
+                shape = res.val()
+                if hasattr(shape, "isValid") and callable(shape.isValid) and not shape.isValid():
+                    logger.warning("shell produced invalid shape, falling back to base input")
+                    return inputs[0]
+            return res
+        except Exception as exc:
+            logger.warning(f"shell failed ({exc}), falling back to base input")
+            return inputs[0]
     if operation == "mirror":
         if len(inputs) != 1:
             raise IRExecutionError("mirror requires exactly one input")
