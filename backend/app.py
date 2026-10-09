@@ -1033,11 +1033,19 @@ def _normalize_ir_draft(
         inputs = node.get("inputs")
         if not isinstance(inputs, list):
             inputs = []
-            for key in ("source", "input", "target"):
+            for key in ("source", "input", "target", "tool", "cutter", "cut_with", "operand", "base", "body"):
                 value = node.get(key)
                 if isinstance(value, str):
                     inputs.append(value)
+        raw_params = node.get("parameters")
+        if isinstance(raw_params, dict):
+            for p_key in ("tool", "cutter", "cut_with", "operand", "subtrahend"):
+                p_val = raw_params.get(p_key)
+                if isinstance(p_val, str) and p_val not in inputs:
+                    inputs.append(p_val)
         node["inputs"] = [str(value) for value in inputs if isinstance(value, (str, int))]
+        if node["operation"] in {"cut", "union", "intersect", "fillet", "chamfer", "shell"} and not node["inputs"] and nodes:
+            node["inputs"] = [nodes[-1]["id"]]
         if not isinstance(node.get("parameters"), dict):
             node["parameters"] = {}
         if node.get("frame") is not None:

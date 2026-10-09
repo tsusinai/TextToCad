@@ -879,6 +879,33 @@ def test_ir_executor_supports_single_input_cut_feature():
 
 
 @pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_ir_executor_handles_cut_with_single_input_without_params():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "plate",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"size": [50, 50, 5]},
+            },
+            {
+                "id": "cut_nop",
+                "kind": "feature",
+                "operation": "cut",
+                "inputs": ["plate"],
+                "parameters": {},
+            },
+        ],
+        "outputs": [{"id": "main", "node": "cut_nop", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_ir_executor_supports_xyz_translate_and_named_axis_rotate():
     ir = {
         "schema_version": "0.2",

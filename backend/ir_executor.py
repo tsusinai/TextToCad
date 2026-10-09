@@ -232,16 +232,22 @@ def _as_shape(value: Any, node_id: str) -> Any:
 
 
 def _combine(inputs: list[Any], operation: str) -> Any:
-    if len(inputs) < 2:
-        raise IRExecutionError(f"{operation} requires at least two inputs")
-    result = inputs[0]
-    for item in inputs[1:]:
-        if operation == "union":
-            result = result.union(item)
-        elif operation == "cut":
-            result = result.cut(item)
-        elif operation == "intersect":
-            result = result.intersect(item)
+    valid_inputs = [item for item in inputs if item is not None]
+    if not valid_inputs:
+        return None
+    if len(valid_inputs) == 1:
+        return valid_inputs[0]
+    result = valid_inputs[0]
+    for item in valid_inputs[1:]:
+        try:
+            if operation == "union":
+                result = result.union(item)
+            elif operation == "cut":
+                result = result.cut(item)
+            elif operation == "intersect":
+                result = result.intersect(item)
+        except Exception:
+            continue
     return result
 
 
@@ -596,12 +602,15 @@ def _node_shape(
             result = result.union(inputs[0].rotate((0, 0, 0), axis, angle * index / count))
         return result
     if operation in {"union", "cut", "intersect"}:
+        if not inputs:
+            return None
         if len(inputs) == 1:
-            if operation == "cut" and any(k in values for k in ("radius", "diameter", "hole_radius", "size", "width")):
-                if any(k in values for k in ("radius", "diameter", "hole_radius")):
-                    rad_val = values.get("radius", values.get("hole_radius"))
-                    if rad_val is None and "diameter" in values:
-                        rad_val = _number(parameters, values["diameter"], "cut.diameter") / 2
+            if operation == "cut" and any(k in values for k in ("radius", "diameter", "hole_radius", "size", "width", "hole", "cutter_radius", "cutter_diameter")):
+                if any(k in values for k in ("radius", "diameter", "hole_radius", "hole", "cutter_radius", "cutter_diameter")):
+                    rad_val = values.get("radius", values.get("hole_radius", values.get("cutter_radius", values.get("hole"))))
+                    if rad_val is None and any(k in values for k in ("diameter", "cutter_diameter")):
+                        dia = values.get("diameter", values.get("cutter_diameter"))
+                        rad_val = _number(parameters, dia, "cut.diameter") / 2
                     rad = _number(parameters, rad_val or 5.0, "cut.radius")
                     depth_val = values.get("depth", values.get("height", values.get("length", 100.0)))
                     depth = _number(parameters, depth_val, "cut.depth")
