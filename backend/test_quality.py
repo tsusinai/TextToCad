@@ -974,5 +974,30 @@ def test_ir_expressions_with_numbers_and_parentheses():
     assert validated["parameters"]["padded"]["expression"] == "(width + 10) / 2"
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_agent_modeling_loop_convergence(tmp_path):
+    from agent_loop import run_agent_modeling_loop
+    initial_ir = {
+        "schema_version": "0.2",
+        "document": {"id": "test-box", "intent": "box 30x30x10 mm", "units": "mm"},
+        "nodes": [
+            {"id": "box", "kind": "primitive", "operation": "box", "parameters": {"size": [30, 30, 10]}}
+        ],
+        "outputs": [{"id": "main", "node": "box", "format": ["step", "stl", "glb"]}],
+    }
+    result = run_agent_modeling_loop(
+        initial_ir,
+        "box 30x30x10 mm with a 10 mm through hole",
+        "fdm",
+        tmp_path,
+        max_rounds=2,
+    )
+    assert result["total_rounds"] >= 1
+    assert result["converged"] is True
+    assert result["final_score"] >= 8.8
+    assert len(result["history"]) >= 1
+
+
+
 
 

@@ -134,7 +134,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=MAX_PROMPT_LENGTH)
     units: Literal["mm", "cm", "m", "in"] = "mm"
     process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
-    mode: Literal["standard", "advanced"] = "standard"
+    mode: Literal["standard", "advanced", "agent"] = "standard"
     strict_dimensions: bool = False
     include_steps: bool = False
     material: Literal["pla", "petg", "abs", "resin", "aluminum"] = "pla"
@@ -207,6 +207,7 @@ class GenerateResponse(BaseModel):
     provenance: dict[str, Any] = Field(default_factory=dict)
     design_ir: dict[str, Any] = Field(default_factory=dict)
     generation_trace: list[dict[str, Any]] = Field(default_factory=list)
+    agent_summary: dict[str, Any] | None = None
     needs_clarification: bool = False
     clarification_questions: list[str] = Field(default_factory=list)
 
@@ -2605,7 +2606,7 @@ def _write_artifacts(
     output_shapes: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
-    model_dir.mkdir(parents=True, exist_ok=False)
+    model_dir.mkdir(parents=True, exist_ok=True)
     step_path = model_dir / "model.step"
     stl_path = model_dir / "model.stl"
     analysis_path = model_dir / "analysis.json"
@@ -3070,12 +3071,34 @@ def health() -> dict[str, Any]:
         "ir_generation_available": cq is not None,
         "ir_llm_planner_available": bool(LLM_API_KEY),
         "ir_deterministic_primitive_planner": cq is not None,
+        "agent_mode_available": bool(LLM_API_KEY) and cq is not None,
     }
 
 
 @app.get("/v1/process-profiles")
 def get_process_profiles() -> dict[str, dict[str, Any]]:
     return PROCESS_PROFILES
+
+
+@app.get("/v1/models/{model_id}/rounds/{round_idx}/views/{view_name}")
+def get_model_round_view(model_id: str, round_idx: int, view_name: str) -> FileResponse:
+    if not re.match(r"^[0-9a-f]{32}$", model_id):
+        raise HTTPException(status_code=400, detail="invalid model_id")
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "", view_name)
+    view_path = ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "views" / f"{safe_name}.png"
+    if not view_path.exists():
+        raise HTTPException(status_code=404, detail="round view image not found")
+    return FileResponse(view_path, media_type="image/png")
+
+
+@app.get("/v1/models/{model_id}/rounds/{round_idx}/model.glb")
+def get_model_round_glb(model_id: str, round_idx: int) -> FileResponse:
+    if not re.match(r"^[0-9a-f]{32}$", model_id):
+        raise HTTPException(status_code=400, detail="invalid model_id")
+    glb_path = ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "model.glb"
+    if not glb_path.exists():
+        raise HTTPException(status_code=404, detail="round GLB not found")
+    return FileResponse(glb_path, media_type="model/gltf-binary")
 
 
 @app.post("/v1/models", response_model=GenerateResponse)
@@ -3289,6 +3312,53 @@ def _generate_ir_model(
                       node_count=len(normalized_ir.get("nodes", [])),
                       constraint_count=len(normalized_ir.get("constraints", [])))
 
+        agent_summary: dict[str, Any] | None = None
+        if request.mode == "agent":
+            recorder.emit("planning", "agent_loop_start", "running", mode="agent")
+            from agent_loop import run_agent_modeling_loop
+            model_id = uuid.uuid4().hex
+            agent_artifacts_dir = ARTIFACT_ROOT / model_id
+            agent_artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+            def agent_progress(ev: dict[str, Any]) -> None:
+                round_num = ev.get("round", 0)
+                st = ev.get("stage", "agent")
+                recorder.emit(
+                    "planning",
+                    f"agent_r{round_num}_{st}",
+                    "succeeded",
+                    round=round_num,
+                    stage=st,
+                    message=ev.get("message", ""),
+                )
+
+            agent_result = run_agent_modeling_loop(
+                initial_ir=normalized_ir,
+                prompt=request.prompt,
+                process=request.process,
+                artifacts_dir=agent_artifacts_dir,
+                llm_api_url=LLM_API_URL,
+                llm_api_key=LLM_API_KEY,
+                llm_model=LLM_MODEL,
+                max_rounds=3,
+                target_score=9.0,
+                progress_callback=agent_progress,
+            )
+            normalized_ir = validate_ir(agent_result["final_ir"])
+            agent_summary = {
+                "total_rounds": agent_result["total_rounds"],
+                "converged": agent_result["converged"],
+                "final_score": agent_result["final_score"],
+                "history": agent_result["history"],
+            }
+            recorder.emit(
+                "planning",
+                "agent_loop_converged",
+                "succeeded",
+                total_rounds=agent_result["total_rounds"],
+                final_score=agent_result["final_score"],
+            )
+
         recorder.emit("validating", "constraint_solve", "running")
         constraint_report = solve_constraints(
             normalized_ir,
@@ -3464,7 +3534,8 @@ def _generate_ir_model(
         ] + ([
             f"IR constraint repair applied ({len(repair_attempts)} attempt(s))."
         ] if repair_attempts else []))[:6]
-        model_id = uuid.uuid4().hex
+        if model_id is None:
+            model_id = uuid.uuid4().hex
         artifacts, step_schema = _write_artifacts(
             model_id,
             shape,
@@ -3479,6 +3550,7 @@ def _generate_ir_model(
                 "assumptions": assumptions,
                 "constraint_report": constraint_report,
                 "repair_attempts": repair_attempts,
+                "agent_summary": agent_summary,
             },
             normalized_ir,
             provenance,
@@ -3503,6 +3575,7 @@ def _generate_ir_model(
             provenance=provenance,
             design_ir=normalized_ir,
             generation_trace=copy.deepcopy(recorder.events),
+            agent_summary=agent_summary,
         )
         with CACHE_LOCK:
             MODEL_CACHE[cache_key] = response
