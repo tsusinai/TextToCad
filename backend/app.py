@@ -590,6 +590,12 @@ def parse_prompt_detailed(
         r"(?:diameter|dia|直径)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
         r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:diameter|dia|直径)",
     ])
+    across_flats = _number_after(text, [
+        r"(?:across\s*flats|across-flats|af|对边距|对边)\s*(?:of|为|是|[:=])?\s*(\d+(?:\.\d+)?)",
+        r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:across\s*flats|across-flats|af|对边距|对边)",
+    ])
+    if across_flats is not None and diameter is None:
+        diameter = across_flats
     triplet_found = len(dimension_triplet) == 3
     diameter_found = diameter is not None
     polygon_dimensions_explicit = bool(
