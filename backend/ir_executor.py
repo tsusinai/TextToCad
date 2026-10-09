@@ -526,7 +526,8 @@ def _node_shape(
         height = _number(parameters, height_val, "cone.height")
         radius1 = _number(parameters, values.get("radius1", values.get("radius", 20.0)), "cone.radius1")
         radius2 = _number(parameters, values.get("radius2", 0.01), "cone.radius2", -1e-12)
-        return _apply_inline_transform(_workplane(frame).cone(height, radius1, radius2))
+        cone_solid = cq.Solid.makeCone(radius1, radius2, height)
+        return _apply_inline_transform(_workplane(frame).newObject([cone_solid]))
     if operation == "torus":
         major = _number(parameters, values.get("major_radius", values.get("radius", 30.0)), "torus.major_radius")
         minor = _number(parameters, values.get("minor_radius", 10.0), "torus.minor_radius")

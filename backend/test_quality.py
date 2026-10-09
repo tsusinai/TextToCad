@@ -809,6 +809,7 @@ def test_triangle_without_dimensions_stays_generic_polygon_prism():
     assert provenance["fields"]["profile_points"]["status"] == "derived"
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_deterministic_ir_builds_torus():
     _, params, _ = app.parse_prompt_detailed("a torus ring 60 mm")
     ir = app._deterministic_ir_plan("a torus ring 60 mm", "fdm", "mm", params)
@@ -819,6 +820,7 @@ def test_deterministic_ir_builds_torus():
     assert metrics["solid_count"] == 1
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_deterministic_ir_builds_hollow_cylinder():
     _, params, _ = app.parse_prompt_detailed("a hollow cylinder 40 mm and height 50 mm")
     ir = app._deterministic_ir_plan("a hollow cylinder 40 mm and height 50 mm", "fdm", "mm", params)
@@ -830,6 +832,7 @@ def test_deterministic_ir_builds_hollow_cylinder():
     assert metrics["face_count"] >= 4
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_ir_executor_supports_inline_position_transform():
     ir = {
         "schema_version": "0.2",
@@ -848,6 +851,7 @@ def test_ir_executor_supports_inline_position_transform():
     assert metrics["bbox_mm"]["z"] == 10.0
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_ir_executor_supports_single_input_cut_feature():
     ir = {
         "schema_version": "0.2",
@@ -874,6 +878,7 @@ def test_ir_executor_supports_single_input_cut_feature():
     assert metrics["face_count"] >= 7
 
 
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_ir_executor_supports_xyz_translate_and_named_axis_rotate():
     ir = {
         "schema_version": "0.2",
@@ -905,6 +910,42 @@ def test_ir_executor_supports_xyz_translate_and_named_axis_rotate():
     metrics = app.shape_metrics(execution["shape"])
     assert metrics["solid_count"] == 1
     assert metrics["bbox_mm"]["z"] == 6.0  # diameter of cylinder
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_deterministic_ir_builds_cone():
+    _, params, _ = app.parse_prompt_detailed("a cone 30 mm diameter and 40 mm height")
+    ir = app._deterministic_ir_plan("a cone 30 mm diameter and 40 mm height", "fdm", "mm", params)
+    assert ir["nodes"][0]["operation"] == "cone"
+    execution = app.execute_ir(ir)
+    assert execution["shape"] is not None
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["face_count"] >= 2
+
+
+def test_ir_expressions_with_numbers_and_parentheses():
+    doc = {
+        "schema_version": "0.2",
+        "parameters": {
+            "width": {"value": 50.0},
+            "half_width": {"value": 25.0, "expression": "0.5 * width"},
+            "padded": {"value": 30.0, "expression": "(width + 10) / 2"},
+        },
+        "nodes": [
+            {
+                "id": "box1",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"width": "width", "depth": "half_width", "height": "padded"},
+            }
+        ],
+        "outputs": [{"id": "main", "node": "box1", "format": ["step"]}],
+    }
+    validated = app.validate_ir(doc)
+    assert validated["parameters"]["half_width"]["expression"] == "0.5 * width"
+    assert validated["parameters"]["padded"]["expression"] == "(width + 10) / 2"
+
 
 
 

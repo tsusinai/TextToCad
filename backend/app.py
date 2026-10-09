@@ -1958,8 +1958,8 @@ def _normal_ray_thickness(
         intersector = BRepIntCurveSurface_Inter()
         intersector.Init(wrapped, line, 1e-7)
         distances: list[float] = []
-        for point_index in range(1, int(intersector.NbPoints()) + 1):
-            point = intersector.Pnt(point_index)
+        while intersector.More():
+            point = intersector.Pnt()
             delta = (
                 float(point.X()) - origin[0],
                 float(point.Y()) - origin[1],
@@ -1968,6 +1968,7 @@ def _normal_ray_thickness(
             distance = sum(delta[axis] * normal[axis] for axis in range(3))
             if math.isfinite(distance) and distance > 1e-4:
                 distances.append(distance)
+            intersector.Next()
         return min(distances) if distances else None
     except Exception:
         return None

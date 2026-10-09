@@ -43,7 +43,7 @@ ALLOWED_KINDS = {
     "primitive", "feature", "sketch", "component", "operation", "inspection",
     "profile", "shell", "cut", "pattern", "edge", "divider", "union",
 }
-EXPRESSION_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\s*(?:[+\-*/%()]|\*\*)\s*[A-Za-z0-9_.]+)*$")
+EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_().]+(?:\s*(?:[+\-*/%()]|\*\*)\s*[A-Za-z0-9_().]+)*$")
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 ID_RE = re.compile(IR_ID_PATTERN)
 
