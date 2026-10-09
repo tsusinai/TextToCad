@@ -301,6 +301,9 @@ def call_vlm_critic(
         "- 'add_chamfer' / 'add_fillet': bevels or rounds edges of target_node with specified distance or radius.\n"
         "- 'shell_hollow': adds a shell or inner pocket cut node to create a hollow cavity with specified wall thickness.\n"
         "- 'set_parameter' / 'replace_node_parameter': edits specific scalar parameters directly.\n"
+        "- Stepped shafts: ensure all cylindrical stages are coaxially stacked along Z and non-overlapping.\n"
+        "- Finned heat sinks: count cooling fins and verify even spacing across the baseplate.\n"
+        "- Bottom features: pockets or cutouts on the underside (-Z face) are occluded in top views; confirm via Ground-Truth Metrology.\n"
         "Give a score >= 9.0 and verdict ACCEPT when all requested functional features, holes, cuts, and proportions match the prompt."
     )
 
