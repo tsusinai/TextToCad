@@ -93,14 +93,26 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             if node is None or not isinstance(name, str):
                 raise ValueError(f"patch[{index}] references an unknown node")
             node.setdefault("parameters", {})[name] = patch.get("value")
-        elif operation == "add_node":
+        elif operation in {"add_node", "replace_node"}:
             node = patch.get("node")
             if not isinstance(node, dict) or not node.get("id"):
                 raise ValueError(f"patch[{index}] has an invalid node")
-            if node["id"] in node_by_id:
-                raise ValueError(f"patch[{index}] would duplicate node id")
-            nodes.append(copy.deepcopy(node))
-            node_by_id[node["id"]] = nodes[-1]
+            node_id = node["id"]
+            if node_id in node_by_id:
+                existing_idx = next(i for i, n in enumerate(nodes) if n.get("id") == node_id)
+                nodes[existing_idx] = copy.deepcopy(node)
+                node_by_id[node_id] = nodes[existing_idx]
+            else:
+                nodes.append(copy.deepcopy(node))
+                node_by_id[node_id] = nodes[-1]
+
+            current_output = candidate.get("outputs", [{}])[0].get("node")
+            node_inputs = node.get("inputs") or []
+            if current_output == node_id or current_output in node_inputs:
+                if candidate.get("outputs"):
+                    candidate["outputs"][0]["node"] = node_id
+                else:
+                    candidate["outputs"] = [{"id": "primary", "node": node_id, "format": ["step", "stl", "glb"]}]
         elif operation == "remove_node":
             node_id = patch.get("node")
             if node_id not in node_by_id:

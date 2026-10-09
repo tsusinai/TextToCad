@@ -608,31 +608,39 @@ def _node_shape(
         if not inputs:
             return None
         if len(inputs) == 1:
-            if operation == "cut" and any(k in values for k in ("radius", "diameter", "hole_radius", "size", "width", "hole", "cutter_radius", "cutter_diameter")):
+            if operation in {"cut", "union"} and any(k in values for k in ("radius", "diameter", "hole_radius", "size", "width", "hole", "cutter_radius", "cutter_diameter")):
                 if any(k in values for k in ("radius", "diameter", "hole_radius", "hole", "cutter_radius", "cutter_diameter")):
                     rad_val = values.get("radius", values.get("hole_radius", values.get("cutter_radius", values.get("hole"))))
                     if rad_val is None and any(k in values for k in ("diameter", "cutter_diameter")):
                         dia = values.get("diameter", values.get("cutter_diameter"))
-                        rad_val = _number(parameters, dia, "cut.diameter") / 2
-                    rad = _number(parameters, rad_val or 5.0, "cut.radius")
+                        rad_val = _number(parameters, dia, f"{operation}.diameter") / 2
+                    rad = _number(parameters, rad_val or 5.0, f"{operation}.radius")
                     depth_val = values.get("depth", values.get("height", values.get("length", 100.0)))
-                    depth = _number(parameters, depth_val, "cut.depth")
-                    tool = _workplane(frame).circle(rad).extrude(depth * 2.0)
-                    x = _number(parameters, values.get("x", 0.0), "cut.x", -1e12)
-                    y = _number(parameters, values.get("y", 0.0), "cut.y", -1e12)
-                    z = _number(parameters, values.get("z", -depth * 0.5), "cut.z", -1e12)
+                    depth = _number(parameters, depth_val, f"{operation}.depth")
+                    tool = _workplane(frame).circle(rad).extrude(depth if operation == "union" else depth * 2.0)
+                    pos = values.get("position")
+                    if isinstance(pos, (list, tuple)) and len(pos) == 3:
+                        x, y, z = pos
+                    else:
+                        x = _number(parameters, values.get("x", 0.0), f"{operation}.x", -1e12)
+                        y = _number(parameters, values.get("y", 0.0), f"{operation}.y", -1e12)
+                        z = _number(parameters, values.get("z", 0.0 if operation == "union" else -depth * 0.5), f"{operation}.z", -1e12)
                     tool = tool.translate((x, y, z))
-                    return inputs[0].cut(tool)
+                    return getattr(inputs[0], operation)(tool)
                 elif any(k in values for k in ("size", "width")):
-                    w = _number(parameters, values.get("width", 10.0), "cut.width")
-                    d = _number(parameters, values.get("depth", 10.0), "cut.depth")
-                    h = _number(parameters, values.get("height", values.get("depth", 100.0)), "cut.height")
-                    tool = _workplane(frame).box(w, d, h, centered=(True, True, True))
-                    x = _number(parameters, values.get("x", 0.0), "cut.x", -1e12)
-                    y = _number(parameters, values.get("y", 0.0), "cut.y", -1e12)
-                    z = _number(parameters, values.get("z", 0.0), "cut.z", -1e12)
+                    w = _number(parameters, values.get("width", 10.0), f"{operation}.width")
+                    d = _number(parameters, values.get("depth", 10.0), f"{operation}.depth")
+                    h = _number(parameters, values.get("height", values.get("length", values.get("depth", 100.0))), f"{operation}.height")
+                    tool = _workplane(frame).box(w, d, h, centered=(True, True, True if operation == "cut" else False))
+                    pos = values.get("position")
+                    if isinstance(pos, (list, tuple)) and len(pos) == 3:
+                        x, y, z = pos
+                    else:
+                        x = _number(parameters, values.get("x", 0.0), f"{operation}.x", -1e12)
+                        y = _number(parameters, values.get("y", 0.0), f"{operation}.y", -1e12)
+                        z = _number(parameters, values.get("z", 0.0), f"{operation}.z", -1e12)
                     tool = tool.translate((x, y, z))
-                    return inputs[0].cut(tool)
+                    return getattr(inputs[0], operation)(tool)
             return inputs[0]
         return _combine(inputs, operation)
     if operation == "translate":

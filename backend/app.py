@@ -903,6 +903,10 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "For a sphere or ball (球体/球), emit a sphere primitive with radius or diameter (if dimension not specified, use a reasonable default like radius=25). "
         "For a regular N-gon or polygon prism, emit regular_polygon with parameters.sides, parameters.points (planar [x,y] pairs) or width/depth, and parameters.height. Use polygon_prism only for an explicit irregular polygon profile. "
         "Do not infer rounded edges from generic words such as model, part, body, or solid. "
+        "Engineering Assembly & Multi-Feature Guidelines: "
+        "- For multi-tier/stepped drive shafts (阶梯传动轴/阶梯轴), do NOT leave all cylinders concentric at the origin! Each cylinder stage must be sequentially stacked along the axis: create each cylinder and translate it along Z (e.g. stage 1 at z=0, stage 2 at z=length1, stage 3 at z=length1+length2) before union. For keyways (键槽), position a cutter box at the output shaft surface and subtract with cut. "
+        "- For finned heat sinks (芯片散热器/散热片), model the baseplate box, and for fins, translate each fin box across the top surface of the baseplate (at z = base_height) along X with even spacing, union with base, and subtract any chip pocket (贴合槽) from the bottom face (z = 0). "
+        "- When cutting holes, pockets, or slots, translate the tool to the intended location and subtract using operation: 'cut'. "
         f"Selected process: {process}. Requested input units: {units}. "
         f"Allowed IR shape: {json.dumps(schema)}"
     )
@@ -3363,7 +3367,7 @@ def _generate_ir_model(
                 llm_api_url=LLM_API_URL,
                 llm_api_key=LLM_API_KEY,
                 llm_model=LLM_MODEL,
-                max_rounds=3,
+                max_rounds=4,
                 target_score=9.0,
                 progress_callback=agent_progress,
             )
