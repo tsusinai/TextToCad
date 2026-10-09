@@ -3373,6 +3373,7 @@ def _generate_ir_model(
                 "best_round": agent_result.get("best_round", 0),
                 "converged": agent_result["converged"],
                 "final_score": agent_result["final_score"],
+                "final_certificate": agent_result.get("final_certificate"),
                 "history": agent_result["history"],
             }
             recorder.emit(
