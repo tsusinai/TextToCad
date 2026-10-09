@@ -870,6 +870,122 @@
       transition: opacity .2s ease, transform .2s ease;
     }
     .viewport-transform-bar.hidden { display: none !important; }
+    .agent-timeline {
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      background: rgba(22, 26, 32, 0.88);
+      border: 1px solid rgba(212, 255, 79, 0.28);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .agent-timeline.hidden { display: none !important; }
+    .agent-timeline-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .timeline-label {
+      color: #94a3b8;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .timeline-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--lime);
+      background: rgba(212, 255, 79, 0.15);
+      border: 1px solid rgba(212, 255, 79, 0.4);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .timeline-rounds {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    .timeline-round-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(30, 36, 44, 0.85);
+      color: #cbd5e1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .timeline-round-btn:hover {
+      border-color: rgba(212, 255, 79, 0.5);
+      color: var(--lime);
+      background: rgba(45, 54, 66, 0.95);
+    }
+    .timeline-round-btn.active {
+      border-color: var(--lime);
+      color: #171816;
+      background: var(--lime);
+      font-weight: 800;
+      box-shadow: 0 0 12px rgba(212, 255, 79, 0.35);
+    }
+    .critic-card {
+      margin-top: 14px;
+      padding: 16px;
+      border: 1px solid rgba(212, 255, 79, 0.25);
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: var(--shadow-card);
+    }
+    .critic-card.hidden { display: none !important; }
+    .critic-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .critic-score {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 800;
+      color: #15803d;
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .critic-summary {
+      margin-top: 8px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--ink);
+    }
+    .critic-views-preview {
+      margin-top: 10px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      max-height: 200px;
+    }
+    .critic-views-preview img {
+      width: 100%;
+      height: auto;
+      display: block;
+      cursor: pointer;
+    }
+    .critic-discrepancies { display: grid; gap: 6px; margin-top: 10px; }
+    .critic-item {
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      background: var(--panel);
+      color: var(--ink-subtle);
+    }
     .transform-section { display: flex; align-items: center; gap: 3px; }
     .transform-bar-label {
       color: #94a3b8;
@@ -1357,6 +1473,13 @@
         </div>
       </aside>
       <div class="content">
+        <div class="agent-timeline" id="agentTimeline" hidden>
+          <div class="agent-timeline-head">
+            <span class="timeline-label" id="timelineLabel">AGENT REWORK TIMELINE</span>
+            <span class="timeline-badge" id="timelineScoreBadge">SCORE: --</span>
+          </div>
+          <div class="timeline-rounds" id="timelineRounds"></div>
+        </div>
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
             <span class="viewport-label">3D CAD VIEWPORT</span><span class="issue-badge" id="issueBadge">READY</span>
@@ -1505,6 +1628,7 @@
             <select class="mode-select" id="generationMode" aria-label="Generation mode">
               <option value="standard">Standard</option>
               <option value="advanced">Advanced · LLM</option>
+              <option value="agent">Agent · Vision Auto-Rework</option>
             </select>
           </div>
           </div>
@@ -1524,6 +1648,15 @@
               <div class="wall-map" id="wallMap"></div>
               <div class="issue-list" id="issueList"></div>
             </div>
+          </div>
+          <div class="critic-card" id="criticCard" hidden>
+            <div class="critic-head">
+              <span class="section-label" id="criticLabel">VLM VISION CRITIQUE</span>
+              <span class="critic-score" id="criticScore">--</span>
+            </div>
+            <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
+            <div class="critic-views-preview" id="criticViewsPreview"></div>
+            <div class="critic-discrepancies" id="criticDiscrepancies"></div>
           </div>
         </section>
       </div>
@@ -1618,7 +1751,7 @@
       aluminum: { label: { en: 'Aluminum · anodized', zh: '铝 · 阳极氧化' }, meta: { en: 'Machined metal appearance', zh: '金属加工外观' }, body: 0xb9c2c1, side: 0x899493, inner: 0x606d6d, accent: 0xd8e0df, roughness: .28, metalness: .58 }
     };
     let selectedMode = (() => { try { return localStorage.getItem(modeStorageKey) || 'standard'; } catch (error) { return 'standard'; } })();
-    if (!['standard', 'advanced'].includes(selectedMode)) selectedMode = 'standard';
+    if (!['standard', 'advanced', 'agent'].includes(selectedMode)) selectedMode = 'standard';
     let advancedAvailable = false;
     let backendAuthRequired = false;
     const processProfiles = {
@@ -1715,8 +1848,10 @@
         modeLabel: 'GENERATION ENGINE',
         standardMode: 'Standard (Deterministic)',
         advancedMode: 'Advanced (LLM + OCCT)',
+        agentMode: 'Agent (Visual Auto-Rework)',
         standardModeHint: 'Parametric rule parser · Deterministic, ultra-fast & private',
         advancedModeHint: 'DeepSeek semantic intent extraction · Solved & validated by OCCT',
+        agentModeHint: 'Headless multi-view render ➔ VLM visual critique ➔ iterative patch correction',
         advancedRequiresBackend: 'Advanced LLM mode requires an active backend connection.',
         advancedUnavailable: 'Backend connected, but LLM API credentials are not configured.',
         unitLabel: 'SYSTEM UNITS',
@@ -1826,7 +1961,12 @@
         btnResetTransform: '⟲ Reset',
         gizmoIso: 'ISO',
         gizmoTop: 'TOP',
-        gizmoFront: 'FRONT'
+        gizmoFront: 'FRONT',
+        timelineLabel: 'AGENT REWORK TIMELINE',
+        timelineScore: 'SCORE: ',
+        criticLabel: 'VLM VISION CRITIQUE',
+        round: 'Round ',
+        finalRound: 'Final'
       },
       zh: {
         toggle: 'EN',
@@ -1861,8 +2001,10 @@
         modeLabel: '几何生成引擎',
         standardMode: '标准规则解析 (确定性)',
         advancedMode: '高级智能解析 (大模型 + OCCT)',
+        agentMode: 'Agent · 智能视觉返工模式 (多模态自校正)',
         standardModeHint: '规则解析器 · 确定性、响应极快且本地私有',
         advancedModeHint: 'DeepSeek 语义解析 · OpenCASCADE 工业内核求解验证',
+        agentModeHint: '多视图无头渲染 ➔ VLM 视觉批判 ➔ 增量特征补丁自校正',
         advancedRequiresBackend: '高级模式需要连接几何计算后端服务。',
         advancedUnavailable: '后端已连接，但尚未配置 LLM API 凭证。',
         unitLabel: '尺寸基准单位',
@@ -1972,7 +2114,12 @@
         btnResetTransform: '⟲ 重置姿态',
         gizmoIso: '轴测',
         gizmoTop: '俯视',
-        gizmoFront: '主视'
+        gizmoFront: '主视',
+        timelineLabel: 'AGENT 视觉返工演化时序',
+        timelineScore: '综合评分: ',
+        criticLabel: 'VLM 视觉评审诊断报告',
+        round: '第 ',
+        finalRound: '最终成品'
       }
     };
 
@@ -2115,7 +2262,10 @@
         generationMode.setAttribute('aria-label', t.modeLabel);
         generationMode.options[0].textContent = t.standardMode;
         generationMode.options[1].textContent = t.advancedMode;
+        if (generationMode.options[2]) generationMode.options[2].textContent = t.agentMode;
       }
+      if (document.getElementById('timelineLabel')) document.getElementById('timelineLabel').textContent = t.timelineLabel;
+      if (document.getElementById('criticLabel')) document.getElementById('criticLabel').textContent = t.criticLabel;
       updateModeHint();
       processSelect.setAttribute('aria-label', t.processLabel);
       processSelect.options[0].textContent = t.fdmOption;
@@ -2182,9 +2332,13 @@
     function updateModeHint() {
       if (!modeHint) return;
       const t = copy[currentLang];
-      modeHint.textContent = selectedMode === 'advanced'
-        ? (backendAuthRequired ? t.backendAuthRequired : (advancedAvailable ? t.advancedModeHint : (backendUrl ? t.advancedUnavailable : t.advancedRequiresBackend)))
-        : t.standardModeHint;
+      if (selectedMode === 'agent') {
+        modeHint.textContent = backendAuthRequired ? t.backendAuthRequired : (advancedAvailable ? t.agentModeHint : (backendUrl ? t.advancedUnavailable : t.advancedRequiresBackend));
+      } else if (selectedMode === 'advanced') {
+        modeHint.textContent = backendAuthRequired ? t.backendAuthRequired : (advancedAvailable ? t.advancedModeHint : (backendUrl ? t.advancedUnavailable : t.advancedRequiresBackend));
+      } else {
+        modeHint.textContent = t.standardModeHint;
+      }
     }
 
     async function probeBackendCapabilities() {
@@ -3860,6 +4014,72 @@
         button.setAttribute('aria-disabled', String(!available));
       });
     }
+    function renderAgentSummary(summary, modelId) {
+      const timelineEl = document.getElementById('agentTimeline');
+      const criticCard = document.getElementById('criticCard');
+      if (!summary || !Array.isArray(summary.history) || summary.history.length === 0) {
+        if (timelineEl) timelineEl.hidden = true;
+        if (criticCard) criticCard.hidden = true;
+        return;
+      }
+      if (timelineEl) timelineEl.hidden = false;
+      if (criticCard) criticCard.hidden = false;
+      const t = copy[currentLang];
+      const scoreBadge = document.getElementById('timelineScoreBadge');
+      if (scoreBadge) scoreBadge.textContent = (t.timelineScore || 'SCORE: ') + summary.final_score + ' / 10';
+      const roundsContainer = document.getElementById('timelineRounds');
+      if (roundsContainer) {
+        roundsContainer.innerHTML = '';
+        summary.history.forEach((round, idx) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'timeline-round-btn' + (idx === summary.history.length - 1 ? ' active' : '');
+          const label = idx === summary.history.length - 1 ? (t.finalRound || 'Final') : ((t.round || 'Round ') + idx);
+          btn.innerHTML = '<strong>' + label + '</strong><span>' + round.score + '★</span>';
+          btn.addEventListener('click', () => {
+            roundsContainer.querySelectorAll('.timeline-round-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateCriticView(round, idx, modelId);
+            if (modelId && round.glb_available && backendUrl) {
+              loadThreePreview(resolveBackendUrl('/v1/models/' + modelId + '/rounds/' + idx + '/model.glb'));
+            }
+          });
+          roundsContainer.appendChild(btn);
+        });
+      }
+      const lastRound = summary.history[summary.history.length - 1];
+      updateCriticView(lastRound, summary.history.length - 1, modelId);
+    }
+    function updateCriticView(round, roundIdx, modelId) {
+      if (!round) return;
+      const t = copy[currentLang];
+      const criticScore = document.getElementById('criticScore');
+      if (criticScore) criticScore.textContent = round.score + ' / 10';
+      const criticSummary = document.getElementById('criticSummary');
+      if (criticSummary) criticSummary.textContent = round.summary || (round.critique && round.critique.summary) || (t.verified || 'Visual critique verified.');
+      const previewContainer = document.getElementById('criticViewsPreview');
+      if (previewContainer && modelId && backendUrl) {
+        previewContainer.innerHTML = '<img src="' + resolveBackendUrl('/v1/models/' + modelId + '/rounds/' + roundIdx + '/views/composite') + '" alt="4-View CAD Inspection" title="4-View CAD Inspection (ISO, TOP, FRONT, RIGHT)" />';
+      }
+      const discContainer = document.getElementById('criticDiscrepancies');
+      if (discContainer) {
+        discContainer.innerHTML = '';
+        const list = round.discrepancies || [];
+        if (list.length === 0) {
+          const item = document.createElement('div');
+          item.className = 'critic-item';
+          item.textContent = currentLang === 'zh' ? '✓ 所有几何特征与尺寸要求完全符合设计意图' : '✓ All features match design intent';
+          discContainer.appendChild(item);
+        } else {
+          list.forEach(d => {
+            const item = document.createElement('div');
+            item.className = 'critic-item';
+            item.textContent = '• ' + (d.issue || d.description || JSON.stringify(d));
+            discContainer.appendChild(item);
+          });
+        }
+      }
+    }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
       const activeProcess = process || selectedProcess;
@@ -4040,6 +4260,7 @@
         updateProcessHint(remote && remote.profile);
         updateChecks(modelSpec, remote && remote.checks);
         updateExportButtons();
+        renderAgentSummary(remote && remote.agent_summary, remote && remote.model_id);
         if (remote && remote.needs_clarification && Array.isArray(remote.clarification_questions) && remote.clarification_questions.length) {
           setGenerationError((currentLang === 'zh' ? '需要补充：' : 'Please clarify: ') + remote.clarification_questions.join(' · '));
         } else if (backendError && backendUrl) {
@@ -4102,7 +4323,7 @@
       if (modelSpec) generateModel();
     });
     if (generationMode) generationMode.addEventListener('change', () => {
-      selectedMode = generationMode.value === 'advanced' ? 'advanced' : 'standard';
+      selectedMode = ['advanced', 'agent'].includes(generationMode.value) ? generationMode.value : 'standard';
       try { localStorage.setItem(modeStorageKey, selectedMode); } catch (error) {}
       updateModeHint();
       backendArtifact = null;
