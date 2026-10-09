@@ -302,36 +302,178 @@
     .revision-head { margin-top: 18px; }
     .revision-clear { border: 0; background: transparent; color: var(--muted); font-size: 11px; padding: 2px 0; }
     .revision-clear:hover { color: var(--ink); }
-    .revision-list { display: grid; gap: 7px; margin-top: 10px; }
+    .revision-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .revision-item {
       border: 1px solid var(--line);
       background: #ffffff;
       border-radius: 10px;
       padding: 9px 12px;
       text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
       transition: all 0.15s ease;
+      cursor: pointer;
+      width: 100%;
     }
     .revision-item:hover {
       border-color: var(--lime-border);
-      background: var(--soft-lime);
-      transform: translateX(2px);
+      background: #fbfdf7;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      transform: translateY(-1px);
     }
-    .revision-item strong, .revision-item span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .revision-item strong { font-size: 11px; font-weight: 700; color: var(--ink); }
-    .revision-item span, .revision-empty { margin-top: 3px; color: var(--muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; }
-    .revision-empty { line-height: 1.4; }
+    .rev-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .rev-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--ink);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+    .rev-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .rev-row-bottom {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .rev-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+    .rev-badge.rev-backend {
+      background: #eef7e9;
+      color: #2d6a1b;
+      border-color: #cbe6bf;
+    }
+    .rev-badge.rev-agent {
+      background: rgba(212, 255, 79, 0.2);
+      color: #3f6212;
+      border-color: rgba(212, 255, 79, 0.5);
+    }
+    .rev-diff-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+    .revision-empty { line-height: 1.4; color: var(--muted); font-size: 11px; }
     .check.warn { background: #fff0c2; color: #856b2c; }
     .check.fail { background: #ffd9d1; color: #9a4434; }
     .plan-item.warn { background: #fffaf0; }
     .plan-item.fail { background: #fff2ef; }
+    .sidebar-config-card {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sidebar-config-card .process-controls,
+    .sidebar-config-card .mode-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      grid-template-columns: 1fr;
+    }
+    .sidebar-config-card .process-copy,
+    .sidebar-config-card .mode-copy {
+      padding: 0;
+      border: 0;
+    }
+    .sidebar-config-card .process-select,
+    .sidebar-config-card .mode-select {
+      width: 100%;
+    }
     .feature-card {
       margin-top: 18px;
-      padding: 18px;
+      padding: 14px 18px;
       border-radius: 16px;
       border: 1px solid var(--line);
       background: var(--card);
+      transition: all .2s ease;
     }
-    .feature-head { display: flex; align-items: center; justify-content: space-between; }
+    .feature-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .feature-head-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-toggle-icon {
+      font-size: 13px;
+      color: var(--green);
+      display: inline-block;
+      transition: transform .2s ease;
+      line-height: 1;
+    }
+    .feature-card:not(.collapsed) .feature-toggle-icon {
+      transform: rotate(90deg);
+    }
+    .feature-head-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-collapse-btn {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      color: #475569;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .feature-collapse-btn:hover {
+      background: #e2e8f0;
+      color: var(--ink);
+    }
+    .feature-card.collapsed .feature-card-body {
+      display: none !important;
+    }
+    .feature-card:not(.collapsed) .feature-card-body {
+      display: block !important;
+      margin-top: 14px;
+    }
     .feature-mode {
       color: var(--green);
       font-family: 'JetBrains Mono', monospace;
@@ -2002,6 +2144,41 @@
         <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut" id="generateShortcut">Ctrl ↵</span></button>
         <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
         <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
+        <div class="sidebar-config-card">
+          <div class="process-controls">
+            <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF (3D Print) · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
+            <select class="process-select" id="processSelect" aria-label="Manufacturing process">
+              <option value="fdm">FDM / FFF</option>
+              <option value="sla">SLA / Resin</option>
+              <option value="cnc">CNC Milling</option>
+              <option value="injection">Injection Molding</option>
+            </select>
+            <div class="process-copy pull-copy" id="pullDirectionWrap" hidden><span class="section-label" id="pullDirectionLabel">MOLD PULL</span><small id="pullDirectionHint">Used for injection draft review</small></div>
+            <select class="process-select" id="pullDirectionSelect" aria-label="Mold pull direction" hidden>
+              <option value="0,0,1">+Z</option>
+              <option value="0,0,-1">−Z</option>
+              <option value="1,0,0">+X</option>
+              <option value="-1,0,0">−X</option>
+              <option value="0,1,0">+Y</option>
+              <option value="0,-1,0">−Y</option>
+            </select>
+            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">SYSTEM UNITS</span><small id="unitHint">Unspecified numeric values automatically assume this unit</small></div>
+            <select class="process-select" id="unitSelect" aria-label="Input units">
+              <option value="mm">mm</option>
+              <option value="cm">cm</option>
+              <option value="m">m</option>
+              <option value="in">in</option>
+            </select>
+          </div>
+          <div class="mode-controls">
+            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION ENGINE</span><small id="modeHint">Parametric rule parser · Deterministic, ultra-fast & private</small></div>
+            <select class="mode-select" id="generationMode" aria-label="Generation mode">
+              <option value="standard">Standard</option>
+              <option value="advanced">Advanced · LLM</option>
+              <option value="agent">Agent · Vision Auto-Rework</option>
+            </select>
+          </div>
+        </div>
         <div class="starter">
           <div class="section-label">ENGINEERING PRESETS</div>
           <div class="starter-buttons">
@@ -2207,47 +2384,25 @@
               <option value="aluminum">Aluminum · anodized</option>
             </select><small id="materialMeta">Print-ready surface</small></article>
           </div>
-          <div class="feature-card">
-            <div class="feature-head"><span class="section-label" id="featureLabel">PARAMETRIC FEATURE TREE</span><span class="feature-mode" id="featureMode">PARAMETRIC B-REP</span></div>
-            <div class="feature-tree" id="featureTree"></div>
-          <div class="generation-process" aria-live="polite">
-            <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD SEQUENCE TRACE</span><span class="generation-process-status" id="generationStatus">READY</span></div>
-            <div class="generation-progress" aria-hidden="true"><div class="generation-progress-bar" id="generationProgressBar"></div></div>
-            <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Submit a prompt to inspect the OCCT feature pipeline execution.</div></div>
-          </div>
-          <div class="process-controls">
-            <div class="process-copy"><span class="section-label" id="processLabel">MANUFACTURING PROCESS</span><small id="processProfileHint">FDM / FFF (3D Print) · minimum wall 1.2 mm · tolerance ±0.2 mm</small></div>
-            <select class="process-select" id="processSelect" aria-label="Manufacturing process">
-              <option value="fdm">FDM / FFF</option>
-              <option value="sla">SLA / Resin</option>
-              <option value="cnc">CNC Milling</option>
-              <option value="injection">Injection Molding</option>
-            </select>
-            <div class="process-copy pull-copy" id="pullDirectionWrap" hidden><span class="section-label" id="pullDirectionLabel">MOLD PULL</span><small id="pullDirectionHint">Used for injection draft review</small></div>
-            <select class="process-select" id="pullDirectionSelect" aria-label="Mold pull direction" hidden>
-              <option value="0,0,1">+Z</option>
-              <option value="0,0,-1">−Z</option>
-              <option value="1,0,0">+X</option>
-              <option value="-1,0,0">−X</option>
-              <option value="0,1,0">+Y</option>
-              <option value="0,-1,0">−Y</option>
-            </select>
-            <div class="process-copy unit-copy"><span class="section-label" id="unitLabel">SYSTEM UNITS</span><small id="unitHint">Unspecified numeric values automatically assume this unit</small></div>
-            <select class="process-select" id="unitSelect" aria-label="Input units">
-              <option value="mm">mm</option>
-              <option value="cm">cm</option>
-              <option value="m">m</option>
-              <option value="in">in</option>
-            </select>
-          </div>
-          <div class="mode-controls">
-            <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION ENGINE</span><small id="modeHint">Parametric rule parser · Deterministic, ultra-fast & private</small></div>
-            <select class="mode-select" id="generationMode" aria-label="Generation mode">
-              <option value="standard">Standard</option>
-              <option value="advanced">Advanced · LLM</option>
-              <option value="agent">Agent · Vision Auto-Rework</option>
-            </select>
-          </div>
+          <div class="feature-card collapsible-card collapsed" id="featureCard">
+            <div class="feature-head" id="featureHeadToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="featureCardBody" title="点击展开/收起 CAD 特征构建树">
+              <div class="feature-head-left">
+                <span class="feature-toggle-icon" id="featureToggleIcon">▸</span>
+                <span class="section-label" id="featureLabel">PARAMETRIC FEATURE TREE</span>
+              </div>
+              <div class="feature-head-right">
+                <span class="feature-mode" id="featureMode">PARAMETRIC B-REP</span>
+                <button type="button" class="feature-collapse-btn" id="featureCollapseBtn">展开</button>
+              </div>
+            </div>
+            <div class="feature-card-body" id="featureCardBody" style="display:none;">
+              <div class="feature-tree" id="featureTree"></div>
+              <div class="generation-process" aria-live="polite">
+                <div class="generation-process-head"><span class="section-label" id="generationProcessLabel">BUILD SEQUENCE TRACE</span><span class="generation-process-status" id="generationStatus">READY</span></div>
+                <div class="generation-progress" aria-hidden="true"><div class="generation-progress-bar" id="generationProgressBar"></div></div>
+                <div class="generation-trace" id="generationTrace"><div class="generation-process-empty" id="generationEmpty">Submit a prompt to inspect the OCCT feature pipeline execution.</div></div>
+              </div>
+            </div>
           </div>
           <div class="plan-card">
             <div class="plan-head">
@@ -2352,11 +2507,11 @@
     const pullDirectionStorageKey = 'formCadPullDirection';
     const modeStorageKey = 'formCadGenerationMode';
     const materialPresets = {
-      pla: { label: { en: 'Matte PLA · warm white', zh: '哑光 PLA · 暖白' }, meta: { en: 'Print-ready surface', zh: '适合打印的表面' }, body: 0xddf79b, side: 0x9fca82, inner: 0x6e9e68, accent: 0xb9d98f, roughness: .62, metalness: .02 },
-      petg: { label: { en: 'PETG · translucent green', zh: 'PETG · 半透明绿' }, meta: { en: 'Tough and slightly translucent', zh: '韧性高，略带透光' }, body: 0x9fd6bb, side: 0x68ae91, inner: 0x477d69, accent: 0xb7e4c7, roughness: .38, metalness: .02 },
-      abs: { label: { en: 'ABS · graphite', zh: 'ABS · 石墨黑' }, meta: { en: 'Impact-resistant engineering plastic', zh: '耐冲击工程塑料' }, body: 0x687078, side: 0x4b535b, inner: 0x30363c, accent: 0x9aa6b1, roughness: .48, metalness: .04 },
-      resin: { label: { en: 'Resin · stone grey', zh: '光敏树脂 · 石灰灰' }, meta: { en: 'Fine surface detail', zh: '适合精细表面' }, body: 0xb8b5ad, side: 0x929089, inner: 0x6b6963, accent: 0xd9d5c9, roughness: .72, metalness: 0 },
-      aluminum: { label: { en: 'Aluminum · anodized', zh: '铝 · 阳极氧化' }, meta: { en: 'Machined metal appearance', zh: '金属加工外观' }, body: 0xb9c2c1, side: 0x899493, inner: 0x606d6d, accent: 0xd8e0df, roughness: .28, metalness: .58 }
+      pla: { label: { en: 'Matte PLA · warm white', zh: '哑光 PLA · 暖白' }, meta: { en: 'Print-ready natural matte surface', zh: '适合 3D 打印的微哑光白' }, body: 0xf5f3ee, side: 0xe6e4de, inner: 0xd9d7d0, accent: 0xf5f3ee, roughness: .55, metalness: .02 },
+      petg: { label: { en: 'PETG · sky blue', zh: 'PETG · 天空蓝' }, meta: { en: 'Tough engineering polymer', zh: '高韧性半光泽工程聚合物' }, body: 0x38bdf8, side: 0x0284c7, inner: 0x0369a1, accent: 0x7dd3fc, roughness: .35, metalness: .06 },
+      abs: { label: { en: 'ABS · graphite slate', zh: 'ABS · 石墨黑' }, meta: { en: 'Impact-resistant engineering plastic', zh: '耐冲击哑光工程塑料' }, body: 0x334155, side: 0x1e293b, inner: 0x0f172a, accent: 0x475569, roughness: .65, metalness: .04 },
+      resin: { label: { en: 'Resin · architectural ivory', zh: '光敏树脂 · 象牙灰' }, meta: { en: 'Fine surface detail', zh: '高精度细腻表面' }, body: 0xe2e8f0, side: 0xcbd5e1, inner: 0x94a3b8, accent: 0xf1f5f9, roughness: .30, metalness: .02 },
+      aluminum: { label: { en: 'Aluminum · machined', zh: '铝 · 阳极氧化银' }, meta: { en: 'Machined metal appearance', zh: 'CNC 阳极氧化金属光泽' }, body: 0xd1d5db, side: 0x9ca3af, inner: 0x6b7280, accent: 0xe5e7eb, roughness: .24, metalness: .82 }
     };
     let selectedMode = (() => { try { return localStorage.getItem(modeStorageKey) || 'standard'; } catch (error) { return 'standard'; } })();
     if (!['standard', 'advanced', 'agent'].includes(selectedMode)) selectedMode = 'standard';
@@ -2934,6 +3089,12 @@
         const isCollapsed = timelineEl && timelineEl.classList.contains('collapsed');
         timelineCollapseBtn.textContent = isCollapsed ? (t.expand || 'Expand') : (t.collapse || 'Collapse');
       }
+      const featureCollapseBtn = document.getElementById('featureCollapseBtn');
+      const featureCard = document.getElementById('featureCard');
+      if (featureCollapseBtn && featureCard) {
+        const isCollapsed = featureCard.classList.contains('collapsed');
+        featureCollapseBtn.textContent = isCollapsed ? (t.expand || 'Expand') : (t.collapse || 'Collapse');
+      }
       if (document.getElementById('criticPatchesSummary')) {
         const patchesCount = (currentAgentSummary && currentAgentSummary.history && currentAgentSummary.history[currentAgentRoundIdx] && (currentAgentSummary.history[currentAgentRoundIdx].applied_patches || currentAgentSummary.history[currentAgentRoundIdx].proposed_patches || currentAgentSummary.history[currentAgentRoundIdx].patches || []).length) || 0;
         document.getElementById('criticPatchesSummary').textContent = t.appliedPatches + (patchesCount ? ' (' + patchesCount + ')' : '');
@@ -3309,8 +3470,8 @@
       threeState.model.position.sub(center);
       const maxDim = Math.max(size.x, size.y, size.z, 1);
       const distance = maxDim * 1.8;
-      threeState.camera.near = Math.max(maxDim / 1000, 0.01);
-      threeState.camera.far = Math.max(maxDim * 20, 1000);
+      threeState.camera.near = Math.max(maxDim / 500, 0.1);
+      threeState.camera.far = Math.max(maxDim * 100, 50000);
       threeState.model.traverse((node) => {
         const materials = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
         materials.forEach((material) => { material.fog = false; });
@@ -3319,10 +3480,6 @@
         const cell = Math.pow(10, Math.floor(Math.log10(maxDim / 6)));
         threeState.grid.scale.setScalar(cell / 10);
         threeState.grid.position.y = -size.y / 2 - maxDim * 0.002;
-      }
-      if (threeState.scene.fog) {
-        threeState.scene.fog.near = distance * 1.6;
-        threeState.scene.fog.far = distance * 4.2;
       }
       if (!preserveCamera) {
         threeState.camera.position.set(distance, distance * .8, distance);
@@ -3485,7 +3642,7 @@
         threeState.GLTFLoader = GLTFLoader;
         threeState.scene = new THREE.Scene();
         threeState.scene.background = null;
-        threeState.scene.fog = new THREE.Fog(0x15181c, 400, 1200);
+        threeState.scene.fog = null;
         const helpers = new THREE.Group();
         helpers.name = 'cadHelpers';
         const grid = new THREE.GridHelper(2000, 200, 0x52624e, 0x354035);
@@ -3497,8 +3654,8 @@
         threeState.helpers = helpers;
         threeState.grid = grid;
         threeState.scene.add(helpers);
-        threeState.camera = new THREE.PerspectiveCamera(35, 1, .01, 100000);
-        threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        threeState.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50000);
+        threeState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });
         threeState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         threeState.renderer.domElement.setAttribute('aria-label', 'Interactive generated 3D model');
         if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -3515,16 +3672,19 @@
         };
         threeState.controls.minDistance = .05;
         threeState.controls.maxDistance = 100000;
-        threeState.scene.add(new THREE.HemisphereLight(0xe8f0d8, 0x141816, 2.0));
-        const key = new THREE.DirectionalLight(0xffffff, 2.4);
-        key.position.set(4, 7, 5);
+        threeState.scene.add(new THREE.HemisphereLight(0xffffff, 0x1e293b, 1.4));
+        const key = new THREE.DirectionalLight(0xffffff, 2.2);
+        key.position.set(200, 400, 300);
         threeState.scene.add(key);
-        const rim = new THREE.DirectionalLight(0xd4ff4f, 0.9);
-        rim.position.set(-5, 4, -4);
-        threeState.scene.add(rim);
-        const fill = new THREE.DirectionalLight(0x7da46d, 0.7);
-        fill.position.set(-3, -2, 4);
+        const fill = new THREE.DirectionalLight(0xf1f5f9, 1.1);
+        fill.position.set(-300, 150, 200);
         threeState.scene.add(fill);
+        const rim = new THREE.DirectionalLight(0xe2e8f0, 0.9);
+        rim.position.set(-200, 300, -300);
+        threeState.scene.add(rim);
+        const bottomFill = new THREE.DirectionalLight(0x94a3b8, 0.4);
+        bottomFill.position.set(0, -300, 0);
+        threeState.scene.add(bottomFill);
         const resize = () => {
           const width = threeViewport.clientWidth || 1;
           const height = threeViewport.clientHeight || 1;
@@ -3563,6 +3723,8 @@
           if (material.color) material.color.setHex(preset.body);
           if ('roughness' in material) material.roughness = preset.roughness;
           if ('metalness' in material) material.metalness = preset.metalness;
+          material.side = 2; // THREE.DoubleSide
+          material.needsUpdate = true;
         });
       });
     }
@@ -3783,12 +3945,6 @@
         threeState.model = gltf.scene;
         applyPreviewMaterial(threeState.model, fallbackSpec || { material: selectedMaterial });
         addModelEdgeLines(THREE, threeState.model);
-        threeState.model.traverse((node) => {
-          if (node.isMesh && node.material) {
-            node.material.roughness = Math.min(node.material.roughness !== undefined ? node.material.roughness : 0.45, 0.45);
-            node.material.metalness = Math.max(node.material.metalness !== undefined ? node.material.metalness : 0.08, 0.08);
-          }
-        });
         // CadQuery/OCCT uses Z-up while glTF viewers use Y-up; normalize the
         // imported root so top/front views and orbit controls match the SVG preview.
         threeState.model.rotation.x = -Math.PI / 2;
@@ -4580,21 +4736,49 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'revision-item';
+
+        const rowTop = document.createElement('div');
+        rowTop.className = 'rev-row-top';
         const title = document.createElement('strong');
-        title.textContent = displayTitle(entry.spec && entry.spec.title ? entry.spec.title : titleFor(entry.prompt));
-        const meta = document.createElement('span');
-        const time = new Date(entry.createdAt).toLocaleString(currentLang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        meta.textContent = (entry.source === 'backend' ? copy[currentLang].revisionBackend : copy[currentLang].revisionLocal) + ' · ' + (entry.diff && entry.diff.length ? formatDiff(entry.diff) : copy[currentLang].diffInitial) + ' · ' + time;
-        button.appendChild(title);
-        button.appendChild(meta);
+        title.className = 'rev-title';
+        const displayTxt = displayTitle(entry.spec && entry.spec.title ? entry.spec.title : titleFor(entry.prompt));
+        title.textContent = displayTxt;
+        title.title = entry.prompt || displayTxt;
+
+        const time = document.createElement('span');
+        time.className = 'rev-time';
+        const dateObj = new Date(entry.createdAt);
+        time.textContent = dateObj.toLocaleTimeString(currentLang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+
+        rowTop.appendChild(title);
+        rowTop.appendChild(time);
+
+        const rowBottom = document.createElement('div');
+        rowBottom.className = 'rev-row-bottom';
+
+        const badge = document.createElement('span');
+        const isBackend = entry.source === 'backend';
+        badge.className = 'rev-badge ' + (isBackend ? 'rev-backend' : (entry.mode === 'agent' ? 'rev-agent' : ''));
+        badge.textContent = isBackend ? (currentLang === 'zh' ? 'OCCT 实体' : 'OCCT B-Rep') : (currentLang === 'zh' ? '本地预览' : 'Local');
+
+        const diffSpan = document.createElement('span');
+        diffSpan.className = 'rev-diff-tag';
+        diffSpan.textContent = (entry.diff && entry.diff.length ? formatDiff(entry.diff) : copy[currentLang].diffInitial);
+
+        rowBottom.appendChild(badge);
+        rowBottom.appendChild(diffSpan);
+
+        button.appendChild(rowTop);
+        button.appendChild(rowBottom);
+
         button.addEventListener('click', () => {
-        prompt.value = selectedMode === 'advanced' && entry.prompt ? entry.prompt : (entry.canonicalPrompt || entry.prompt);
-        modelSpec = null;
-        backendArtifact = null;
-        llmAssumptions = [];
-        updateInterpretation(parseModel(prompt.value), 'draft');
-        generateModel();
-      });
+          prompt.value = selectedMode === 'advanced' && entry.prompt ? entry.prompt : (entry.canonicalPrompt || entry.prompt);
+          modelSpec = null;
+          backendArtifact = null;
+          llmAssumptions = [];
+          updateInterpretation(parseModel(prompt.value), 'draft');
+          generateModel();
+        });
         revisionList.appendChild(button);
       });
     }
@@ -5147,6 +5331,41 @@
           });
         }
       }
+
+      // Collapsible Feature Tree Drawer (Default Collapsed)
+      const featureCard = document.getElementById('featureCard');
+      const featureHeadToggle = document.getElementById('featureHeadToggle');
+      const featureCollapseBtn = document.getElementById('featureCollapseBtn');
+      const featureBody = document.getElementById('featureCardBody');
+      if (featureHeadToggle && featureCard) {
+        function toggleFeatureCollapse() {
+          const willCollapse = !featureCard.classList.contains('collapsed');
+          featureCard.classList.toggle('collapsed', willCollapse);
+          featureHeadToggle.setAttribute('aria-expanded', String(!willCollapse));
+          if (featureBody) featureBody.style.display = willCollapse ? 'none' : 'block';
+          if (featureCollapseBtn) {
+            featureCollapseBtn.textContent = willCollapse ? (currentLang === 'zh' ? '展开' : 'Expand') : (currentLang === 'zh' ? '收起' : 'Collapse');
+          }
+        }
+        featureHeadToggle.addEventListener('click', (e) => {
+          if (e.target && e.target.closest && e.target.closest('#featureCollapseBtn')) {
+            e.stopPropagation();
+          }
+          toggleFeatureCollapse();
+        });
+        featureHeadToggle.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleFeatureCollapse();
+          }
+        });
+        if (featureCollapseBtn) {
+          featureCollapseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleFeatureCollapse();
+          });
+        }
+      }
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
@@ -5410,7 +5629,6 @@
           else applyPreviewMaterial(threeState.model, modelSpec);
         }
         renderModel(modelSpec, currentView);
-        generateModel();
       }
     });
     if (unitSelect) unitSelect.addEventListener('change', () => {
