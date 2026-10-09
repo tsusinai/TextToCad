@@ -7,8 +7,11 @@ and later used by the main generation path.
 from __future__ import annotations
 
 import ast
+import logging
 import math
 from typing import Any
+
+logger = logging.getLogger("ir_executor")
 
 try:
     import cadquery as cq
