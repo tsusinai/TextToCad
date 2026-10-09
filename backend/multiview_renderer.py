@@ -14,8 +14,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 try:
     import vtk
-    VTK_AVAILABLE = True
-except ImportError:
+    import os
+    import sys
+    # On Linux/headless, standard vtkXOpenGLRenderWindow crashes if DISPLAY is not present
+    VTK_AVAILABLE = bool(vtk is not None and (sys.platform == "win32" or os.environ.get("DISPLAY")))
+except Exception:
     vtk = None
     VTK_AVAILABLE = False
 
@@ -148,7 +151,7 @@ class HeadlessCADRenderer:
         self,
         resolution: int = 512,
         background_rgb: tuple[float, float, float] = (0.95, 0.96, 0.98),
-        prefer_vtk: bool = True,
+        prefer_vtk: bool = False,
     ):
         self.resolution = resolution
         self.background_rgb = background_rgb
