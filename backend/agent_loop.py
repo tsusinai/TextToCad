@@ -329,7 +329,7 @@ def call_vlm_critic(
                 f"{ground_truth_text}"
                 f"{patch_history_text}"
                 f"Current Parameters: {json.dumps(current_ir.get('parameters', {}))}\n"
-                f"Current Nodes: {[str(n.get('id', '')) + ':' + str(n.get('operation', '')) for n in current_ir.get('nodes', [])]}\n"
+                f"Current Node IDs: {[str(n.get('id', '')) for n in current_ir.get('nodes', [])]}\n"
                 f"DFM Violations: {json.dumps(dfm_report.get('violations', []))}\n\n"
                 "Review the 4-view image alongside ground-truth measurements. If any feature is missing or misaligned, produce structured JSON patches to repair the CAD model."
             ),

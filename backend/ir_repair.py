@@ -45,6 +45,26 @@ def suggest_repairs(ir: dict[str, Any], constraint_report: dict[str, Any]) -> li
     return patches
 
 
+def _clean_target_id(raw_id: Any, node_by_id: dict[str, Any], candidate: dict[str, Any], nodes: list[dict[str, Any]]) -> str:
+    fallback_id = None
+    if candidate.get("outputs"):
+        fallback_id = candidate["outputs"][0].get("node")
+    elif nodes:
+        fallback_id = nodes[-1].get("id")
+    if not raw_id:
+        return fallback_id or "base"
+    sid = str(raw_id).strip()
+    if ":" in sid:
+        sid = sid.split(":")[0].strip()
+    if sid in node_by_id:
+        return sid
+    sid_lower = sid.lower()
+    for nid in node_by_id:
+        if nid.lower() == sid_lower:
+            return nid
+    return fallback_id or sid
+
+
 def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> dict[str, Any]:
     if not patches:
         return validate_ir(copy.deepcopy(ir))
@@ -109,12 +129,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             current["status"] = "repaired"
             parameters[name] = current
         elif operation == "add_hole_pattern":
-            target_id = patch.get("target_node") or patch.get("node")
-            if not target_id:
-                if candidate.get("outputs"):
-                    target_id = candidate["outputs"][0].get("node")
-                elif nodes:
-                    target_id = nodes[-1].get("id")
+            target_id = _clean_target_id(patch.get("target_node") or patch.get("node"), node_by_id, candidate, nodes)
             if not target_id or target_id not in node_by_id:
                 raise ValueError(f"patch[{index}] references an unknown target_node '{target_id}'")
 
@@ -206,12 +221,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
                 candidate["outputs"] = [{"id": "primary", "node": cut_id, "format": ["step", "stl", "glb"]}]
         elif operation in {"add_chamfer", "add_fillet"}:
             actual_op = "chamfer" if operation == "add_chamfer" else "fillet"
-            target_id = patch.get("target_node") or patch.get("node")
-            if not target_id:
-                if candidate.get("outputs"):
-                    target_id = candidate["outputs"][0].get("node")
-                elif nodes:
-                    target_id = nodes[-1].get("id")
+            target_id = _clean_target_id(patch.get("target_node") or patch.get("node"), node_by_id, candidate, nodes)
             if not target_id or target_id not in node_by_id:
                 raise ValueError(f"patch[{index}] references an unknown target_node '{target_id}'")
 
@@ -265,12 +275,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             else:
                 candidate["outputs"] = [{"id": "primary", "node": edge_id, "format": ["step", "stl", "glb"]}]
         elif operation == "shell_hollow":
-            target_id = patch.get("target_node") or patch.get("node")
-            if not target_id:
-                if candidate.get("outputs"):
-                    target_id = candidate["outputs"][0].get("node")
-                elif nodes:
-                    target_id = nodes[-1].get("id")
+            target_id = _clean_target_id(patch.get("target_node") or patch.get("node"), node_by_id, candidate, nodes)
             if not target_id or target_id not in node_by_id:
                 raise ValueError(f"patch[{index}] references an unknown target_node '{target_id}'")
 
