@@ -703,15 +703,17 @@
 
     .content { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(560px, 1fr) auto; gap: 24px; }
     .viewport {
-      min-height: 640px;
+      min-height: 580px;
       position: relative;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
       background: radial-gradient(circle at 50% 25%, #1d2127 0%, #121417 70%, #0a0c0e 100%);
       border-radius: 22px;
       border: 1px solid #282d35;
       box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       color: #fff;
-      padding: 22px 26px;
+      padding: 20px 24px;
     }
     .viewport::before {
       content: "";
@@ -728,16 +730,30 @@
       transition: opacity .25s ease;
     }
     .viewport.grid-hidden::before { opacity: 0; }
-    .viewport-header, .viewport-footer { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; }
-    .viewport-footer { flex-wrap: wrap; gap: 12px; }
-    .viewport-footer > div:first-child { min-width: 0; flex: 1 1 260px; }
-    .view-pill:focus-visible, .export:focus-visible, .generate:focus-visible, .cancel-generation:focus-visible, .model-stage:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .viewport-header {
+      position: relative;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       flex-wrap: wrap;
       row-gap: 10px;
-      padding-bottom: 16px;
+      padding-bottom: 14px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
+    .viewport-footer {
+      position: relative;
+      z-index: 5;
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .viewport-footer-meta { min-width: 0; flex: 1 1 240px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .viewport-export-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .view-pill:focus-visible, .export:focus-visible, .generate:focus-visible, .cancel-generation:focus-visible, .model-stage:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .viewport-label {
       font-family: 'Space Grotesk', sans-serif;
       color: #cbd5e1;
@@ -1004,12 +1020,13 @@
       border: 1px solid rgba(251, 146, 60, 0.4);
     }
     .critic-card {
-      margin-top: 14px;
-      padding: 16px;
-      border: 1px solid rgba(212, 255, 79, 0.25);
-      border-radius: 14px;
-      background: #ffffff;
-      box-shadow: var(--shadow-card);
+      margin-top: 10px;
+      padding: 12px 14px;
+      border: 1px solid rgba(212, 255, 79, 0.28);
+      border-radius: 10px;
+      background: rgba(14, 18, 24, 0.85);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      color: #e2e8f0;
     }
     .critic-card.hidden { display: none !important; }
     .critic-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -1024,23 +1041,23 @@
       text-transform: uppercase;
     }
     .critic-verdict.verdict-accept {
-      color: #15803d;
-      background: #dcfce7;
-      border: 1px solid #86efac;
+      color: #4ade80;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(74, 222, 128, 0.4);
     }
     .critic-verdict.verdict-revise,
     .critic-verdict.verdict-rework {
-      color: #c2410c;
-      background: #ffedd5;
-      border: 1px solid #fed7aa;
+      color: #fb923c;
+      background: rgba(249, 115, 22, 0.15);
+      border: 1px solid rgba(251, 146, 60, 0.4);
     }
     .critic-score {
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
       font-weight: 800;
-      color: #15803d;
-      background: #dcfce7;
-      border: 1px solid #86efac;
+      color: var(--lime);
+      background: rgba(212, 255, 79, 0.15);
+      border: 1px solid rgba(212, 255, 79, 0.45);
       padding: 2px 8px;
       border-radius: 999px;
     }
@@ -1049,34 +1066,34 @@
       font-family: 'Plus Jakarta Sans', sans-serif;
       font-size: 12px;
       line-height: 1.45;
-      color: var(--ink);
+      color: #cbd5e1;
     }
     .critic-views-preview {
       margin-top: 10px;
       border-radius: 8px;
       overflow: hidden;
-      border: 1px solid var(--line);
-      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #0d1117;
     }
     .critic-view-toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 6px 10px;
-      background: #f8fafc;
-      border-bottom: 1px solid var(--line);
+      background: #161b22;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
     .critic-view-caption {
       font-family: 'Space Grotesk', sans-serif;
       font-size: 11px;
       font-weight: 700;
-      color: var(--ink-subtle);
+      color: #94a3b8;
       letter-spacing: 0.02em;
     }
     .critic-view-mode-toggle {
       display: inline-flex;
       align-items: center;
-      background: #e2e8f0;
+      background: rgba(255, 255, 255, 0.08);
       padding: 2px;
       border-radius: 6px;
       gap: 2px;
@@ -1084,21 +1101,22 @@
     .critic-mode-btn {
       border: none;
       background: transparent;
-      color: #64748b;
-      font-size: 10.5px;
+      color: #94a3b8;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 10px;
       font-weight: 700;
-      padding: 3px 8px;
+      padding: 2px 7px;
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .critic-mode-btn:hover {
-      color: var(--ink);
+      color: #ffffff;
     }
     .critic-mode-btn.active {
-      background: #ffffff;
-      color: var(--ink);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      background: rgba(212, 255, 79, 0.2);
+      color: var(--lime);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
     .critic-img-wrap {
       position: relative;
@@ -1141,35 +1159,35 @@
       padding: 6px 10px;
       border-radius: 6px;
       font-size: 11px;
-      background: var(--panel);
-      color: var(--ink-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
     }
     .critic-item.severity-high {
-      background: #fef2f2;
-      color: #991b1b;
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
       border-left: 3px solid #ef4444;
     }
     .critic-item.severity-medium {
-      background: #fffbeb;
-      color: #92400e;
+      background: rgba(245, 158, 11, 0.15);
+      color: #fcd34d;
       border-left: 3px solid #f59e0b;
     }
     .critic-patches {
       margin-top: 10px;
-      border: 1px solid var(--line);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 8px;
       overflow: hidden;
-      background: #f8fafc;
+      background: rgba(13, 17, 23, 0.7);
     }
     .critic-patches-summary {
       padding: 7px 10px;
       font-family: 'Space Grotesk', sans-serif;
       font-size: 11px;
       font-weight: 700;
-      color: var(--ink);
+      color: #cbd5e1;
       cursor: pointer;
       user-select: none;
-      background: #f1f5f9;
+      background: rgba(255, 255, 255, 0.04);
       border-bottom: 1px solid transparent;
       transition: background 0.15s ease;
       display: flex;
@@ -1177,10 +1195,10 @@
       justify-content: space-between;
     }
     .critic-patches[open] .critic-patches-summary {
-      border-bottom-color: var(--line);
+      border-bottom-color: rgba(255, 255, 255, 0.08);
     }
     .critic-patches-summary:hover {
-      background: #e2e8f0;
+      background: rgba(255, 255, 255, 0.08);
     }
     .critic-patches-content {
       padding: 8px 10px;
@@ -1193,8 +1211,8 @@
     }
     .critic-patch-item {
       padding: 6px 8px;
-      background: #ffffff;
-      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 6px;
       display: flex;
       flex-direction: column;
@@ -1212,19 +1230,19 @@
       font-weight: 800;
       padding: 1px 6px;
       border-radius: 4px;
-      background: #e0e7ff;
-      color: #3730a3;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
       text-transform: uppercase;
     }
     .critic-patch-param {
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
       font-weight: 600;
-      color: var(--ink);
+      color: #f1f5f9;
     }
     .critic-patch-reason {
       font-size: 10.5px;
-      color: var(--ink-subtle);
+      color: #94a3b8;
     }
     .critic-patches-json {
       margin: 4px 0 0;
@@ -1400,8 +1418,8 @@
       z-index: 1;
       display: grid;
       place-items: center;
-      height: calc(100% - 90px);
-      min-height: 470px;
+      flex: 1 1 auto;
+      min-height: 440px;
       touch-action: none;
       cursor: grab;
       user-select: none;
@@ -1426,19 +1444,19 @@
     }
     .interaction-hint {
       position: absolute;
-      left: 20px;
-      bottom: 20px;
+      left: 16px;
+      bottom: 12px;
       color: #cbd5e1;
       font-family: 'JetBrains Mono', monospace;
       font-size: 10px;
       letter-spacing: 0.03em;
       pointer-events: none;
       z-index: 4;
-      background: rgba(15, 18, 22, 0.6);
+      background: rgba(15, 18, 22, 0.7);
       backdrop-filter: blur(8px);
       padding: 4px 10px;
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
     .model-svg {
       width: 100%;
@@ -1451,13 +1469,6 @@
     .model-wrap.feature-highlighted .model-svg { filter: drop-shadow(0 28px 20px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 18px rgba(212, 255, 79, 0.6)); }
     .model-wrap.selector-matched .model-svg,
     .model-stage.selector-matched .three-viewport canvas { filter: drop-shadow(0 0 16px rgba(212, 255, 79, 0.34)); }
-    .viewport-footer {
-      position: absolute;
-      bottom: 20px;
-      left: 24px;
-      right: 24px;
-      z-index: 5;
-    }
     .state-pill {
       background: var(--lime);
       color: #171816;
@@ -1752,7 +1763,7 @@
       .recent { margin-top: 24px; }
       .content { grid-template-rows: auto auto; }
       .viewport { min-height: 500px; padding: 16px; }
-      .viewport-footer { left: 16px; right: 16px; bottom: 14px; }
+      .viewport-footer { margin-top: 10px; }
       .model-stage { min-height: 360px; }
       .param-grid { grid-template-columns: 1fr; }
       .plan-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1825,6 +1836,34 @@
           </div>
           <div class="score-trajectory" id="scoreTrajectory"></div>
           <div class="timeline-rounds" id="timelineRounds"></div>
+          <div class="critic-card" id="criticCard" hidden>
+            <div class="critic-head">
+              <span class="section-label" id="criticLabel">VLM VISION CRITIQUE</span>
+              <div class="critic-badges">
+                <span class="critic-verdict" id="criticVerdict">--</span>
+                <span class="critic-score" id="criticScore">--</span>
+              </div>
+            </div>
+            <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
+            <div class="critic-views-preview" id="criticViewsPreview">
+              <div class="critic-view-toolbar">
+                <span class="critic-view-caption" id="criticViewCaption">4-View CAD Inspection</span>
+                <div class="critic-view-mode-toggle" id="criticViewToggle" role="group" aria-label="View Mode">
+                  <button type="button" class="critic-mode-btn active" id="criticModeClean" data-mode="clean">Clean</button>
+                  <button type="button" class="critic-mode-btn" id="criticModeAnnotated" data-mode="annotated">Annotated</button>
+                </div>
+              </div>
+              <div class="critic-img-wrap" id="criticImgWrap" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open 4-View CAD inspection modal">
+                <img id="criticCompositeImg" class="critic-composite-img" src="" alt="4-View CAD Inspection" title="Click to view full inspection sheet" />
+                <div class="critic-img-hint" id="criticImgHint">🔍 Click to zoom</div>
+              </div>
+            </div>
+            <div class="critic-discrepancies" id="criticDiscrepancies"></div>
+            <details class="critic-patches" id="criticPatchesDetails">
+              <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
+              <div class="critic-patches-content" id="criticPatchesContent"></div>
+            </details>
+          </div>
         </div>
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
@@ -1910,8 +1949,17 @@
             </div>
           </div>
           <div class="viewport-footer">
-            <div style="display:flex;align-items:center;gap:18px;"><span class="state-pill" id="modelState">PARAMETRIC SOLID</span><span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span></div>
-            <button class="export" id="exportObj" type="button">Export OBJ</button><button class="export" id="exportStep" type="button" style="display:none">Export STEP</button><button class="export" id="export3mf" type="button" style="display:none">Export 3MF</button><button class="export" id="exportGlb" type="button" style="display:none">Export GLB</button><button class="export" id="exportGlbEntities" type="button" style="display:none">Export Entities GLB</button>
+            <div class="viewport-footer-meta">
+              <span class="state-pill" id="modelState">PARAMETRIC SOLID</span>
+              <span class="viewport-meta" id="modelMeta">3 solids · 12 mm wall · chamfer 4 mm</span>
+            </div>
+            <div class="viewport-export-group">
+              <button class="export" id="exportStep" type="button" style="display:none" title="导出工业级 ISO 10303 STEP AP242 实体模型">STEP</button>
+              <button class="export" id="export3mf" type="button" style="display:none" title="导出用于 3D 打印切片的 3MF 增材制造档案">3MF</button>
+              <button class="export" id="exportGlb" type="button" style="display:none" title="导出轻量化 GLB 3D 预览模型">GLB</button>
+              <button class="export" id="exportGlbEntities" type="button" style="display:none" title="导出多实体拓扑 GLB">多实体 GLB</button>
+              <button class="export" id="exportObj" type="button" title="导出三维网格 OBJ 文件">OBJ</button>
+            </div>
           </div>
         </section>
         <section class="params">
@@ -1994,34 +2042,6 @@
               <div class="wall-map" id="wallMap"></div>
               <div class="issue-list" id="issueList"></div>
             </div>
-          </div>
-          <div class="critic-card" id="criticCard" hidden>
-            <div class="critic-head">
-              <span class="section-label" id="criticLabel">VLM VISION CRITIQUE</span>
-              <div class="critic-badges">
-                <span class="critic-verdict" id="criticVerdict">--</span>
-                <span class="critic-score" id="criticScore">--</span>
-              </div>
-            </div>
-            <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
-            <div class="critic-views-preview" id="criticViewsPreview">
-              <div class="critic-view-toolbar">
-                <span class="critic-view-caption" id="criticViewCaption">4-View CAD Inspection</span>
-                <div class="critic-view-mode-toggle" id="criticViewToggle" role="group" aria-label="View Mode">
-                  <button type="button" class="critic-mode-btn active" id="criticModeClean" data-mode="clean">Clean</button>
-                  <button type="button" class="critic-mode-btn" id="criticModeAnnotated" data-mode="annotated">Annotated</button>
-                </div>
-              </div>
-              <div class="critic-img-wrap" id="criticImgWrap" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open 4-View CAD inspection modal">
-                <img id="criticCompositeImg" class="critic-composite-img" src="" alt="4-View CAD Inspection" title="Click to view full inspection sheet" />
-                <div class="critic-img-hint" id="criticImgHint">🔍 Click to zoom</div>
-              </div>
-            </div>
-            <div class="critic-discrepancies" id="criticDiscrepancies"></div>
-            <details class="critic-patches" id="criticPatchesDetails">
-              <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
-              <div class="critic-patches-content" id="criticPatchesContent"></div>
-            </details>
           </div>
         </section>
       </div>
@@ -2197,15 +2217,15 @@
         iso: 'ISOMETRIC',
         top: 'TOP',
         front: 'FRONT',
-        export: 'Export OBJ (Wireframe)',
-        exportStep: 'Export STEP (AP242)',
-        export3mf: 'Export 3MF (Additive)',
-        exportGlb: 'Export GLB (3D Viewer)',
-        exportGlbEntities: 'Export Entities GLB',
+        export: 'OBJ',
+        exportStep: 'STEP',
+        export3mf: '3MF',
+        exportGlb: 'GLB',
+        exportGlbEntities: 'Entities',
         fit: 'FIT',
         grid: 'GRID',
-        viewerUnits: 'Viewport Units',
-        interactionHint: 'Left drag: orbit · Scroll: zoom · Right drag: pan · View buttons: orthographic align',
+        viewerUnits: 'Units',
+        interactionHint: 'Left drag: orbit · Scroll: zoom · Right drag: pan · Double-click: reset',
         localThreeHint: 'Interactive parametric preview · Connect backend for validated B-Rep geometry',
         localConceptHint: 'Concept wireframe preview · Connect backend for full solid model',
         backendFallbackHint: 'SVG wireframe fallback · GLB preview currently unavailable',
@@ -2366,15 +2386,15 @@
         iso: '轴测投影 (ISO)',
         top: '俯视图 (TOP)',
         front: '主视图 (FRONT)',
-        export: '导出 OBJ (几何网格)',
-        exportStep: '导出 STEP (工业级 B-Rep)',
-        export3mf: '导出 3MF (增材制造数据)',
-        exportGlb: '导出 GLB (交互三维模型)',
-        exportGlbEntities: '导出多实体 GLB',
+        export: 'OBJ',
+        exportStep: 'STEP',
+        export3mf: '3MF',
+        exportGlb: 'GLB',
+        exportGlbEntities: '多实体 GLB',
         fit: '视角复位',
         grid: '参考网格',
-        viewerUnits: '视口显示单位',
-        interactionHint: '左键旋转 · 滚轮缩放 · 右键平移 · 视角按钮快速对齐',
+        viewerUnits: '视口单位',
+        interactionHint: '左键旋转 · 滚轮缩放 · 右键平移 · 双击复位',
         localThreeHint: '本地交互式参数化预览 · 连接后端生成精确 B-Rep 实体',
         localConceptHint: '几何概念线框 · 启动后端服务可获得完整 3D 实体',
         backendFallbackHint: '矢量线框降级显示 · GLB 视口暂未就绪',
