@@ -28,7 +28,7 @@ The response contains validated STEP and STL download URLs plus optional 3MF and
 
 - `GET /health` reports CadQuery/OCCT, preview, LLM, authentication, and queue status. It does not require the API key.
 - `GET /v1/process-profiles` returns FDM, SLA, CNC, and injection molding constraints.
-- `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`; `generation_strategy` accepts `legacy`, `ir`, or `auto`. Standard mode defaults to the deterministic builder; advanced UI requests `auto`, which tries LLM → generic Semantic CAD IR v0.2 → CadQuery/OCCT and falls back to the deterministic builder with a recorded reason. `strict_dimensions: true` rejects ambiguous unlabeled dimensions instead of applying defaults. Injection requests may pass `mold_pull_direction: [x, y, z]`; the vector is normalized for face-level draft checks and defaults safely to +Z.
+- `POST /v1/models` synchronously generates a model. The optional `mode` is `standard` or `advanced`; `generation_strategy` accepts `legacy`, `ir`, or `auto`. The default and frontend path is `ir`, which runs LLM/primitive planning → generic Semantic CAD IR v0.2 → CadQuery/OCCT. `legacy` is an explicit compatibility mode; `auto` is only for controlled migrations and records any fallback reason. `strict_dimensions: true` rejects ambiguous unlabeled dimensions instead of applying defaults. Injection requests may pass `mold_pull_direction: [x, y, z]`; the vector is normalized for face-level draft checks and defaults safely to +Z.
 - `POST /v1/jobs` creates a bounded asynchronous job; `GET /v1/jobs/{job_id}` polls it and `DELETE /v1/jobs/{job_id}` cancels it. A full queue returns HTTP 429. Generation mutations also use a bounded per-client rate limit (configurable with `RATE_LIMIT_WINDOW_SECONDS` and `MAX_MUTATIONS_PER_WINDOW`). Job responses include `progress.stage`, `progress.current_step`, elapsed time, and ordered `events`; the trace is updated after each real CAD operation rather than simulated on the client.
 - `GET /v1/models/{model_id}/manifest` returns parameters, checks, process metadata, exports, and the reproducible manifest. In `auto`/`ir` generation, constraint repair attempts and fallback reasons are included in the manifest provenance and generation trace; `ir_fallback_code` is a stable category such as `llm_invalid_ir`, `unsupported_operation`, or `kernel_validation`.
 - `GET /v1/models/{model_id}/ir` returns the v0.2 Semantic CAD IR used by the generation path. The IR is family-independent: primitives, features, constraints, selectors, and outputs are validated before kernel execution. Edge/face selectors support index, normal, position, area, parallel/perpendicular direction, and axis matching; IR execution trace records selector match indices/counts for audit and preview fallback highlighting.
@@ -41,7 +41,7 @@ When `BACKEND_API_KEY` is set, every `/v1/*` request requires `X-API-Key`; `/hea
 
 ## DeepSeek / OpenAI-compatible LLM
 
-Advanced mode is provider-neutral. For local Docker testing with DeepSeek, copy the template and set:
+The generic IR planner is provider-neutral; advanced UI settings only change the amount of design context shown to the user. For local Docker testing with DeepSeek, copy the template and set:
 
 ~~~bash
 cp .env.example .env
@@ -54,7 +54,7 @@ LLM_API_URL=https://api.deepseek.com/chat/completions
 LLM_MODEL=deepseek-chat
 ~~~
 
-The backend keeps both keys server-side, sends only the natural-language intent to the LLM, and validates the returned JSON before any geometry operation. Providers that reject `response_format=json_object` receive one compatibility retry without that field. Missing keys or provider failures fall back to the deterministic parser.
+The backend keeps both keys server-side, sends only the natural-language intent to the LLM, and validates the returned JSON before any geometry operation. Providers that reject `response_format=json_object` receive one compatibility retry without that field. Missing keys or provider failures use the deterministic primitive planner only when the prompt explicitly names a registered primitive; free-form descriptions fail clearly and never fall back to a model-family template.
 
 The parser includes an L-bracket family (`angle`) for prompts such as `20x20 L-shaped profile, plate thickness 3`; the deterministic baseline wins when an advanced LLM proposes an unrelated family. The generated revision includes Semantic CAD IR in `manifest.json` and exposes it at `GET /v1/models/{model_id}/ir`. Manufacturing analysis is nominal: `review_required` stays true and `manufacturing_ready` stays false until face-level measurement is available. Export manifests record geometry metrics, checksums, axis/unit metadata, and STEP/mesh validation.
 
@@ -93,3 +93,16 @@ docker run --rm texttocad-backend python kernel_smoke.py
 ~~~
 
 kernel_smoke.py 会实际构造薄壁凹腔，执行面级 DFM/法向射线能力检查，并验证两个独立 Semantic CAD IR 输出都通过 B-Rep 质量门。相同检查由 GitHub Actions 的 kernel-smoke job 自动执行。
+
+
+## IR-first product contract
+
+The production path is now `natural language -> Semantic CAD IR -> static validation -> constraint solve/repair -> CadQuery/OCCT -> B-Rep/DFM verification`. The frontend always requests `generation_strategy: "ir"`. The IR contains primitives, features, datums, parameters, constraints, and outputs; it does not contain a required model-family enum. `ModelParameters.kind` remains only as a response compatibility field.
+
+The IR executor (`ir_executor.py`) provides full support for:
+- Primitives: `box`, `cylinder`, `sphere`, `cone`, `torus` (`Solid.makeTorus`), `regular_polygon`, `polygon_prism`, `sketch`.
+- Spatial transformations: inline `position`/`origin`/`center` parameter translation, `translate`, `rotate`, `mirror`.
+- CSG Booleans: `union`, `cut`, `intersect` with multi-node topological inputs.
+- Feature finishing: `fillet`, `chamfer`, `shell`, `linear_pattern`, `polar_pattern`.
+
+When no LLM key is configured, the backend compiles explicit primitive and boolean hole prompts (box/cube, sphere, cylinder, cone, torus, regular polygons, and hollow/through-hole geometry) with the deterministic primitive planner. A free-form description without an LLM returns a clear 503 explaining how to configure the provider. This prevents a missing provider from producing a misleading default model.

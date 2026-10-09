@@ -172,7 +172,7 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 4. P3：确定性修复配方与受限 IR patch repair loop。
 5. P4：图片/草图输入和装配 component/mate。
 
-兼容要求：现有 `POST /v1/generate`、`ModelParameters`、导出 URL 和前端预览继续可用；IR 路径必须记录 schema、IR hash、fallback 原因、执行轨迹和验证结果。
+兼容要求：现有 `POST /v1/models`、`ModelParameters`、导出 URL 和前端预览继续可用；IR 路径必须记录 schema、IR hash、fallback 原因、执行轨迹和验证结果。
 
 
 ## P0/P1 实现进度（2026-10-04）
@@ -193,7 +193,7 @@ Astra 审查补充的体验与稳定性工作已落地：真实 GLB 预览生命
 - 增加语义 selector 静态校验：实体、拓扑类型和 where 属性必须来自白名单。
 - 增加 `ir_repair.py` 与 `POST /v1/ir/repair`：默认只建议 `set_parameter` 等受限 patch，显式 apply 后重新验证。
 - 增加 `POST /v1/ir/plan`：高级模式下让 LLM 直接生成 v0.2 IR 草案；服务端执行大小限制、JSON 校验、IR 校验和约束检查。
-- 现有 `POST /v1/generate` 仍走兼容路径，通用 IR 先通过 plan/validate/compile 独立验证，待指标对齐后切换主生成策略。
+- 现有 `POST /v1/models` 仍走兼容路径，通用 IR 先通过 plan/validate/compile 独立验证，待指标对齐后切换主生成策略。
 
 
 
@@ -278,3 +278,22 @@ P7 下一步：将多实体输出接入预览场景与选择器语义，并在 O
 - .github/workflows/quality.yml 增加镜像构建和烟测 job；run 260 已通过，parser regression 与 kernel smoke 均为 success。
 
 验收结论：CadQuery/OCCT 的生产式 Docker 镜像已经具备可重复的最小内核回归门禁；后续新增 IR 操作或 DFM 算法应先扩展该 smoke 样例，再合并到主分支。
+
+
+## IR-first 交付状态（2026-10）
+
+- 默认生成策略已切换为 `ir`，前端标准与高级模式都走通用 IR。
+- 已注册 `regular_polygon` 原语并覆盖三角形到任意正多边形的参数化边界框。
+- LLM 仅输出数据 IR；确定性规划器只处理明确原语，未知自由形体不会回退到模型族模板。
+- 生成结果保留 IR、约束报告、修复尝试、执行 trace 和导出工件，便于审计与增量演进。
+
+
+## 纯自然语言无模板 CAD 与视觉测试闭环（2026-10-05）
+
+- **解除固定模板束缚**：彻底移除前端将所有自定义形体猜测或强制归类为收纳盒、固定隔间与固定尺寸的逻辑，界面完全由后端返回的通用 Semantic CAD IR 节点、实际包围盒与 B-Rep 水密流形指标（面数、体积）动态驱动。
+- **修复前端初始化时序与 Three.js 视口**：修复 `polygonSideWords` 初始化时序（TDZ）引发的脚本异常，在 `ensureThreeRenderer` 中预载 `GLTFLoader`，确保自由输入自然语言时 3D 视口直接加载渲染 CadQuery/OCCT 编译导出的真实 GLB 模型，不再陷入 SVG 离线占位状态。
+- **增强 IR 几何图执行能力**：
+  - `ir_executor.py` 支持 `torus` 圆环体原语（使用 `cq.Solid.makeTorus` 稳定构造）。
+  - 支持所有基元的内联坐标偏移（`position` / `origin` / `center`）。
+  - 确定性规划器扩充了通孔/内腔语义解析并自动执行 CSG `cut` 布尔差运算。
+- **自动化浏览器黑盒视觉测试**：使用 Playwright 驱动真实浏览器对在线部署环境进行黑盒视觉测试，验证了通孔圆柱套筒、内挖球腔立方体、复合特征法兰盘等多个非模板纯自然语言用例，3D 视口渲染、特征树流转、等轴测/顶视投影切换与中英文国际化全部测试通过（截屏留证）。

@@ -381,6 +381,28 @@ def test_ir_selector_is_checked_against_registered_entities():
 
 
 
+def test_geometry_repair_bounds_edge_features():
+    ir = {
+        "schema_version": "0.2",
+        "parameters": {
+            "width": {"value": 40, "unit": "mm"},
+            "depth": {"value": 30, "unit": "mm"},
+            "height": {"value": 20, "unit": "mm"},
+        },
+        "nodes": [{
+            "id": "body", "kind": "primitive", "operation": "box",
+            "parameters": {"size": ["width", "depth", "height"]},
+        }, {
+            "id": "edge", "kind": "feature", "operation": "fillet",
+            "inputs": ["body"], "parameters": {"radius": 25},
+        }],
+        "outputs": [{"id": "main", "node": "edge"}],
+    }
+    patches = app._geometry_repair_patches(ir, "fillet radius is too large")
+    assert patches[0]["op"] == "replace_node_parameter"
+    assert patches[0]["value"] == 2.5
+
+
 def test_ir_repair_returns_and_applies_explicit_patch():
     ir = {
         "schema_version": "0.2",
@@ -399,15 +421,67 @@ def test_ir_repair_returns_and_applies_explicit_patch():
     assert app.solve_constraints(repaired)["valid"] is True
 
 
-def test_generation_strategy_defaults_to_legacy_and_accepts_ir_modes():
+def test_generation_strategy_defaults_to_ir_and_accepts_compatibility_modes():
     default_request = app.GenerateRequest(prompt="a 20 mm block")
     ir_request = app.GenerateRequest(
         prompt="a 20 mm block",
         mode="advanced",
         generation_strategy="auto",
     )
-    assert default_request.generation_strategy == "legacy"
+    assert default_request.generation_strategy == "ir"
     assert ir_request.generation_strategy == "auto"
+
+
+def test_llm_ir_normalizer_fills_generic_contract():
+    raw = {
+        "schema_version": "0.1",
+        "parameters": {"width": 20, "height": 8},
+        "nodes": [{
+            "id": "body",
+            "operation": "rectangular_prism",
+            "parameters": {"size": [20, 12, 8]},
+            "frame": "xy",
+        }],
+    }
+    normalized = app._normalize_ir_draft(raw, "a rectangular part", "fdm", "mm")
+    assert normalized["schema_version"] == "0.2"
+    assert normalized["nodes"][0]["operation"] == "box"
+    assert normalized["datums"][0]["id"] == "xy"
+    assert normalized["outputs"][0]["node"] == "body"
+    assert app.validate_ir(normalized)["schema_version"] == "0.2"
+
+
+def test_deterministic_primitive_planner_is_family_independent(monkeypatch):
+    params_title, params, _ = app.parse_prompt_detailed("a regular octagon 80 mm wide and 20 mm tall")
+    ir = app._deterministic_ir_plan("a regular octagon 80 mm wide and 20 mm tall", "fdm", "mm", params)
+    assert ir["nodes"][0]["operation"] == "regular_polygon"
+    assert ir["nodes"][0]["parameters"]["sides"] == 8
+    assert app.validate_ir(ir)["outputs"][0]["node"] == "body"
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_executor_builds_regular_polygon():
+    ir = {
+        "schema_version": "0.2",
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [{
+            "id": "body", "kind": "primitive", "operation": "regular_polygon",
+            "parameters": {"sides": 7, "width": 60, "depth": 40, "height": 12},
+            "frame": "xy",
+        }],
+        "outputs": [{"id": "main", "node": "body"}],
+    }
+    execution = app.execute_ir(app.validate_ir(ir))
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["valid_brep"] is True
+    assert metrics["bbox_mm"] == {"x": 60.0, "y": 40.0, "z": 12.0}
+
+
+def test_frontend_requests_ir_without_family_prompt_injection():
+    index_source = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    assert "generation_strategy: 'ir'" in index_source
+    assert "Parsed CAD parameters: " not in index_source
+    assert "Baseline CAD parameters: " not in index_source
 
 
 def test_cache_key_separates_generation_strategies():
@@ -465,6 +539,23 @@ def test_generic_ir_selector_applies_to_edge_feature():
     }
     execution = app.execute_ir(app.validate_ir(ir))
     assert app.shape_metrics(execution["shape"])["valid_brep"] is True
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_generic_ir_executes_sphere_primitive():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "ball", "kind": "primitive", "operation": "sphere",
+             "parameters": {"radius": 15}},
+        ],
+        "outputs": [{"id": "main", "node": "ball"}],
+    }
+    execution = app.execute_ir(app.validate_ir(ir))
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["valid_brep"] is True
+    assert metrics["solid_count"] == 1
+    assert metrics["volume_mm3"] > 0
 
 
 def test_face_level_dfm_records_normals_and_areas():
@@ -716,3 +807,320 @@ def test_triangle_without_dimensions_stays_generic_polygon_prism():
     assert params.profile_points == [[-60.0, -40.2], [60.0, -40.2], [0.0, 40.2]]
     assert params.height == 42.0
     assert provenance["fields"]["profile_points"]["status"] == "derived"
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_deterministic_ir_builds_torus():
+    _, params, _ = app.parse_prompt_detailed("a torus ring 60 mm")
+    ir = app._deterministic_ir_plan("a torus ring 60 mm", "fdm", "mm", params)
+    assert ir["nodes"][0]["operation"] == "torus"
+    execution = app.execute_ir(ir)
+    assert execution["shape"] is not None
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_deterministic_ir_builds_hollow_cylinder():
+    _, params, _ = app.parse_prompt_detailed("a hollow cylinder 40 mm and height 50 mm")
+    ir = app._deterministic_ir_plan("a hollow cylinder 40 mm and height 50 mm", "fdm", "mm", params)
+    ops = [node["operation"] for node in ir["nodes"]]
+    assert "cut" in ops
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["face_count"] >= 4
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_ir_executor_supports_inline_position_transform():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "box1",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"size": [20, 20, 10], "position": [10, 0, 5]},
+            }
+        ],
+        "outputs": [{"id": "main", "node": "box1", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["bbox_mm"]["z"] == 10.0
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_ir_executor_supports_single_input_cut_feature():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "plate",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"size": [50, 50, 5]},
+            },
+            {
+                "id": "center_hole",
+                "kind": "feature",
+                "operation": "cut",
+                "inputs": ["plate"],
+                "parameters": {"diameter": 22, "depth": 5},
+            },
+        ],
+        "outputs": [{"id": "main", "node": "center_hole", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["face_count"] >= 7
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_ir_executor_handles_cut_with_single_input_without_params():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "plate",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"size": [50, 50, 5]},
+            },
+            {
+                "id": "cut_nop",
+                "kind": "feature",
+                "operation": "cut",
+                "inputs": ["plate"],
+                "parameters": {},
+            },
+        ],
+        "outputs": [{"id": "main", "node": "cut_nop", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_ir_executor_supports_xyz_translate_and_named_axis_rotate():
+    ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {
+                "id": "arm",
+                "kind": "primitive",
+                "operation": "cylinder",
+                "parameters": {"radius": 3, "height": 10},
+            },
+            {
+                "id": "arm_rot",
+                "kind": "feature",
+                "operation": "rotate",
+                "inputs": ["arm"],
+                "parameters": {"axis": "x", "angle": 90},
+            },
+            {
+                "id": "arm_placed",
+                "kind": "feature",
+                "operation": "translate",
+                "inputs": ["arm_rot"],
+                "parameters": {"x": 5, "y": 10, "z": 15},
+            },
+        ],
+        "outputs": [{"id": "main", "node": "arm_placed", "format": ["step"]}],
+    }
+    execution = app.execute_ir(ir)
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["bbox_mm"]["z"] == 6.0  # diameter of cylinder
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_deterministic_ir_builds_cone():
+    _, params, _ = app.parse_prompt_detailed("a cone 30 mm diameter and 40 mm height")
+    ir = app._deterministic_ir_plan("a cone 30 mm diameter and 40 mm height", "fdm", "mm", params)
+    assert ir["nodes"][0]["operation"] == "cone"
+    execution = app.execute_ir(ir)
+    assert execution["shape"] is not None
+    metrics = app.shape_metrics(execution["shape"])
+    assert metrics["solid_count"] == 1
+    assert metrics["face_count"] >= 2
+
+
+def test_ir_expressions_with_numbers_and_parentheses():
+    doc = {
+        "schema_version": "0.2",
+        "parameters": {
+            "width": {"value": 50.0},
+            "half_width": {"value": 25.0, "expression": "0.5 * width"},
+            "padded": {"value": 30.0, "expression": "(width + 10) / 2"},
+        },
+        "nodes": [
+            {
+                "id": "box1",
+                "kind": "primitive",
+                "operation": "box",
+                "parameters": {"width": "width", "depth": "half_width", "height": "padded"},
+            }
+        ],
+        "outputs": [{"id": "main", "node": "box1", "format": ["step"]}],
+    }
+    validated = app.validate_ir(doc)
+    assert validated["parameters"]["half_width"]["expression"] == "0.5 * width"
+    assert validated["parameters"]["padded"]["expression"] == "(width + 10) / 2"
+
+
+@pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
+def test_agent_modeling_loop_convergence(tmp_path):
+    from agent_loop import run_agent_modeling_loop
+    initial_ir = {
+        "schema_version": "0.2",
+        "document": {"id": "test-box", "intent": "box 30x30x10 mm", "units": "mm"},
+        "nodes": [
+            {"id": "box", "kind": "primitive", "operation": "box", "parameters": {"size": [30, 30, 10]}}
+        ],
+        "outputs": [{"id": "main", "node": "box", "format": ["step", "stl", "glb"]}],
+    }
+    result = run_agent_modeling_loop(
+        initial_ir,
+        "box 30x30x10 mm with a 10 mm through hole",
+        "fdm",
+        tmp_path,
+        max_rounds=2,
+    )
+    assert result["total_rounds"] >= 1
+    assert result["converged"] is True
+    assert result["final_score"] >= 8.8
+    assert len(result["history"]) >= 1
+
+
+def test_apply_patches_advanced_primitives():
+    from ir_repair import apply_patches
+
+    base_ir = {
+        "schema_version": "0.2",
+        "parameters": {"width": {"value": 40.0, "unit": "mm"}},
+        "nodes": [
+            {
+                "id": "base_part",
+                "kind": "primitive",
+                "operation": "cylinder",
+                "inputs": [],
+                "parameters": {"radius": 30.0, "height": 10.0},
+            }
+        ],
+        "outputs": [{"id": "primary", "node": "base_part", "format": ["step", "stl", "glb"]}],
+    }
+
+    # 1. scale_parameter
+    p_scale = [{"op": "scale_parameter", "parameter": "width", "factor": 1.5}]
+    ir_scaled = apply_patches(base_ir, p_scale)
+    assert ir_scaled["parameters"]["width"]["value"] == 60.0
+
+    # 2. add_hole_pattern
+    p_pattern = [{
+        "op": "add_hole_pattern",
+        "target_node": "base_part",
+        "count": 4,
+        "circle_radius": 20.0,
+        "hole_diameter": 4.0,
+        "depth": 50.0,
+    }]
+    ir_pattern = apply_patches(base_ir, p_pattern)
+    pattern_cut = next(n for n in ir_pattern["nodes"] if n["id"] == "cut_hole_pattern_1")
+    assert pattern_cut["operation"] == "cut"
+    assert len(pattern_cut["inputs"]) == 5  # base_part + 4 cutter cylinders
+    assert ir_pattern["outputs"][0]["node"] == "cut_hole_pattern_1"
+
+    # 3. add_chamfer
+    p_chamfer = [{"op": "add_chamfer", "target_node": "base_part", "distance": 1.5}]
+    ir_chamfer = apply_patches(base_ir, p_chamfer)
+    chamfer_node = next(n for n in ir_chamfer["nodes"] if n["operation"] == "chamfer")
+    assert chamfer_node["parameters"]["distance"] == 1.5
+    assert ir_chamfer["outputs"][0]["node"] == chamfer_node["id"]
+
+    # 4. add_fillet
+    p_fillet = [{"op": "add_fillet", "target_node": "base_part", "radius": 2.0}]
+    ir_fillet = apply_patches(base_ir, p_fillet)
+    fillet_node = next(n for n in ir_fillet["nodes"] if n["operation"] == "fillet")
+    assert fillet_node["parameters"]["radius"] == 2.0
+    assert ir_fillet["outputs"][0]["node"] == fillet_node["id"]
+
+    # 5. shell_hollow
+    p_shell = [{"op": "shell_hollow", "target_node": "base_part", "thickness": 2.5}]
+    ir_shell = apply_patches(base_ir, p_shell)
+    shell_node = next(n for n in ir_shell["nodes"] if n["operation"] == "shell")
+    assert shell_node["parameters"]["thickness"] == 2.5
+    assert ir_shell["outputs"][0]["node"] == shell_node["id"]
+
+
+def test_heuristic_fallback_critique_pattern_recognition():
+    from agent_loop import _heuristic_fallback_critique
+
+    sample_ir = {
+        "schema_version": "0.2",
+        "nodes": [
+            {"id": "flange", "kind": "primitive", "operation": "cylinder", "parameters": {"radius": 35.0, "height": 10.0}}
+        ],
+        "outputs": [{"id": "primary", "node": "flange", "format": ["step", "stl", "glb"]}],
+    }
+
+    # "4 mounting holes"
+    c1 = _heuristic_fallback_critique("round flange with 4 mounting holes", sample_ir, 0)
+    assert any(p["op"] == "add_hole_pattern" for p in c1["proposed_patches"])
+    patch1 = next(p for p in c1["proposed_patches"] if p["op"] == "add_hole_pattern")
+    assert patch1["count"] == 4
+
+    # "6 bolt holes"
+    c2 = _heuristic_fallback_critique("flange plate with 6 bolt holes", sample_ir, 0)
+    patch2 = next(p for p in c2["proposed_patches"] if p["op"] == "add_hole_pattern")
+    assert patch2["count"] == 6
+
+    # "four holes on 40mm circle"
+    c3 = _heuristic_fallback_critique("cylinder base with four holes on 40mm circle", sample_ir, 0)
+    patch3 = next(p for p in c3["proposed_patches"] if p["op"] == "add_hole_pattern")
+    assert patch3["count"] == 4
+    assert patch3["circle_radius"] == 20.0
+
+    # "bolt circle"
+    c4 = _heuristic_fallback_critique("adapter with bolt circle", sample_ir, 0)
+    assert any(p["op"] == "add_hole_pattern" for p in c4["proposed_patches"])
+
+    # Edge treatment: "chamfer 2mm"
+    c5 = _heuristic_fallback_critique("block with 2mm chamfer", sample_ir, 0)
+    patch5 = next(p for p in c5["proposed_patches"] if p["op"] == "add_chamfer")
+    assert patch5["distance"] == 2.0
+
+    # Hollow: "hollow shell with 2mm wall"
+    c6 = _heuristic_fallback_critique("hollow shell box with 2mm wall", sample_ir, 0)
+    patch6 = next(p for p in c6["proposed_patches"] if p["op"] == "shell_hollow")
+    assert patch6["thickness"] == 2.0
+
+
+def test_render_annotated_composite_output(tmp_path):
+    from PIL import Image
+    from multiview_renderer import HeadlessCADRenderer
+
+    renderer = HeadlessCADRenderer(resolution=256)
+    dummy_view = tmp_path / "top.png"
+    Image.new("RGB", (256, 256), color=(220, 220, 220)).save(dummy_view)
+    view_paths = {"top": dummy_view, "iso": dummy_view, "front": dummy_view, "right": dummy_view}
+
+    anno_out = tmp_path / "annotated_composite.png"
+    discrepancies = [
+        {"severity": "high", "feature": "hole_pattern", "issue": "Missing 4-hole pattern on top surface"},
+        {"severity": "medium", "feature": "edge_treatment", "issue": "Missing 1mm chamfer on top edge"}
+    ]
+    res_path = renderer.render_annotated_composite(view_paths, discrepancies, anno_out)
+    assert res_path.exists()
+    assert res_path.stat().st_size > 1000
+
+
+
+
+
+

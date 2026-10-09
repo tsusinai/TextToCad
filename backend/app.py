@@ -79,7 +79,7 @@ LLM_API_KEY = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "").st
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
 # Optional shared-secret protection for public deployments. Keep empty for local-only use.
 BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
-BUILD_VERSION = os.getenv("BUILD_VERSION", "rounded-cube-material-v1")
+BUILD_VERSION = os.getenv("BUILD_VERSION", "semantic-ir-v1")
 try:
     LLM_TIMEOUT_SECONDS = max(1.0, min(60.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))))
 except ValueError:
@@ -134,14 +134,14 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=MAX_PROMPT_LENGTH)
     units: Literal["mm", "cm", "m", "in"] = "mm"
     process: Literal["fdm", "sla", "cnc", "injection"] = "fdm"
-    mode: Literal["standard", "advanced"] = "standard"
+    mode: Literal["standard", "advanced", "agent"] = "standard"
     strict_dimensions: bool = False
     include_steps: bool = False
     material: Literal["pla", "petg", "abs", "resin", "aluminum"] = "pla"
     # Optional mold pull direction used by injection draft analysis; defaults to +Z.
     mold_pull_direction: list[float] | None = None
     # legacy keeps existing behavior; ir uses generic Semantic CAD IR; auto tries IR then falls back safely.
-    generation_strategy: Literal["legacy", "ir", "auto"] = "legacy"
+    generation_strategy: Literal["legacy", "ir", "auto"] = "ir"
 
 
 class IRValidationRequest(BaseModel):
@@ -201,12 +201,15 @@ class GenerateResponse(BaseModel):
     analysis: dict[str, Any]
     step_schema: str
     mode: str = "standard"
-    generation_strategy: str = "legacy"
+    generation_strategy: str = "ir"
     llm_used: bool = False
     assumptions: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
     design_ir: dict[str, Any] = Field(default_factory=dict)
     generation_trace: list[dict[str, Any]] = Field(default_factory=list)
+    agent_summary: dict[str, Any] | None = None
+    needs_clarification: bool = False
+    clarification_questions: list[str] = Field(default_factory=list)
 
 
 CACHE_LOCK = Lock()
@@ -875,7 +878,7 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "datums": [{"id": "xy", "type": "plane"}],
         "nodes": [{
             "id": "node-id", "kind": "primitive|sketch|feature",
-            "operation": "box|cylinder|sphere|cone|torus|polygon_prism|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|shell|fillet|chamfer|linear_pattern|polar_pattern",
+            "operation": "box|cylinder|sphere|cone|torus|polygon_prism|regular_polygon|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|mirror|shell|fillet|chamfer|linear_pattern|polar_pattern",
             "inputs": [], "parameters": {}, "frame": "xy"
         }],
         "constraints": [{"id": "constraint-id", "type": "range|geometric|topology|manufacturing", "parameter": "name", "hard": True}],
@@ -889,8 +892,10 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "Do not use a model-family field. Express the design with registered primitives, features, datums, "
         "constraints, and explicit node dependencies. Keep all numeric dimensions in millimetres. "
         "Only add a fillet, chamfer, shell, hole, or other feature when the user explicitly requests it. "
+        "Primitive parameters guide: box requires size: [w,d,h] or width, depth, height; sphere requires radius (or diameter); cylinder requires radius (or diameter) and height; cone requires radius1 and height. "
         "For a plain, regular, sharp, or unrounded cube/block, emit a box primitive with no edge treatment. "
-        "For a regular N-gon or polygon prism, emit polygon_prism with parameters.points as a planar list of [x,y] pairs and parameters.height. "
+        "For a sphere or ball (球体/球), emit a sphere primitive with radius or diameter (if dimension not specified, use a reasonable default like radius=25). "
+        "For a regular N-gon or polygon prism, emit regular_polygon with parameters.sides, parameters.points (planar [x,y] pairs) or width/depth, and parameters.height. Use polygon_prism only for an explicit irregular polygon profile. "
         "Do not infer rounded edges from generic words such as model, part, body, or solid. "
         f"Selected process: {process}. Requested input units: {units}. "
         f"Allowed IR shape: {json.dumps(schema)}"
@@ -946,6 +951,331 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise RuntimeError("LLM provider returned a non-object Semantic CAD IR")
     return parsed
+
+
+
+
+def _normalize_ir_draft(
+    payload: dict[str, Any],
+    prompt: str,
+    process: str,
+    units: str,
+) -> dict[str, Any]:
+    """Normalize provider-shaped JSON into the canonical, data-only IR contract."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("LLM provider returned a non-object Semantic CAD IR")
+    candidate = copy.deepcopy(payload)
+    if isinstance(candidate.get("ir"), dict):
+        candidate = copy.deepcopy(candidate["ir"])
+    if candidate.get("schema_version") not in {None, "0.2"}:
+        candidate["schema_version"] = "0.2"
+    candidate.setdefault("schema_version", "0.2")
+    document = candidate.setdefault("document", {})
+    if not isinstance(document, dict):
+        document = {}
+        candidate["document"] = document
+    document.setdefault("id", "llm-design")
+    document.setdefault("intent", prompt[:400])
+    document.setdefault("units", units)
+    candidate["units"] = "mm"
+    candidate["process"] = process
+
+    raw_parameters = candidate.get("parameters") or {}
+    if not isinstance(raw_parameters, dict):
+        raise RuntimeError("IR parameters must be an object")
+    normalized_parameters: dict[str, Any] = {}
+    for name, raw_value in raw_parameters.items():
+        if isinstance(raw_value, dict) and "value" in raw_value:
+            value = copy.deepcopy(raw_value)
+            value.setdefault("unit", "mm")
+            value.setdefault("source", "llm")
+            value.setdefault("role", "dimension")
+            value.setdefault("status", "resolved")
+        else:
+            value = {"value": copy.deepcopy(raw_value), "unit": "mm", "source": "llm", "role": "dimension", "status": "resolved"}
+        normalized_parameters[str(name)] = value
+    candidate["parameters"] = normalized_parameters
+
+    aliases = {
+        "polygon": "polygon_prism",
+        "regular_prism": "regular_polygon",
+        "regular_polygon_prism": "regular_polygon",
+        "rounded_cube": "box",
+        "rectangular_prism": "box",
+        "cube": "box",
+        "cuboid": "box",
+        "block": "box",
+        "ball": "sphere",
+        "ring": "torus",
+        "donut": "torus",
+        "subtract": "cut",
+        "difference": "cut",
+        "hole": "cut",
+        "drill": "cut",
+        "add": "union",
+        "fuse": "union",
+        "combine": "union",
+        "boolean_union": "union",
+        "boolean_cut": "cut",
+        "boolean_intersect": "intersect",
+    }
+    raw_nodes = candidate.get("nodes")
+    if not isinstance(raw_nodes, list):
+        raw_nodes = candidate.get("features") if isinstance(candidate.get("features"), list) else []
+    nodes: list[dict[str, Any]] = []
+    for index, raw_node in enumerate(raw_nodes):
+        if not isinstance(raw_node, dict):
+            continue
+        node = copy.deepcopy(raw_node)
+        node.setdefault("id", f"node_{index + 1}")
+        operation = str(node.get("operation") or node.get("actual_operation") or "box").strip().lower()
+        node["operation"] = aliases.get(operation, operation)
+        node.setdefault("kind", "primitive" if node["operation"] in {"box", "cylinder", "sphere", "cone", "torus", "polygon_prism", "regular_polygon", "sketch"} else "feature")
+        inputs = node.get("inputs")
+        if not isinstance(inputs, list):
+            inputs = []
+            for key in ("source", "input", "target", "tool", "cutter", "cut_with", "operand", "base", "body"):
+                value = node.get(key)
+                if isinstance(value, str):
+                    inputs.append(value)
+        raw_params = node.get("parameters")
+        if isinstance(raw_params, dict):
+            for p_key in ("tool", "cutter", "cut_with", "operand", "subtrahend"):
+                p_val = raw_params.get(p_key)
+                if isinstance(p_val, str) and p_val not in inputs:
+                    inputs.append(p_val)
+        node["inputs"] = [str(value) for value in inputs if isinstance(value, (str, int))]
+        if node["operation"] in {"cut", "union", "intersect", "fillet", "chamfer", "shell"} and not node["inputs"] and nodes:
+            node["inputs"] = [nodes[-1]["id"]]
+        if not isinstance(node.get("parameters"), dict):
+            node["parameters"] = {}
+        if node.get("frame") is not None:
+            node["frame"] = str(node["frame"])
+        nodes.append(node)
+    candidate["nodes"] = nodes
+    candidate.pop("features", None)
+
+    datums = candidate.get("datums")
+    if not isinstance(datums, list):
+        datums = []
+    known_datums = {str(item.get("id")) for item in datums if isinstance(item, dict) and item.get("id")}
+    frame_ids = {str(node["frame"]) for node in nodes if node.get("frame")}
+    for frame_id in sorted(frame_ids - known_datums):
+        datums.append({"id": frame_id, "type": "plane", "origin": [0, 0, 0], "normal": [0, 0, 1]})
+    candidate["datums"] = datums
+
+    outputs = candidate.get("outputs")
+    if not isinstance(outputs, list):
+        outputs = []
+    normalized_outputs: list[dict[str, Any]] = []
+    for index, raw_output in enumerate(outputs):
+        if not isinstance(raw_output, dict):
+            continue
+        output = copy.deepcopy(raw_output)
+        if isinstance(output.get("format"), str):
+            output["format"] = [output["format"]]
+        output.setdefault("id", f"output_{index + 1}")
+        if output.get("node") is not None:
+            output["node"] = str(output["node"])
+        normalized_outputs.append(output)
+    if not normalized_outputs and nodes:
+        normalized_outputs = [{"id": "main", "node": nodes[-1]["id"], "format": ["step", "stl", "glb"]}]
+    candidate["outputs"] = normalized_outputs
+    provenance = candidate.setdefault("provenance", {})
+    if not isinstance(provenance, dict):
+        provenance = {}
+        candidate["provenance"] = provenance
+    provenance.setdefault("prompt", prompt[:400])
+    provenance.setdefault("planner", "llm_ir")
+    provenance.setdefault("process", process)
+    return candidate
+
+
+def _deterministic_ir_plan(
+    prompt: str,
+    process: str,
+    units: str,
+    params: ModelParameters,
+) -> dict[str, Any]:
+    """Build a conservative primitive IR when no LLM provider is configured.
+
+    This is deliberately shape-agnostic: it only handles explicit primitive
+    vocabulary and never maps an unknown object to a named model family.
+    Free-form descriptions still require an LLM planner.
+    """
+    text = " ".join(str(prompt).strip().lower().split())
+    primitive_tokens = (
+        "cube", "block", "box", "方块", "正方体", "立方体",
+        "sphere", "ball", "球", "cylinder", "圆柱", "圆柱体",
+        "cone", "圆锥", "圆锥体", "torus", "ring", "donut", "圆环", "圆环体", "环体",
+        "polygon", "多边形", "triangle", "三角",
+        "square", "正方形", "pentagon", "五边形", "hexagon", "六边形",
+        "octagon", "八边形", "gon", "边形", "hole", "通孔", "带孔", "空心", "管", "筒",
+    )
+    if not any(token in text for token in primitive_tokens):
+        raise RuntimeError(
+            "LLM API is required for free-form CAD descriptions; "
+            "set LLM_API_KEY/OPENAI_API_KEY or use an explicit primitive description"
+        )
+
+    width = max(1.0, float(params.width))
+    depth = max(1.0, float(params.depth))
+    height = max(1.0, float(params.height))
+    parameters: dict[str, Any] = {
+        "width": {"value": width, "unit": "mm", "source": "parser", "role": "dimension"},
+        "depth": {"value": depth, "unit": "mm", "source": "parser", "role": "dimension"},
+        "height": {"value": height, "unit": "mm", "source": "parser", "role": "dimension"},
+    }
+    datums = [{"id": "xy", "type": "plane", "origin": [0, 0, 0], "normal": [0, 0, 1]}]
+    nodes: list[dict[str, Any]]
+    if any(token in text for token in ("sphere", "ball", "球")):
+        parameters["radius"] = {
+            "value": min(width, depth) / 2,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "sphere",
+            "parameters": {"radius": "radius"},
+            "frame": "xy",
+        }]
+    elif any(token in text for token in ("torus", "ring", "donut", "圆环", "圆环体", "环体")):
+        major = max(2.0, min(width, depth) / 2)
+        minor = max(0.8, round(major / 4.0, 2))
+        parameters["major_radius"] = {
+            "value": major,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        parameters["minor_radius"] = {
+            "value": minor,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "torus",
+            "parameters": {"major_radius": "major_radius", "minor_radius": "minor_radius"},
+            "frame": "xy",
+        }]
+    elif any(token in text for token in ("cylinder", "圆柱", "圆柱体")):
+        parameters["radius"] = {
+            "value": min(width, depth) / 2,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "cylinder",
+            "parameters": {"radius": "radius", "height": "height"},
+            "frame": "xy",
+        }]
+    elif any(token in text for token in ("cone", "圆锥", "圆锥体")):
+        parameters["radius"] = {
+            "value": min(width, depth) / 2,
+            "unit": "mm",
+            "source": "derived",
+            "role": "dimension",
+        }
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "cone",
+            "parameters": {"radius1": "radius", "radius2": 0.01, "height": "height"},
+            "frame": "xy",
+        }]
+    elif _polygon_side_count(text) is not None:
+        sides = _polygon_side_count(text) or len(params.profile_points) or 3
+        profile = params.profile_points or _polygon_profile_points(sides, width, depth)
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "regular_polygon",
+            "parameters": {
+                "sides": sides,
+                "points": profile,
+                "height": "height",
+            },
+            "frame": "xy",
+        }]
+    else:
+        nodes = [{
+            "id": "body",
+            "kind": "primitive",
+            "operation": "box",
+            "parameters": {"size": ["width", "depth", "height"], "centered": [True, True, False]},
+            "frame": "xy",
+        }]
+
+    has_hole = bool(re.search(r"(hole|through[- ]?hole|hollow|bore|pipe|tube|内孔|穿孔|通孔|带孔|空心|管|筒)", text, flags=re.IGNORECASE))
+    if has_hole and nodes[0]["operation"] in {"box", "cylinder", "regular_polygon"}:
+        hole_rad = max(0.5, round(min(width, depth) / 4.0, 2))
+        parameters["hole_radius"] = {"value": hole_rad, "unit": "mm", "source": "derived", "role": "dimension"}
+        hole_height = height + 4.0
+        nodes.append({
+            "id": "hole_cylinder",
+            "kind": "primitive",
+            "operation": "cylinder",
+            "parameters": {"radius": "hole_radius", "height": hole_height, "position": [0, 0, -2.0]},
+            "frame": "xy",
+        })
+        nodes.append({
+            "id": "body_with_hole",
+            "kind": "feature",
+            "operation": "cut",
+            "inputs": [nodes[0]["id"], "hole_cylinder"],
+            "parameters": {},
+            "frame": "xy",
+        })
+
+    explicit_edge_treatment = bool(re.search(
+        r"(圆角|倒角|圆润|fillet|chamfer|rounded|round\s*edge|no\s*sharp|无棱角)",
+        text,
+        flags=re.IGNORECASE,
+    ))
+    if explicit_edge_treatment and params.chamfer > 0:
+        edge_operation = "fillet" if params.edge_style == "fillet" else "chamfer"
+        nodes.append({
+            "id": "edge_treatment",
+            "kind": "feature",
+            "operation": edge_operation,
+            "inputs": ["body"],
+            "parameters": {"radius": params.chamfer},
+        })
+    output_node = nodes[-1]["id"]
+    return {
+        "schema_version": "0.2",
+        "document": {
+            "id": "deterministic-primitive",
+            "intent": prompt[:400],
+            "units": "mm",
+            "language": "zh-CN" if re.search(r"[一-龥]", prompt) else "en",
+        },
+        "units": "mm",
+        "process": process,
+        "parameters": parameters,
+        "datums": datums,
+        "nodes": nodes,
+        "constraints": [
+            {"id": "width_positive", "type": "range", "parameter": "width", "minimum_mm": 0.001, "hard": True},
+            {"id": "depth_positive", "type": "range", "parameter": "depth", "minimum_mm": 0.001, "hard": True},
+            {"id": "height_positive", "type": "range", "parameter": "height", "minimum_mm": 0.001, "hard": True},
+        ],
+        "outputs": [{"id": "main", "node": output_node, "format": ["step", "stl", "glb"]}],
+        "provenance": {
+            "planner": "deterministic_primitive",
+            "assumptions": ["LLM unavailable; explicit primitive vocabulary compiled without a model-family template."],
+        },
+        "builder": "CadQuery/OCCT",
+    }
 
 
 def interpret_prompt(
@@ -1637,8 +1967,8 @@ def _normal_ray_thickness(
         intersector = BRepIntCurveSurface_Inter()
         intersector.Init(wrapped, line, 1e-7)
         distances: list[float] = []
-        for point_index in range(1, int(intersector.NbPoints()) + 1):
-            point = intersector.Pnt(point_index)
+        while intersector.More():
+            point = intersector.Pnt()
             delta = (
                 float(point.X()) - origin[0],
                 float(point.Y()) - origin[1],
@@ -1647,6 +1977,7 @@ def _normal_ray_thickness(
             distance = sum(delta[axis] * normal[axis] for axis in range(3))
             if math.isfinite(distance) and distance > 1e-4:
                 distances.append(distance)
+            intersector.Next()
         return min(distances) if distances else None
     except Exception:
         return None
@@ -2275,7 +2606,7 @@ def _write_artifacts(
     output_shapes: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str], str]:
     model_dir = ARTIFACT_ROOT / model_id
-    model_dir.mkdir(parents=True, exist_ok=False)
+    model_dir.mkdir(parents=True, exist_ok=True)
     step_path = model_dir / "model.step"
     stl_path = model_dir / "model.stl"
     analysis_path = model_dir / "analysis.json"
@@ -2533,9 +2864,15 @@ def validate_ir_endpoint(request: IRValidationRequest) -> dict[str, Any]:
 @app.post("/v1/ir/plan")
 def plan_ir_endpoint(request: IRPlanRequest) -> dict[str, Any]:
     """Generate and validate a generic v0.2 IR with the configured LLM."""
+    llm_used = True
     try:
-        raw = _llm_ir_json(request.prompt, request.process, request.units)
-        normalized = validate_ir(raw)
+        _, baseline, _ = parse_prompt_detailed(request.prompt, request.process, request.units)
+        try:
+            raw = _llm_ir_json(request.prompt, request.process, request.units)
+        except RuntimeError:
+            llm_used = False
+            raw = _deterministic_ir_plan(request.prompt, request.process, request.units, baseline)
+        normalized = validate_ir(_normalize_ir_draft(raw, request.prompt, request.process, request.units))
     except (RuntimeError, IRValidationError) as exc:
         if isinstance(exc, IRValidationError):
             raise HTTPException(status_code=422, detail={"valid": False, "issues": exc.issues}) from exc
@@ -2544,7 +2881,7 @@ def plan_ir_endpoint(request: IRPlanRequest) -> dict[str, Any]:
     return {
         "valid": constraints["valid"],
         "schema_version": "0.2",
-        "llm_used": True,
+        "llm_used": llm_used,
         "constraints": constraints,
         "ir": normalized,
     }
@@ -2731,13 +3068,54 @@ def health() -> dict[str, Any]:
         "process_profiles": list(PROCESS_PROFILES),
         "ir_schema_version": "0.2",
         "ir_compile_available": cq is not None,
-        "ir_generation_available": cq is not None and bool(LLM_API_KEY),
+        "ir_generation_available": cq is not None,
+        "ir_llm_planner_available": bool(LLM_API_KEY),
+        "ir_deterministic_primitive_planner": cq is not None,
+        "agent_mode_available": bool(LLM_API_KEY) and cq is not None,
     }
 
 
 @app.get("/v1/process-profiles")
 def get_process_profiles() -> dict[str, dict[str, Any]]:
     return PROCESS_PROFILES
+
+
+@app.get("/v1/models/{model_id}/rounds/{round_idx}/views/{view_name}")
+def get_model_round_view(model_id: str, round_idx: int, view_name: str) -> FileResponse:
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
+        raise HTTPException(status_code=400, detail="invalid model_id")
+    if round_idx < 0 or round_idx > 1000:
+        raise HTTPException(status_code=400, detail="invalid round_idx")
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "", view_name)
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="invalid view_name")
+    model_root = (ARTIFACT_ROOT / model_id).resolve()
+    view_path = (ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "views" / f"{safe_name}.png").resolve()
+    if not view_path.is_relative_to(model_root):
+        raise HTTPException(status_code=400, detail="path traversal denied")
+    if not view_path.exists():
+        direct_path = (ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / f"{safe_name}.png").resolve()
+        if not direct_path.is_relative_to(model_root):
+            raise HTTPException(status_code=400, detail="path traversal denied")
+        if direct_path.exists():
+            return FileResponse(direct_path, media_type="image/png")
+        raise HTTPException(status_code=404, detail="round view image not found")
+    return FileResponse(view_path, media_type="image/png")
+
+
+@app.get("/v1/models/{model_id}/rounds/{round_idx}/model.glb")
+def get_model_round_glb(model_id: str, round_idx: int) -> FileResponse:
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
+        raise HTTPException(status_code=400, detail="invalid model_id")
+    if round_idx < 0 or round_idx > 1000:
+        raise HTTPException(status_code=400, detail="invalid round_idx")
+    model_root = (ARTIFACT_ROOT / model_id).resolve()
+    glb_path = (ARTIFACT_ROOT / model_id / "rounds" / str(round_idx) / "model.glb").resolve()
+    if not glb_path.is_relative_to(model_root):
+        raise HTTPException(status_code=400, detail="path traversal denied")
+    if not glb_path.exists():
+        raise HTTPException(status_code=404, detail="round GLB not found")
+    return FileResponse(glb_path, media_type="model/gltf-binary")
 
 
 @app.post("/v1/models", response_model=GenerateResponse)
@@ -2765,6 +3143,53 @@ def _ir_error_code(error: Exception) -> str:
     if "brep" in message or "geometry validation" in message:
         return "kernel_validation"
     return "ir_generation_error"
+
+
+
+def _geometry_repair_patches(ir: dict[str, Any], message: str) -> list[dict[str, Any]]:
+    """Return one conservative IR patch for common OCC edge/thickness failures."""
+    lowered = str(message).lower()
+    if not any(token in lowered for token in ("fillet", "chamfer", "shell", "radius", "thickness")):
+        return []
+    parameters = ir.get("parameters") or {}
+    dimensions: list[float] = []
+    for name in ("width", "depth", "height"):
+        raw = parameters.get(name)
+        value = raw.get("value") if isinstance(raw, dict) else raw
+        if isinstance(value, (int, float)) and float(value) > 0:
+            dimensions.append(float(value))
+    safe_edge = max(0.2, round(min(dimensions) / 8.0, 2)) if dimensions else 1.0
+    safe_wall = max(0.8, round(min(dimensions) / 6.0, 2)) if dimensions else 1.2
+    for node in ir.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        operation = str(node.get("operation", ""))
+        values = node.get("parameters") or {}
+        if operation in {"fillet", "chamfer"} and "radius" in values:
+            current = values.get("radius")
+            if isinstance(current, (int, float)) and abs(float(current) - safe_edge) <= 1e-6:
+                continue
+            return [{
+                "op": "replace_node_parameter",
+                "node": node.get("id"),
+                "parameter": "radius",
+                "value": safe_edge,
+                "reason": "OCC edge treatment failed; reduced radius to a bounded value.",
+                "source": "deterministic_geometry_repair",
+            }]
+        if operation == "shell" and "thickness" in values:
+            current = values.get("thickness")
+            if isinstance(current, (int, float)) and abs(float(current) - safe_wall) <= 1e-6:
+                continue
+            return [{
+                "op": "replace_node_parameter",
+                "node": node.get("id"),
+                "parameter": "thickness",
+                "value": safe_wall,
+                "reason": "OCC shell failed; reduced wall thickness to a bounded value.",
+                "source": "deterministic_geometry_repair",
+            }]
+    return []
 
 
 def _polygon_points_are_planar(value: Any) -> bool:
@@ -2798,7 +3223,7 @@ def _enforce_explicit_polygon_profile(
     expected_points = params.profile_points or _polygon_profile_points(3, params.width, params.depth)
     polygon_nodes = [
         node for node in normalized_ir.get("nodes", [])
-        if node.get("operation") == "polygon_prism"
+        if node.get("operation") in {"polygon_prism", "regular_polygon"}
     ]
     if polygon_nodes:
         node = polygon_nodes[0]
@@ -2811,6 +3236,10 @@ def _enforce_explicit_polygon_profile(
         if changed:
             values["points"] = copy.deepcopy(expected_points)
         values["height"] = params.height
+        if node.get("operation") == "regular_polygon":
+            if values.get("sides") != len(expected_points):
+                values["sides"] = len(expected_points)
+                changed = True
         return validate_ir(normalized_ir), changed
     # If the provider ignored the explicit polygon request, use the deterministic
     # generic IR profile instead of silently showing a triangle or box.
@@ -2838,16 +3267,25 @@ def _generate_ir_model(
     try:
         recorder.emit("parsing", "interpretation", "running", mode=request.mode, units=request.units,
                       strategy=request.generation_strategy)
-        title, params, _, baseline_assumptions, provenance = parse_prompt_detailed(
+        title, params, provenance = parse_prompt_detailed(
             request.prompt, request.process, request.units, request.material
         )
+        baseline_assumptions = list(provenance.get("assumptions", []))
         if request.strict_dimensions and provenance.get("units", {}).get("ambiguous_dimensions"):
             raise ValueError("ambiguous dimensions; specify width, depth, and height or provide a dimension triplet")
         recorder.emit("parsing", "interpretation", "succeeded",
                       llm_used=False, dimensions_mm=[params.width, params.depth, params.height],
                       assumptions_count=len(baseline_assumptions))
         recorder.emit("planning", "ir_plan", "running", schema_version="0.2")
-        raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
+        llm_used = True
+        try:
+            raw_ir = _llm_ir_json(request.prompt, request.process, request.units)
+        except RuntimeError as exc:
+            llm_used = False
+            raw_ir = _deterministic_ir_plan(request.prompt, request.process, request.units, params)
+            baseline_assumptions.append(str(exc)[:180])
+            recorder.emit("planning", "llm_fallback", "warning", reason=str(exc)[:240], planner="deterministic_primitive")
+        raw_ir = _normalize_ir_draft(raw_ir, request.prompt, request.process, request.units)
         normalized_ir = validate_ir(raw_ir)
         normalized_ir, polygon_profile_enforced = _enforce_explicit_polygon_profile(
             normalized_ir,
@@ -2890,6 +3328,53 @@ def _generate_ir_model(
                       schema_version=normalized_ir.get("schema_version", "0.2"),
                       node_count=len(normalized_ir.get("nodes", [])),
                       constraint_count=len(normalized_ir.get("constraints", [])))
+
+        agent_summary: dict[str, Any] | None = None
+        if request.mode == "agent":
+            recorder.emit("planning", "agent_loop_start", "running", mode="agent")
+            from agent_loop import run_agent_modeling_loop
+            model_id = uuid.uuid4().hex
+            agent_artifacts_dir = ARTIFACT_ROOT / model_id
+            agent_artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+            def agent_progress(ev: dict[str, Any]) -> None:
+                round_num = ev.get("round", 0)
+                st = ev.get("stage", "agent")
+                recorder.emit(
+                    "planning",
+                    f"agent_r{round_num}_{st}",
+                    "succeeded",
+                    round=round_num,
+                    agent_step=st,
+                    message=ev.get("message", ""),
+                )
+
+            agent_result = run_agent_modeling_loop(
+                initial_ir=normalized_ir,
+                prompt=request.prompt,
+                process=request.process,
+                artifacts_dir=agent_artifacts_dir,
+                llm_api_url=LLM_API_URL,
+                llm_api_key=LLM_API_KEY,
+                llm_model=LLM_MODEL,
+                max_rounds=3,
+                target_score=9.0,
+                progress_callback=agent_progress,
+            )
+            normalized_ir = validate_ir(agent_result["final_ir"])
+            agent_summary = {
+                "total_rounds": agent_result["total_rounds"],
+                "converged": agent_result["converged"],
+                "final_score": agent_result["final_score"],
+                "history": agent_result["history"],
+            }
+            recorder.emit(
+                "planning",
+                "agent_loop_converged",
+                "succeeded",
+                total_rounds=agent_result["total_rounds"],
+                final_score=agent_result["final_score"],
+            )
 
         recorder.emit("validating", "constraint_solve", "running")
         constraint_report = solve_constraints(
@@ -2934,7 +3419,31 @@ def _generate_ir_model(
                       repairs=len(repair_attempts))
 
         recorder.emit("building", "ir_compile", "running")
-        execution = execute_ir(normalized_ir)
+        execution = None
+        for geometry_attempt in range(2):
+            try:
+                execution = execute_ir(normalized_ir)
+                break
+            except IRExecutionError as exc:
+                patches = _geometry_repair_patches(normalized_ir, str(exc))
+                if not patches or geometry_attempt >= 1:
+                    raise
+                normalized_ir = apply_patches(normalized_ir, patches)
+                repair_attempts.append({
+                    "attempt": geometry_attempt + 1,
+                    "patch_count": len(patches),
+                    "patches": copy.deepcopy(patches),
+                    "stage": "geometry",
+                })
+                recorder.emit(
+                    "building",
+                    "ir_geometry_repair",
+                    "warning",
+                    reason=str(exc)[:240],
+                    patch_count=len(patches),
+                )
+        if execution is None:
+            raise IRExecutionError("IR execution produced no result")
         shape = execution["shape"]
         node_step_ids: dict[str, str] = {}
         for event_index, event in enumerate(execution.get("trace", [])):
@@ -3030,7 +3539,9 @@ def _generate_ir_model(
             })
 
         provenance = copy.deepcopy(provenance)
-        provenance["ir_strategy"] = "llm_generic_v0.2"
+        provenance["ir_strategy"] = "llm_generic_v0.2" if llm_used else "deterministic_primitive_v0.2"
+        provenance["planner"] = "llm_ir" if llm_used else "deterministic_primitive"
+        provenance["llm_used"] = llm_used
         provenance["ir_schema_version"] = normalized_ir.get("schema_version", "0.2")
         provenance["ir_constraint_report"] = constraint_report
         provenance["ir_repair_attempts"] = repair_attempts
@@ -3040,7 +3551,8 @@ def _generate_ir_model(
         ] + ([
             f"IR constraint repair applied ({len(repair_attempts)} attempt(s))."
         ] if repair_attempts else []))[:6]
-        model_id = uuid.uuid4().hex
+        if model_id is None:
+            model_id = uuid.uuid4().hex
         artifacts, step_schema = _write_artifacts(
             model_id,
             shape,
@@ -3051,10 +3563,11 @@ def _generate_ir_model(
             {
                 "mode": request.mode,
                 "strategy": "ir",
-                "llm_used": True,
+                "llm_used": llm_used,
                 "assumptions": assumptions,
                 "constraint_report": constraint_report,
                 "repair_attempts": repair_attempts,
+                "agent_summary": agent_summary,
             },
             normalized_ir,
             provenance,
@@ -3074,11 +3587,12 @@ def _generate_ir_model(
             step_schema=step_schema,
             mode=request.mode,
             generation_strategy="ir",
-            llm_used=True,
+            llm_used=llm_used,
             assumptions=assumptions,
             provenance=provenance,
             design_ir=normalized_ir,
             generation_trace=copy.deepcopy(recorder.events),
+            agent_summary=agent_summary,
         )
         with CACHE_LOCK:
             MODEL_CACHE[cache_key] = response

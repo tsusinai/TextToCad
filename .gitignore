@@ -11,3 +11,4 @@ __pycache__/
 backend/__pycache__/
 *.pyc
 
+gui-test-screenshots/

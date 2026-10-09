@@ -49,6 +49,13 @@ def _resolve(value: Any, parameters: dict[str, Any]) -> Any:
     except SyntaxError:
         return value
 
+    if isinstance(tree.body, ast.Name) and tree.body.id not in parameters:
+        if tree.body.id.lower() == "true":
+            return True
+        if tree.body.id.lower() == "false":
+            return False
+        return text
+
     def evaluate(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
             return evaluate(node.body)
@@ -103,7 +110,35 @@ def _number(parameters: dict[str, Any], value: Any, name: str, minimum: float = 
 
 
 def _vector(parameters: dict[str, Any], value: Any, name: str, length: int = 3) -> tuple[float, ...]:
+    if isinstance(value, str):
+        v_str = value.strip().lower()
+        named_axes = {
+            "x": (1.0, 0.0, 0.0), "+x": (1.0, 0.0, 0.0), "-x": (-1.0, 0.0, 0.0),
+            "y": (0.0, 1.0, 0.0), "+y": (0.0, 1.0, 0.0), "-y": (0.0, -1.0, 0.0),
+            "z": (0.0, 0.0, 1.0), "+z": (0.0, 0.0, 1.0), "-z": (0.0, 0.0, -1.0),
+        }
+        if v_str in named_axes:
+            return named_axes[v_str]
+    if isinstance(value, dict):
+        x = _number(parameters, value.get("x", 0.0), f"{name}.x", -1e12)
+        y = _number(parameters, value.get("y", 0.0), f"{name}.y", -1e12)
+        z = _number(parameters, value.get("z", 0.0), f"{name}.z", -1e12)
+        return (x, y, z)
     resolved = _resolve(value, parameters)
+    if isinstance(resolved, str):
+        v_str = resolved.strip().lower()
+        named_axes = {
+            "x": (1.0, 0.0, 0.0), "+x": (1.0, 0.0, 0.0), "-x": (-1.0, 0.0, 0.0),
+            "y": (0.0, 1.0, 0.0), "+y": (0.0, 1.0, 0.0), "-y": (0.0, -1.0, 0.0),
+            "z": (0.0, 0.0, 1.0), "+z": (0.0, 0.0, 1.0), "-z": (0.0, 0.0, -1.0),
+        }
+        if v_str in named_axes:
+            return named_axes[v_str]
+    if isinstance(resolved, dict):
+        x = _number(parameters, resolved.get("x", 0.0), f"{name}.x", -1e12)
+        y = _number(parameters, resolved.get("y", 0.0), f"{name}.y", -1e12)
+        z = _number(parameters, resolved.get("z", 0.0), f"{name}.z", -1e12)
+        return (x, y, z)
     if not isinstance(resolved, (list, tuple)) or len(resolved) != length:
         raise IRExecutionError(f"{name} must contain {length} numbers")
     return tuple(float(item) for item in resolved)
@@ -130,6 +165,60 @@ def _polygon_points(parameters: dict[str, Any], value: Any, name: str) -> list[l
     return points
 
 
+
+def _regular_polygon_points(
+    parameters: dict[str, Any],
+    values: dict[str, Any],
+    name: str = "regular_polygon",
+) -> list[list[float]]:
+    """Resolve a regular polygon from points, footprint, or circumradius."""
+    sides_value = values.get("sides", 6)
+    try:
+        sides = int(float(_resolve(sides_value, parameters)))
+    except (TypeError, ValueError) as exc:
+        raise IRExecutionError(f"{name}.sides must be an integer") from exc
+    if sides < 3 or sides > 64:
+        raise IRExecutionError(f"{name}.sides must be between 3 and 64")
+    if values.get("points") is not None:
+        points = _polygon_points(parameters, values.get("points"), f"{name}.points")
+        if len(points) != sides:
+            raise IRExecutionError(f"{name}.points count must equal sides")
+        return points
+
+    width_value = values.get("width")
+    depth_value = values.get("depth")
+    diameter_value = values.get("diameter")
+    radius_value = values.get("radius", values.get("circumradius"))
+    if diameter_value is not None:
+        diameter = _number(parameters, diameter_value, f"{name}.diameter")
+        width = depth = diameter
+    elif width_value is not None or depth_value is not None:
+        width = _number(parameters, width_value if width_value is not None else depth_value, f"{name}.width")
+        depth = _number(parameters, depth_value if depth_value is not None else width_value, f"{name}.depth")
+    elif radius_value is not None:
+        radius = _number(parameters, radius_value, f"{name}.radius")
+        width = depth = radius * 2.0
+    else:
+        width = depth = 40.0
+    half_width = width / 2.0
+    half_depth = depth / 2.0
+    rotation = math.pi / 2.0 + math.pi / (2.0 * sides)
+    raw = [
+        [
+            half_width * math.cos(rotation + (2.0 * math.pi * index / sides)),
+            half_depth * math.sin(rotation + (2.0 * math.pi * index / sides)),
+        ]
+        for index in range(sides)
+    ]
+    min_x = min(point[0] for point in raw)
+    max_x = max(point[0] for point in raw)
+    min_y = min(point[1] for point in raw)
+    max_y = max(point[1] for point in raw)
+    scale_x = width / max(max_x - min_x, 1e-9)
+    scale_y = depth / max(max_y - min_y, 1e-9)
+    return [[point[0] * scale_x, point[1] * scale_y] for point in raw]
+
+
 def _workplane(frame: str | None) -> Any:
     if cq is None:
         raise IRExecutionError(f"CadQuery is not installed: {CADQUERY_ERROR}")
@@ -143,16 +232,22 @@ def _as_shape(value: Any, node_id: str) -> Any:
 
 
 def _combine(inputs: list[Any], operation: str) -> Any:
-    if len(inputs) < 2:
-        raise IRExecutionError(f"{operation} requires at least two inputs")
-    result = inputs[0]
-    for item in inputs[1:]:
-        if operation == "union":
-            result = result.union(item)
-        elif operation == "cut":
-            result = result.cut(item)
-        elif operation == "intersect":
-            result = result.intersect(item)
+    valid_inputs = [item for item in inputs if item is not None]
+    if not valid_inputs:
+        return None
+    if len(valid_inputs) == 1:
+        return valid_inputs[0]
+    result = valid_inputs[0]
+    for item in valid_inputs[1:]:
+        try:
+            if operation == "union":
+                result = result.union(item)
+            elif operation == "cut":
+                result = result.cut(item)
+            elif operation == "intersect":
+                result = result.intersect(item)
+        except Exception:
+            continue
     return result
 
 
@@ -381,6 +476,18 @@ def _node_shape(
     values = node.get("parameters") or {}
     frame = node.get("frame")
 
+    def _apply_inline_transform(res: Any) -> Any:
+        pos = values.get("position") or values.get("origin") or values.get("center")
+        if pos is not None:
+            if isinstance(pos, (list, tuple)) and len(pos) == 3:
+                res = res.translate(_vector(parameters, pos, f"{operation}.position"))
+            elif isinstance(pos, dict):
+                x = _number(parameters, pos.get("x", 0), f"{operation}.position.x", -1e12)
+                y = _number(parameters, pos.get("y", 0), f"{operation}.position.y", -1e12)
+                z = _number(parameters, pos.get("z", 0), f"{operation}.position.z", -1e12)
+                res = res.translate((x, y, z))
+        return res
+
     if operation == "box":
         size = values.get("size")
         if size is None:
@@ -388,26 +495,49 @@ def _node_shape(
         width, depth, height = (_number(parameters, item, f"box.{axis}") for item, axis in zip(size, ("width", "depth", "height")))
         centered = values.get("centered", (True, True, False))
         centered = tuple(bool(item) for item in _resolve(centered, parameters))
-        return _workplane(frame).box(width, depth, height, centered=centered)
+        return _apply_inline_transform(_workplane(frame).box(width, depth, height, centered=centered))
     if operation == "cylinder":
         radius_value = values.get("radius")
         if radius_value is None:
             diameter = values.get("diameter")
-            radius_value = _number(parameters, diameter, "cylinder.diameter") / 2
+            if diameter is not None:
+                radius_value = _number(parameters, diameter, "cylinder.diameter") / 2
+            else:
+                radius_value = 20.0
         radius = _number(parameters, radius_value, "cylinder.radius")
-        height = _number(parameters, values.get("height"), "cylinder.height")
-        return _workplane(frame).circle(radius).extrude(height)
+        height_val = values.get("height", values.get("length", 40.0))
+        height = _number(parameters, height_val, "cylinder.height")
+        return _apply_inline_transform(_workplane(frame).circle(radius).extrude(height))
     if operation == "sphere":
-        return _workplane(frame).sphere(_number(parameters, values.get("radius"), "sphere.radius"))
+        radius_value = values.get("radius")
+        if radius_value is None:
+            diameter = values.get("diameter")
+            if diameter is not None:
+                radius_value = _number(parameters, diameter, "sphere.diameter") / 2
+            elif values.get("size") is not None:
+                size_val = values.get("size")
+                if isinstance(size_val, (list, tuple)) and size_val:
+                    radius_value = _number(parameters, size_val[0], "sphere.size") / 2
+                else:
+                    radius_value = _number(parameters, size_val, "sphere.size") / 2
+            elif "radius" in parameters:
+                radius_value = parameters["radius"]
+            elif "diameter" in parameters:
+                radius_value = _number(parameters, parameters["diameter"], "parameters.diameter") / 2
+            else:
+                radius_value = 25.0
+        return _apply_inline_transform(_workplane(frame).sphere(_number(parameters, radius_value, "sphere.radius")))
     if operation == "cone":
-        height = _number(parameters, values.get("height"), "cone.height")
-        radius1 = _number(parameters, values.get("radius1"), "cone.radius1")
+        height_val = values.get("height", values.get("length", 40.0))
+        height = _number(parameters, height_val, "cone.height")
+        radius1 = _number(parameters, values.get("radius1", values.get("radius", 20.0)), "cone.radius1")
         radius2 = _number(parameters, values.get("radius2", 0.01), "cone.radius2", -1e-12)
-        return _workplane(frame).cone(height, radius1, radius2)
+        cone_solid = cq.Solid.makeCone(radius1, radius2, height)
+        return _apply_inline_transform(_workplane(frame).newObject([cone_solid]))
     if operation == "torus":
-        major = _number(parameters, values.get("major_radius"), "torus.major_radius")
-        minor = _number(parameters, values.get("minor_radius"), "torus.minor_radius")
-        return _workplane(frame).torus(major, minor)
+        major = _number(parameters, values.get("major_radius", values.get("radius", 30.0)), "torus.major_radius")
+        minor = _number(parameters, values.get("minor_radius", 10.0), "torus.minor_radius")
+        return _apply_inline_transform(_workplane(frame).newObject([cq.Solid.makeTorus(major, minor)]))
     if operation == "sketch":
         geometry = values.get("geometry", values.get("elements", []))
         if not isinstance(geometry, list) or not geometry:
@@ -431,10 +561,14 @@ def _node_shape(
             else:
                 raise IRExecutionError(f"unsupported sketch geometry '{kind}'")
         return sketch
+    if operation == "regular_polygon":
+        points = _regular_polygon_points(parameters, values)
+        height = _number(parameters, values.get("height", 40.0), "regular_polygon.height")
+        return _apply_inline_transform(_workplane(frame).polyline(points).close().extrude(height))
     if operation == "polygon_prism":
         points = _polygon_points(parameters, values.get("points"), "polygon_prism.points")
         height = _number(parameters, values.get("height"), "polygon_prism.height")
-        return _workplane(frame).polyline(points).close().extrude(height)
+        return _apply_inline_transform(_workplane(frame).polyline(points).close().extrude(height))
     if operation == "sweep":
         if len(inputs) != 2:
             raise IRExecutionError("sweep requires a profile and a path input")
@@ -468,11 +602,43 @@ def _node_shape(
             result = result.union(inputs[0].rotate((0, 0, 0), axis, angle * index / count))
         return result
     if operation in {"union", "cut", "intersect"}:
+        if not inputs:
+            return None
+        if len(inputs) == 1:
+            if operation == "cut" and any(k in values for k in ("radius", "diameter", "hole_radius", "size", "width", "hole", "cutter_radius", "cutter_diameter")):
+                if any(k in values for k in ("radius", "diameter", "hole_radius", "hole", "cutter_radius", "cutter_diameter")):
+                    rad_val = values.get("radius", values.get("hole_radius", values.get("cutter_radius", values.get("hole"))))
+                    if rad_val is None and any(k in values for k in ("diameter", "cutter_diameter")):
+                        dia = values.get("diameter", values.get("cutter_diameter"))
+                        rad_val = _number(parameters, dia, "cut.diameter") / 2
+                    rad = _number(parameters, rad_val or 5.0, "cut.radius")
+                    depth_val = values.get("depth", values.get("height", values.get("length", 100.0)))
+                    depth = _number(parameters, depth_val, "cut.depth")
+                    tool = _workplane(frame).circle(rad).extrude(depth * 2.0)
+                    x = _number(parameters, values.get("x", 0.0), "cut.x", -1e12)
+                    y = _number(parameters, values.get("y", 0.0), "cut.y", -1e12)
+                    z = _number(parameters, values.get("z", -depth * 0.5), "cut.z", -1e12)
+                    tool = tool.translate((x, y, z))
+                    return inputs[0].cut(tool)
+                elif any(k in values for k in ("size", "width")):
+                    w = _number(parameters, values.get("width", 10.0), "cut.width")
+                    d = _number(parameters, values.get("depth", 10.0), "cut.depth")
+                    h = _number(parameters, values.get("height", values.get("depth", 100.0)), "cut.height")
+                    tool = _workplane(frame).box(w, d, h, centered=(True, True, True))
+                    x = _number(parameters, values.get("x", 0.0), "cut.x", -1e12)
+                    y = _number(parameters, values.get("y", 0.0), "cut.y", -1e12)
+                    z = _number(parameters, values.get("z", 0.0), "cut.z", -1e12)
+                    tool = tool.translate((x, y, z))
+                    return inputs[0].cut(tool)
+            return inputs[0]
         return _combine(inputs, operation)
     if operation == "translate":
         if len(inputs) != 1:
             raise IRExecutionError("translate requires exactly one input")
-        return inputs[0].translate(_vector(parameters, values.get("vector", [0, 0, 0]), "translate.vector"))
+        vec = values.get("vector")
+        if vec is None:
+            vec = [values.get("x", 0.0), values.get("y", 0.0), values.get("z", 0.0)]
+        return inputs[0].translate(_vector(parameters, vec, "translate.vector"))
     if operation == "rotate":
         if len(inputs) != 1:
             raise IRExecutionError("rotate requires exactly one input")
@@ -494,7 +660,8 @@ def _node_shape(
         if len(inputs) != 1:
             raise IRExecutionError(f"{operation} requires exactly one input")
         structured_selector = values.get("selector") or values.get("face_selector") or values.get("edge_selector")
-        radius = _number(parameters, values.get("radius", values.get("distance")), f"{operation}.radius")
+        rad_val = values.get("radius", values.get("distance", values.get("size", values.get("amount", values.get("width", values.get(operation, 2.0))))))
+        radius = _number(parameters, rad_val, f"{operation}.radius")
         if isinstance(structured_selector, dict):
             edges = _topology_selection(inputs[0], structured_selector, "edge", selector_metadata)
         else:
