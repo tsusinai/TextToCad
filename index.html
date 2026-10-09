@@ -887,13 +887,15 @@
     }
     .viewport-transform-bar.hidden { display: none !important; }
     .agent-timeline {
-      margin-bottom: 12px;
-      padding: 10px 14px;
-      background: rgba(22, 26, 32, 0.88);
+      margin-top: 14px;
+      margin-bottom: 8px;
+      padding: 12px 16px;
+      background: rgba(22, 26, 32, 0.9);
       border: 1px solid rgba(212, 255, 79, 0.28);
-      border-radius: 12px;
+      border-radius: 14px;
       backdrop-filter: blur(12px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      transition: all .25s ease;
     }
     .agent-timeline.hidden { display: none !important; }
     .agent-timeline-head {
@@ -901,7 +903,56 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin-bottom: 8px;
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 0;
+    }
+    .timeline-head-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .timeline-toggle-icon {
+      font-size: 13px;
+      color: var(--lime);
+      display: inline-block;
+      transition: transform .2s ease;
+      line-height: 1;
+    }
+    .agent-timeline.collapsed .timeline-toggle-icon {
+      transform: rotate(-90deg);
+    }
+    .agent-timeline.collapsed {
+      padding-bottom: 12px;
+    }
+    .agent-timeline.collapsed .agent-timeline-body {
+      display: none !important;
+    }
+    .timeline-head-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .timeline-collapse-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: #94a3b8;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .timeline-collapse-btn:hover {
+      background: rgba(212, 255, 79, 0.15);
+      color: var(--lime);
+      border-color: rgba(212, 255, 79, 0.4);
+    }
+    .agent-timeline-body {
+      margin-top: 10px;
+      transition: opacity .2s ease;
     }
     .timeline-label {
       color: #94a3b8;
@@ -1972,63 +2023,6 @@
         </div>
       </aside>
       <div class="content">
-        <div class="agent-timeline" id="agentTimeline" hidden>
-          <div class="agent-timeline-head">
-            <span class="timeline-label" id="timelineLabel">AGENT REWORK TIMELINE</span>
-            <span class="timeline-badge" id="timelineScoreBadge">SCORE: --</span>
-          </div>
-          <div class="score-trajectory" id="scoreTrajectory"></div>
-          <div class="timeline-rounds" id="timelineRounds"></div>
-          <div class="critic-card" id="criticCard" hidden>
-            <div class="critic-head">
-              <span class="section-label" id="criticLabel">VLM VISION CRITIQUE</span>
-              <div class="critic-badges">
-                <span class="critic-verdict" id="criticVerdict">--</span>
-                <span class="critic-score" id="criticScore">--</span>
-              </div>
-            </div>
-            <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
-            <div class="critic-metrology" id="criticMetrology" hidden></div>
-            <div class="critic-views-preview" id="criticViewsPreview">
-              <div class="critic-view-toolbar">
-                <span class="critic-view-caption" id="criticViewCaption">4-View CAD Inspection</span>
-                <div class="critic-view-mode-toggle" id="criticViewToggle" role="group" aria-label="View Mode">
-                  <button type="button" class="critic-mode-btn active" id="criticModeClean" data-mode="clean">Clean</button>
-                  <button type="button" class="critic-mode-btn" id="criticModeAnnotated" data-mode="annotated">Annotated</button>
-                </div>
-              </div>
-              <div class="critic-img-wrap" id="criticImgWrap" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open 4-View CAD inspection modal">
-                <img id="criticCompositeImg" class="critic-composite-img" src="" alt="4-View CAD Inspection" title="Click to view full inspection sheet" />
-                <div class="critic-img-hint" id="criticImgHint">🔍 Click to zoom</div>
-              </div>
-            </div>
-            <div class="critic-discrepancies" id="criticDiscrepancies"></div>
-            <details class="critic-patches" id="criticPatchesDetails">
-              <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
-              <div class="critic-patches-content" id="criticPatchesContent"></div>
-            </details>
-            <div class="critic-acceptance" id="criticAcceptance" hidden>
-              <div class="acceptance-head">
-                <div class="acceptance-title-wrap">
-                  <span class="acceptance-title" id="acceptanceTitle">MULTI-GATE ACCEPTANCE INSPECTION</span>
-                  <span class="acceptance-subtitle" id="acceptanceSubtitle">Independent 5-Gate Quality Audit</span>
-                </div>
-                <span class="acceptance-badge" id="acceptanceStatusBadge">PASSED</span>
-              </div>
-              <div class="acceptance-gates-list" id="acceptanceGatesList"></div>
-              <div class="acceptance-certificate" id="acceptanceCertificate" hidden>
-                <div class="cert-stamp">
-                  <span class="cert-seal-icon">🛡️</span>
-                  <div class="cert-details">
-                    <strong id="certStatusText">ENGINEERING ACCEPTANCE CERTIFIED</strong>
-                    <span class="cert-id" id="certIdText">Certificate ID: AC-CAD-R1</span>
-                    <span class="cert-meta" id="certMetaText">Audited by Autonomous CAD Quality Arbiter</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
         <section class="viewport" aria-label="3D model preview">
           <div class="viewport-header">
             <span class="viewport-label">3D CAD VIEWPORT</span><span class="issue-badge" id="issueBadge">READY</span>
@@ -2126,6 +2120,71 @@
             </div>
           </div>
         </section>
+        <div class="agent-timeline collapsible-card" id="agentTimeline" hidden>
+          <div class="agent-timeline-head" id="agentTimelineToggle" role="button" tabindex="0" aria-expanded="true" aria-controls="agentTimelineBody" title="点击展开/收起 Agent 智能返工演化套件">
+            <div class="timeline-head-left">
+              <span class="timeline-toggle-icon" id="timelineToggleIcon">▾</span>
+              <span class="timeline-label" id="timelineLabel">AGENT REWORK TIMELINE & INSPECTION</span>
+            </div>
+            <div class="timeline-head-right">
+              <span class="timeline-badge" id="timelineScoreBadge">SCORE: --</span>
+              <button type="button" class="timeline-collapse-btn" id="timelineCollapseBtn">收起</button>
+            </div>
+          </div>
+          <div class="agent-timeline-body" id="agentTimelineBody">
+          <div class="score-trajectory" id="scoreTrajectory"></div>
+          <div class="timeline-rounds" id="timelineRounds"></div>
+          <div class="critic-card" id="criticCard" hidden>
+            <div class="critic-head">
+              <span class="section-label" id="criticLabel">VLM VISION CRITIQUE</span>
+              <div class="critic-badges">
+                <span class="critic-verdict" id="criticVerdict">--</span>
+                <span class="critic-score" id="criticScore">--</span>
+              </div>
+            </div>
+            <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
+            <div class="critic-metrology" id="criticMetrology" hidden></div>
+            <div class="critic-views-preview" id="criticViewsPreview">
+              <div class="critic-view-toolbar">
+                <span class="critic-view-caption" id="criticViewCaption">4-View CAD Inspection</span>
+                <div class="critic-view-mode-toggle" id="criticViewToggle" role="group" aria-label="View Mode">
+                  <button type="button" class="critic-mode-btn active" id="criticModeClean" data-mode="clean">Clean</button>
+                  <button type="button" class="critic-mode-btn" id="criticModeAnnotated" data-mode="annotated">Annotated</button>
+                </div>
+              </div>
+              <div class="critic-img-wrap" id="criticImgWrap" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open 4-View CAD inspection modal">
+                <img id="criticCompositeImg" class="critic-composite-img" src="" alt="4-View CAD Inspection" title="Click to view full inspection sheet" />
+                <div class="critic-img-hint" id="criticImgHint">🔍 Click to zoom</div>
+              </div>
+            </div>
+            <div class="critic-discrepancies" id="criticDiscrepancies"></div>
+            <details class="critic-patches" id="criticPatchesDetails">
+              <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
+              <div class="critic-patches-content" id="criticPatchesContent"></div>
+            </details>
+            <div class="critic-acceptance" id="criticAcceptance" hidden>
+              <div class="acceptance-head">
+                <div class="acceptance-title-wrap">
+                  <span class="acceptance-title" id="acceptanceTitle">MULTI-GATE ACCEPTANCE INSPECTION</span>
+                  <span class="acceptance-subtitle" id="acceptanceSubtitle">Independent 5-Gate Quality Audit</span>
+                </div>
+                <span class="acceptance-badge" id="acceptanceStatusBadge">PASSED</span>
+              </div>
+              <div class="acceptance-gates-list" id="acceptanceGatesList"></div>
+              <div class="acceptance-certificate" id="acceptanceCertificate" hidden>
+                <div class="cert-stamp">
+                  <span class="cert-seal-icon">🛡️</span>
+                  <div class="cert-details">
+                    <strong id="certStatusText">ENGINEERING ACCEPTANCE CERTIFIED</strong>
+                    <span class="cert-id" id="certIdText">Certificate ID: AC-CAD-R1</span>
+                    <span class="cert-meta" id="certMetaText">Audited by Autonomous CAD Quality Arbiter</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
         <section class="params">
           <div class="params-head"><span class="section-label">PARAMETRIC CONSTRAINTS</span><div class="params-tools"><span class="solved" id="solved">All constraints fully resolved</span><button class="edit-parameters" id="editParameters" type="button">EDIT</button></div></div>
           <div class="parameter-editor" id="parameterEditor" hidden>
@@ -2536,7 +2595,9 @@
         acceptanceSubtitle: 'Independent 5-Gate Quality & Compliance Audit',
         certStatusText: 'ENGINEERING ACCEPTANCE CERTIFIED',
         passed: 'PASSED',
-        rejected: 'REWORK'
+        rejected: 'REWORK',
+        collapse: 'Collapse',
+        expand: 'Expand'
       },
       zh: {
         toggle: 'EN',
@@ -2710,7 +2771,9 @@
         acceptanceSubtitle: '五重独立质量与合规性量化审计',
         certStatusText: '工业工程质量验收合格认证',
         passed: '验收合格',
-        rejected: '要求返工'
+        rejected: '要求返工',
+        collapse: '收起',
+        expand: '展开'
       }
     };
 
@@ -2865,6 +2928,12 @@
       if (document.getElementById('acceptanceTitle')) document.getElementById('acceptanceTitle').textContent = t.acceptanceTitle || 'MULTI-GATE ACCEPTANCE INSPECTION';
       if (document.getElementById('acceptanceSubtitle')) document.getElementById('acceptanceSubtitle').textContent = t.acceptanceSubtitle || 'Independent 5-Gate Quality & Compliance Audit';
       if (document.getElementById('certStatusText')) document.getElementById('certStatusText').textContent = t.certStatusText || 'ENGINEERING ACCEPTANCE CERTIFIED';
+      const timelineCollapseBtn = document.getElementById('timelineCollapseBtn');
+      const timelineEl = document.getElementById('agentTimeline');
+      if (timelineCollapseBtn) {
+        const isCollapsed = timelineEl && timelineEl.classList.contains('collapsed');
+        timelineCollapseBtn.textContent = isCollapsed ? (t.expand || 'Expand') : (t.collapse || 'Collapse');
+      }
       if (document.getElementById('criticPatchesSummary')) {
         const patchesCount = (currentAgentSummary && currentAgentSummary.history && currentAgentSummary.history[currentAgentRoundIdx] && (currentAgentSummary.history[currentAgentRoundIdx].applied_patches || currentAgentSummary.history[currentAgentRoundIdx].proposed_patches || currentAgentSummary.history[currentAgentRoundIdx].patches || []).length) || 0;
         document.getElementById('criticPatchesSummary').textContent = t.appliedPatches + (patchesCount ? ' (' + patchesCount + ')' : '');
@@ -4662,7 +4731,12 @@
         if (criticCard) criticCard.hidden = true;
         return;
       }
-      if (timelineEl) timelineEl.hidden = false;
+      if (timelineEl) {
+        timelineEl.hidden = false;
+        timelineEl.classList.remove('collapsed');
+        const collapseBtn = document.getElementById('timelineCollapseBtn');
+        if (collapseBtn) collapseBtn.textContent = currentLang === 'zh' ? '收起' : 'Collapse';
+      }
       if (criticCard) criticCard.hidden = false;
       const t = copy[currentLang];
       const scoreBadge = document.getElementById('timelineScoreBadge');
@@ -5040,6 +5114,39 @@
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeCriticLightbox();
       });
+
+      // Collapsible Agent Timeline & Inspection Suite
+      const timelineEl = document.getElementById('agentTimeline');
+      const toggleHead = document.getElementById('agentTimelineToggle');
+      const collapseBtn = document.getElementById('timelineCollapseBtn');
+      if (toggleHead && timelineEl) {
+        function toggleTimelineCollapse() {
+          const willCollapse = !timelineEl.classList.contains('collapsed');
+          timelineEl.classList.toggle('collapsed', willCollapse);
+          toggleHead.setAttribute('aria-expanded', String(!willCollapse));
+          if (collapseBtn) {
+            collapseBtn.textContent = willCollapse ? (currentLang === 'zh' ? '展开' : 'Expand') : (currentLang === 'zh' ? '收起' : 'Collapse');
+          }
+        }
+        toggleHead.addEventListener('click', (e) => {
+          if (e.target && e.target.closest && e.target.closest('#timelineCollapseBtn')) {
+            e.stopPropagation();
+          }
+          toggleTimelineCollapse();
+        });
+        toggleHead.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTimelineCollapse();
+          }
+        });
+        if (collapseBtn) {
+          collapseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleTimelineCollapse();
+          });
+        }
+      }
     }
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
