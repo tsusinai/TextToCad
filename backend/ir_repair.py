@@ -96,12 +96,20 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
         elif operation in {"add_node", "replace_node"}:
             node = patch.get("node")
             if not isinstance(node, dict) or not node.get("id"):
-                raise ValueError(f"patch[{index}] has an invalid node")
+                continue
             node_id = node["id"]
             if node_id in node_by_id:
-                existing_idx = next(i for i, n in enumerate(nodes) if n.get("id") == node_id)
-                nodes[existing_idx] = copy.deepcopy(node)
-                node_by_id[node_id] = nodes[existing_idx]
+                old_node = node_by_id[node_id]
+                # Protect against destructive replacement of base primitive by a feature
+                if old_node.get("kind") == "primitive" and (node.get("kind") == "feature" or node.get("inputs")):
+                    node_id = f"{node_id}_feature"
+                    node["id"] = node_id
+                    nodes.append(copy.deepcopy(node))
+                    node_by_id[node_id] = nodes[-1]
+                else:
+                    existing_idx = next(i for i, n in enumerate(nodes) if n.get("id") == node_id)
+                    nodes[existing_idx] = copy.deepcopy(node)
+                    node_by_id[node_id] = nodes[existing_idx]
             else:
                 nodes.append(copy.deepcopy(node))
                 node_by_id[node_id] = nodes[-1]
