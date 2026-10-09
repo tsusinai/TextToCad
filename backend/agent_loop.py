@@ -47,13 +47,30 @@ def _heuristic_fallback_critique(
     prompt: str,
     current_ir: dict[str, Any],
     round_idx: int,
+    metrics: dict[str, Any] | None = None,
+    patch_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Fallback critique based on symbolic geometric heuristics when VLM is unreachable."""
+    """Fallback critique based on symbolic geometric heuristics and ground-truth metrics when VLM is unreachable."""
     text = prompt.lower()
     nodes = current_ir.get("nodes", [])
     operations = [str(n.get("operation", "")).lower() for n in nodes]
     discrepancies = []
     patches = []
+
+    # Ground-truth metric checks from CAD kernel
+    if metrics:
+        if metrics.get("valid_brep") is False:
+            discrepancies.append({
+                "severity": "high",
+                "feature": "topology",
+                "issue": "Kernel reported non-manifold B-Rep boundary in active solid.",
+            })
+        if metrics.get("solid_count", 1) > 1:
+            discrepancies.append({
+                "severity": "medium",
+                "feature": "solid_count",
+                "issue": f"Model contains {metrics['solid_count']} disjoint solids instead of a single merged part.",
+            })
 
     target_node = nodes[-1]["id"] if nodes else "base"
     if current_ir.get("outputs"):
@@ -239,16 +256,18 @@ def call_vlm_critic(
     llm_api_key: str | None,
     llm_model: str | None,
     round_idx: int = 0,
+    metrics: dict[str, Any] | None = None,
+    patch_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Query a Vision-Language Model to critique the 4-view CAD rendering against the design intent."""
     if not llm_api_url or not llm_api_key:
-        return _heuristic_fallback_critique(prompt, current_ir, round_idx)
+        return _heuristic_fallback_critique(prompt, current_ir, round_idx, metrics=metrics, patch_history=patch_history)
 
     try:
         base64_image = encode_image_base64(composite_image_path)
     except Exception as exc:
         logger.warning(f"Failed to read composite render image: {exc}")
-        return _heuristic_fallback_critique(prompt, current_ir, round_idx)
+        return _heuristic_fallback_critique(prompt, current_ir, round_idx, metrics=metrics, patch_history=patch_history)
 
     system_prompt = (
         "You are an expert Senior CAD Inspector and Metrology Vision Critic. "
@@ -283,16 +302,36 @@ def call_vlm_critic(
         "Give a score >= 9.0 and verdict ACCEPT when all requested functional features, holes, cuts, and proportions match the prompt."
     )
 
+    ground_truth_text = ""
+    if metrics:
+        bbox = metrics.get("bbox_mm", {})
+        ground_truth_text = (
+            f"Ground-Truth OCCT Physical Metrology (Measured directly by CAD Kernel):\n"
+            f"- Bounding Dimensions: {bbox.get('x', '?')} × {bbox.get('y', '?')} × {bbox.get('z', '?')} mm\n"
+            f"- Volume: {metrics.get('volume_mm3', '?')} mm³\n"
+            f"- Solid Count: {metrics.get('solid_count', '?')}, Face Count: {metrics.get('face_count', '?')}\n"
+            f"- Manifold B-Rep Valid: {'YES' if metrics.get('valid_brep') else 'NO'}\n\n"
+        )
+
+    patch_history_text = ""
+    if patch_history:
+        patch_history_text = (
+            f"Previously Applied Patches in Earlier Rounds (DO NOT re-propose or undo these):\n"
+            f"{json.dumps(patch_history, ensure_ascii=False, indent=2)}\n\n"
+        )
+
     user_content: list[dict[str, Any]] = [
         {
             "type": "text",
             "text": (
                 f'Target Design Intent: "{prompt}"\n\n'
                 f"Active Round: {round_idx}\n"
+                f"{ground_truth_text}"
+                f"{patch_history_text}"
                 f"Current Parameters: {json.dumps(current_ir.get('parameters', {}))}\n"
                 f"Current Nodes: {[str(n.get('id', '')) + ':' + str(n.get('operation', '')) for n in current_ir.get('nodes', [])]}\n"
                 f"DFM Violations: {json.dumps(dfm_report.get('violations', []))}\n\n"
-                "Review the 4-view image. If any feature is missing or misaligned, produce structured JSON patches to repair the CAD model."
+                "Review the 4-view image alongside ground-truth measurements. If any feature is missing or misaligned, produce structured JSON patches to repair the CAD model."
             ),
         },
         {
@@ -339,7 +378,7 @@ def call_vlm_critic(
             return parsed
     except Exception as exc:
         logger.warning(f"VLM Critic request failed, using heuristic critique: {exc}")
-        return _heuristic_fallback_critique(prompt, current_ir, round_idx)
+        return _heuristic_fallback_critique(prompt, current_ir, round_idx, metrics=metrics, patch_history=patch_history)
 
 
 def run_agent_modeling_loop(
@@ -358,6 +397,10 @@ def run_agent_modeling_loop(
     renderer = HeadlessCADRenderer(resolution=512)
     current_ir = copy.deepcopy(initial_ir)
     last_valid_ir = copy.deepcopy(initial_ir)
+    best_ir = copy.deepcopy(initial_ir)
+    best_score = -1.0
+    best_round_idx = 0
+    all_applied_patches: list[dict[str, Any]] = []
     rounds_history: list[dict[str, Any]] = []
 
     for round_idx in range(max(1, min(max_rounds, 4))):
@@ -372,20 +415,29 @@ def run_agent_modeling_loop(
             })
 
         # 1. Execute CAD Kernel
+        primary_shape = None
         try:
             execution = execute_ir(current_ir)
             primary_shape = execution["shape"]
             last_valid_ir = copy.deepcopy(current_ir)
         except Exception as exec_err:
-            logger.warning(f"Round {round_idx} execution error: {exec_err}. Rolling back.")
+            logger.warning(f"Round {round_idx} execution error: {exec_err}. Rolling back to last valid IR.")
             current_ir = copy.deepcopy(last_valid_ir)
             execution = execute_ir(current_ir)
             primary_shape = execution["shape"]
 
+        # Deterministic Ground-Truth Metrology from Kernel
+        shape_stats: dict[str, Any] = {}
+        if cq is not None and primary_shape is not None:
+            try:
+                shape_stats = shape_metrics(primary_shape)
+            except Exception as metric_err:
+                logger.warning(f"Failed to calculate shape_metrics: {metric_err}")
+
         # 2. Export intermediate artifacts (STL, GLB)
         temp_stl = round_dir / "model.stl"
         temp_glb = round_dir / "model.glb"
-        if cq is not None:
+        if cq is not None and primary_shape is not None:
             cq.exporters.export(primary_shape, str(temp_stl))
             try:
                 import trimesh
@@ -402,7 +454,7 @@ def run_agent_modeling_loop(
                 "message": f"Rendering 4-view CAD inspection suite for round {round_idx}...",
             })
 
-        views = renderer.render_stl_multiview(temp_stl, round_dir / "views")
+        views = renderer.render_stl_multiview(temp_stl, round_dir / "views", metrics=shape_stats)
 
         # 4. Metric & DFM Check
         dfm_report = solve_constraints(current_ir)
@@ -424,6 +476,8 @@ def run_agent_modeling_loop(
             llm_api_key=llm_api_key,
             llm_model=llm_model,
             round_idx=round_idx,
+            metrics=shape_stats,
+            patch_history=all_applied_patches,
         )
 
         discrepancies = critique.get("discrepancies", [])
@@ -447,10 +501,17 @@ def run_agent_modeling_loop(
             "summary": critique.get("summary", ""),
             "discrepancies": discrepancies,
             "proposed_patches": critique.get("proposed_patches", []),
+            "metrics": shape_stats,
             "views": {k: str(v) for k, v in views.items()},
             "glb_available": temp_glb.exists(),
         }
         rounds_history.append(round_record)
+
+        # Track Best-of-N Candidate
+        if score > best_score:
+            best_score = score
+            best_round_idx = round_idx
+            best_ir = copy.deepcopy(current_ir)
 
         # 6. Convergence Evaluation
         if score >= target_score or critique.get("verdict") == "ACCEPT" or round_idx == max_rounds - 1:
@@ -472,15 +533,21 @@ def run_agent_modeling_loop(
         try:
             patched_ir = apply_patches(current_ir, patches)
             current_ir = patched_ir
+            all_applied_patches.extend(patches)
         except Exception as patch_err:
             logger.warning(f"Failed to apply proposed patches: {patch_err}")
             break
 
-    converged = bool(rounds_history and rounds_history[-1]["score"] >= target_score)
-    final_score = rounds_history[-1]["score"] if rounds_history else 8.5
+    # Tag best round in history
+    for r in rounds_history:
+        r["is_best"] = (r["round"] == best_round_idx)
+
+    converged = bool(rounds_history and best_score >= target_score)
+    final_score = best_score if best_score >= 0 else 8.5
 
     return {
-        "final_ir": current_ir,
+        "final_ir": best_ir,
+        "best_round": best_round_idx,
         "total_rounds": len(rounds_history),
         "converged": converged,
         "final_score": final_score,

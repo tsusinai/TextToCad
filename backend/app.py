@@ -3370,6 +3370,7 @@ def _generate_ir_model(
             normalized_ir = validate_ir(agent_result["final_ir"])
             agent_summary = {
                 "total_rounds": agent_result["total_rounds"],
+                "best_round": agent_result.get("best_round", 0),
                 "converged": agent_result["converged"],
                 "final_score": agent_result["final_score"],
                 "history": agent_result["history"],
