@@ -806,27 +806,50 @@
       right: 16px;
       z-index: 5;
       display: flex;
-      width: 112px;
+      width: 104px;
       flex-direction: column;
-      align-items: stretch;
-      gap: 3px;
+      align-items: center;
+      gap: 4px;
       padding: 6px;
       border: 1px solid rgba(212, 255, 79, 0.25);
       border-radius: 12px;
-      background: rgba(20, 24, 28, 0.85);
+      background: rgba(20, 24, 28, 0.88);
       backdrop-filter: blur(12px);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     }
-    .gizmo-axis { display: block; width: 64px; height: 64px; align-self: flex-end; overflow: visible; }
+    .gizmo-axis { display: block; width: 56px; height: 56px; margin: 0 auto; overflow: visible; }
     .gizmo-axis line { fill: none; stroke-width: 2.4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
     .gizmo-axis line[data-gizmo-axis-line="x"] { stroke: #ef4444; }
     .gizmo-axis line[data-gizmo-axis-line="y"] { stroke: #84cc16; }
     .gizmo-axis line[data-gizmo-axis-line="z"] { stroke: #38bdf8; }
     .gizmo-axis text { fill: #e2e8f0; font-size: 8px; font-weight: 800; font-family: 'Space Grotesk', sans-serif; text-anchor: middle; dominant-baseline: middle; }
     .gizmo-axis-origin { fill: #f8fafc; stroke: #1e293b; stroke-width: 1; }
-    .gizmo-buttons { display: flex; justify-content: flex-end; gap: 2px; }
-    .viewport-gizmo button { border: 0; border-radius: 6px; padding: 4px 6px; background: transparent; color: #94a3b8; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 700; letter-spacing: .03em; cursor: pointer; transition: all 0.14s ease; }
-    .viewport-gizmo button:hover, .viewport-gizmo button.active { background: rgba(212, 255, 79, 0.2); color: var(--lime); }
+    .gizmo-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+      width: 100%;
+    }
+    .viewport-gizmo button {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 3px 0;
+      background: rgba(255, 255, 255, 0.03);
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      text-align: center;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.14s ease;
+    }
+    .viewport-gizmo button:hover, .viewport-gizmo button.active {
+      background: rgba(212, 255, 79, 0.2);
+      border-color: rgba(212, 255, 79, 0.5);
+      color: var(--lime);
+    }
     .viewport-transform-bar {
       position: absolute;
       top: 14px;
@@ -1391,9 +1414,9 @@
                 <text data-gizmo-axis-label="z" x="14" y="51">Z</text>
               </svg>
               <div class="gizmo-buttons">
-                <button type="button" data-gizmo-view="iso" aria-label="Isometric view">ISO</button>
-                <button type="button" data-gizmo-view="top" aria-label="Top view">TOP</button>
-                <button type="button" data-gizmo-view="front" aria-label="Front view">FRONT</button>
+                <button type="button" data-gizmo-view="iso" aria-label="Isometric view" title="轴测投影 (ISO)">轴测</button>
+                <button type="button" data-gizmo-view="top" aria-label="Top view" title="俯视图 (TOP)">俯视</button>
+                <button type="button" data-gizmo-view="front" aria-label="Front view" title="主视图 (FRONT)">主视</button>
               </div>
             </div>
             <div class="viewport-selection" id="viewportSelection" hidden></div>
@@ -1800,7 +1823,10 @@
         labelRot90: 'Rotate 90°:',
         labelMirror: 'Mirror:',
         labelFlip: 'Flip 180°:',
-        btnResetTransform: '⟲ Reset'
+        btnResetTransform: '⟲ Reset',
+        gizmoIso: 'ISO',
+        gizmoTop: 'TOP',
+        gizmoFront: 'FRONT'
       },
       zh: {
         toggle: 'EN',
@@ -1943,7 +1969,10 @@
         labelRot90: '90° 旋转:',
         labelMirror: '平面镜像:',
         labelFlip: '平面翻转:',
-        btnResetTransform: '⟲ 重置姿态'
+        btnResetTransform: '⟲ 重置姿态',
+        gizmoIso: '轴测',
+        gizmoTop: '俯视',
+        gizmoFront: '主视'
       }
     };
 
@@ -2039,9 +2068,12 @@
         viewerUnitSelect.value = selectedUnits;
       }
       if (viewGizmo) {
-        viewGizmo.querySelector('[data-gizmo-view="iso"]').textContent = t.iso;
-        viewGizmo.querySelector('[data-gizmo-view="top"]').textContent = t.top;
-        viewGizmo.querySelector('[data-gizmo-view="front"]').textContent = t.front;
+        const isoBtn = viewGizmo.querySelector('[data-gizmo-view="iso"]');
+        const topBtn = viewGizmo.querySelector('[data-gizmo-view="top"]');
+        const frontBtn = viewGizmo.querySelector('[data-gizmo-view="front"]');
+        if (isoBtn) { isoBtn.textContent = t.gizmoIso || 'ISO'; isoBtn.setAttribute('title', t.iso); }
+        if (topBtn) { topBtn.textContent = t.gizmoTop || 'TOP'; topBtn.setAttribute('title', t.top); }
+        if (frontBtn) { frontBtn.textContent = t.gizmoFront || 'FRONT'; frontBtn.setAttribute('title', t.front); }
       }
       if (document.getElementById('toggleTransformBar')) document.getElementById('toggleTransformBar').textContent = t.toggleTransform;
       if (document.getElementById('labelRot90')) document.getElementById('labelRot90').textContent = t.labelRot90;
