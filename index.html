@@ -1276,6 +1276,136 @@
       font-style: italic;
       padding: 4px 0;
     }
+    .critic-acceptance {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(10, 14, 20, 0.7);
+    }
+    .acceptance-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .acceptance-title-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .acceptance-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: #cbd5e1;
+      letter-spacing: 0.03em;
+    }
+    .acceptance-subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      color: #64748b;
+    }
+    .acceptance-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: 0.03em;
+    }
+    .acceptance-badge.status-passed {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(74, 222, 128, 0.4);
+    }
+    .acceptance-badge.status-rejected {
+      background: rgba(249, 115, 22, 0.2);
+      color: #fb923c;
+      border: 1px solid rgba(251, 146, 60, 0.4);
+    }
+    .acceptance-gates-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .gate-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+    }
+    .gate-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+    }
+    .gate-icon {
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .gate-icon.passed { color: #4ade80; }
+    .gate-icon.failed { color: #fb923c; }
+    .gate-name {
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .gate-evidence {
+      color: #94a3b8;
+      font-size: 9.5px;
+      white-space: nowrap;
+      text-align: right;
+    }
+    .acceptance-certificate {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(212, 255, 79, 0.08) 100%);
+      border: 1px solid rgba(74, 222, 128, 0.35);
+      box-shadow: 0 0 16px rgba(74, 222, 128, 0.15);
+    }
+    .cert-stamp {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cert-seal-icon {
+      font-size: 20px;
+    }
+    .cert-details {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .cert-details strong {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: #4ade80;
+      letter-spacing: 0.04em;
+    }
+    .cert-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      color: var(--lime);
+    }
+    .cert-meta {
+      font-size: 9px;
+      color: #94a3b8;
+    }
     .critic-lightbox {
       position: fixed;
       inset: 0;
@@ -1877,6 +2007,26 @@
               <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
               <div class="critic-patches-content" id="criticPatchesContent"></div>
             </details>
+            <div class="critic-acceptance" id="criticAcceptance" hidden>
+              <div class="acceptance-head">
+                <div class="acceptance-title-wrap">
+                  <span class="acceptance-title" id="acceptanceTitle">MULTI-GATE ACCEPTANCE INSPECTION</span>
+                  <span class="acceptance-subtitle" id="acceptanceSubtitle">Independent 5-Gate Quality Audit</span>
+                </div>
+                <span class="acceptance-badge" id="acceptanceStatusBadge">PASSED</span>
+              </div>
+              <div class="acceptance-gates-list" id="acceptanceGatesList"></div>
+              <div class="acceptance-certificate" id="acceptanceCertificate" hidden>
+                <div class="cert-stamp">
+                  <span class="cert-seal-icon">🛡️</span>
+                  <div class="cert-details">
+                    <strong id="certStatusText">ENGINEERING ACCEPTANCE CERTIFIED</strong>
+                    <span class="cert-id" id="certIdText">Certificate ID: AC-CAD-R1</span>
+                    <span class="cert-meta" id="certMetaText">Audited by Autonomous CAD Quality Arbiter</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <section class="viewport" aria-label="3D model preview">
@@ -2381,7 +2531,12 @@
         lightboxTitle: '4-View CAD Inspection Suite',
         clickToZoom: '🔍 Click to zoom',
         allFeaturesMatch: '✓ All features match design intent',
-        criticViewCaption: '4-View CAD Inspection'
+        criticViewCaption: '4-View CAD Inspection',
+        acceptanceTitle: 'MULTI-GATE ACCEPTANCE INSPECTION',
+        acceptanceSubtitle: 'Independent 5-Gate Quality & Compliance Audit',
+        certStatusText: 'ENGINEERING ACCEPTANCE CERTIFIED',
+        passed: 'PASSED',
+        rejected: 'REWORK'
       },
       zh: {
         toggle: 'EN',
@@ -2550,7 +2705,12 @@
         lightboxTitle: '4 视向 CAD 评审全览图',
         clickToZoom: '🔍 点击全屏放大',
         allFeaturesMatch: '✓ 所有几何特征与尺寸要求完全符合设计意图',
-        criticViewCaption: '4 视向 CAD 评审图'
+        criticViewCaption: '4 视向 CAD 评审图',
+        acceptanceTitle: '独立多关卡工程验收核准报告',
+        acceptanceSubtitle: '五重独立质量与合规性量化审计',
+        certStatusText: '工业工程质量验收合格认证',
+        passed: '验收合格',
+        rejected: '要求返工'
       }
     };
 
@@ -2702,6 +2862,9 @@
       if (document.getElementById('criticModeAnnotated')) document.getElementById('criticModeAnnotated').textContent = t.toggleViewAnnotated;
       if (document.getElementById('criticImgHint')) document.getElementById('criticImgHint').textContent = t.clickToZoom;
       if (document.getElementById('criticLightboxTitle')) document.getElementById('criticLightboxTitle').textContent = t.lightboxTitle;
+      if (document.getElementById('acceptanceTitle')) document.getElementById('acceptanceTitle').textContent = t.acceptanceTitle || 'MULTI-GATE ACCEPTANCE INSPECTION';
+      if (document.getElementById('acceptanceSubtitle')) document.getElementById('acceptanceSubtitle').textContent = t.acceptanceSubtitle || 'Independent 5-Gate Quality & Compliance Audit';
+      if (document.getElementById('certStatusText')) document.getElementById('certStatusText').textContent = t.certStatusText || 'ENGINEERING ACCEPTANCE CERTIFIED';
       if (document.getElementById('criticPatchesSummary')) {
         const patchesCount = (currentAgentSummary && currentAgentSummary.history && currentAgentSummary.history[currentAgentRoundIdx] && (currentAgentSummary.history[currentAgentRoundIdx].applied_patches || currentAgentSummary.history[currentAgentRoundIdx].proposed_patches || currentAgentSummary.history[currentAgentRoundIdx].patches || []).length) || 0;
         document.getElementById('criticPatchesSummary').textContent = t.appliedPatches + (patchesCount ? ' (' + patchesCount + ')' : '');
@@ -4740,6 +4903,64 @@
           jsonPre.textContent = JSON.stringify(patches, null, 2);
           patchesContent.appendChild(jsonPre);
           if (patchesDetails) patchesDetails.open = true;
+        }
+      }
+
+      // Render Multi-Gate Acceptance Inspection
+      const acceptanceEl = document.getElementById('criticAcceptance');
+      const cert = round.certificate;
+      if (acceptanceEl) {
+        if (cert && Array.isArray(cert.gates)) {
+          acceptanceEl.hidden = false;
+          const statusBadge = document.getElementById('acceptanceStatusBadge');
+          if (statusBadge) {
+            const isPassed = Boolean(cert.passed);
+            statusBadge.textContent = (isPassed ? (t.passed || 'PASSED') : (t.rejected || 'REWORK')) + ' (' + (cert.passed_gates_count || 0) + '/' + (cert.total_gates || 5) + ')';
+            statusBadge.className = 'acceptance-badge ' + (isPassed ? 'status-passed' : 'status-rejected');
+          }
+
+          const gatesList = document.getElementById('acceptanceGatesList');
+          if (gatesList) {
+            gatesList.innerHTML = '';
+            cert.gates.forEach((gate) => {
+              const item = document.createElement('div');
+              item.className = 'gate-item';
+
+              const nameWrap = document.createElement('div');
+              nameWrap.className = 'gate-name-wrap';
+              const icon = document.createElement('span');
+              icon.className = 'gate-icon ' + (gate.passed ? 'passed' : 'failed');
+              icon.textContent = gate.passed ? '✓' : '✗';
+              const nameSpan = document.createElement('span');
+              nameSpan.className = 'gate-name';
+              nameSpan.textContent = gate.name || gate.id;
+              nameWrap.appendChild(icon);
+              nameWrap.appendChild(nameSpan);
+
+              const evidence = document.createElement('span');
+              evidence.className = 'gate-evidence';
+              evidence.textContent = gate.evidence || gate.status || '';
+
+              item.appendChild(nameWrap);
+              item.appendChild(evidence);
+              gatesList.appendChild(item);
+            });
+          }
+
+          const certCard = document.getElementById('acceptanceCertificate');
+          if (certCard) {
+            if (cert.passed) {
+              certCard.hidden = false;
+              const certIdText = document.getElementById('certIdText');
+              if (certIdText) certIdText.textContent = (currentLang === 'zh' ? '验收证书编号: ' : 'Certificate ID: ') + (cert.certificate_id || 'CERT-OK');
+              const certMetaText = document.getElementById('certMetaText');
+              if (certMetaText) certMetaText.textContent = (cert.timestamp || '') + ' · ' + (cert.inspector || 'Chief Inspector');
+            } else {
+              certCard.hidden = true;
+            }
+          }
+        } else {
+          acceptanceEl.hidden = true;
         }
       }
 

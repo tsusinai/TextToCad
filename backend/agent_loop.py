@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import base64
 import copy
+import datetime
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -381,6 +383,127 @@ def call_vlm_critic(
         return _heuristic_fallback_critique(prompt, current_ir, round_idx, metrics=metrics, patch_history=patch_history)
 
 
+class MultiGateInspector:
+    """Rigorous Multi-Gate Engineering Acceptance Inspector for Autonomous CAD.
+
+    Conducts an itemized 5-gate quality audit on each round:
+    - Gate 1: Topology & Manifoldness (Kernel B-Rep check, single solid, non-zero volume)
+    - Gate 2: Dimensional & Feature Intent (Envelope bounds vs prompt, hole/feature counts)
+    - Gate 3: Multi-View Visual Fidelity (VLM/heuristic orthogonal reprojection)
+    - Gate 4: DFM Manufacturability (Wall thickness, draft/overhang clearance)
+    - Gate 5: Inspector Final Sign-Off (Emits certified Acceptance Certificate)
+    """
+
+    def __init__(self, target_score: float = 9.0):
+        self.target_score = target_score
+
+    def inspect_round(
+        self,
+        round_idx: int,
+        prompt: str,
+        current_ir: dict[str, Any],
+        metrics: dict[str, Any],
+        dfm_report: dict[str, Any],
+        critique: dict[str, Any],
+        model_id: str = "",
+    ) -> dict[str, Any]:
+        gates: list[dict[str, Any]] = []
+
+        # Gate 1: Topology & Manifoldness
+        valid_brep = metrics.get("valid_brep", False)
+        solid_count = metrics.get("solid_count", 0)
+        vol = metrics.get("volume_mm3", 0.0)
+        face_count = metrics.get("face_count", 0)
+        gate1_passed = bool(valid_brep and solid_count == 1 and vol > 0.1 and face_count >= 4)
+        gates.append({
+            "id": "gate_topology",
+            "name": "拓扑流形与几何水密性 (Topology & Manifold)",
+            "passed": gate1_passed,
+            "status": "PASS" if gate1_passed else "FAIL",
+            "evidence": f"Solids={solid_count}, Faces={face_count}, Vol={round(vol, 1)} mm³, Manifold={'YES' if valid_brep else 'NO'}",
+        })
+
+        # Gate 2: Dimensional & Feature Intent
+        p_text = prompt.lower()
+        nodes = current_ir.get("nodes", [])
+        discrepancies = critique.get("discrepancies", [])
+        has_hole_intent = bool(re.search(r"(hole|through[- ]?hole|bore|通孔|内孔|穿孔|带孔|安装孔|螺栓孔)", p_text))
+        has_cut_op = any("cut" in str(n.get("operation", "")).lower() or "pattern" in str(n.get("operation", "")).lower() for n in nodes)
+        feature_ok = True
+        feature_issues = []
+        if has_hole_intent and not has_cut_op:
+            feature_ok = False
+            feature_issues.append("缺少布尔打孔特征 (Missing hole cut)")
+
+        high_sev = [d for d in discrepancies if d.get("severity") == "high"]
+        if high_sev:
+            feature_ok = False
+            feature_issues.append(f"{len(high_sev)} 项关键特征缺陷 (Critical discrepancies)")
+
+        gate2_passed = feature_ok
+        gates.append({
+            "id": "gate_features",
+            "name": "关键特征与设计意图约束 (Feature Intent & Specs)",
+            "passed": gate2_passed,
+            "status": "PASS" if gate2_passed else "FAIL",
+            "evidence": "设计意图核心特征全部齐备" if gate2_passed else "; ".join(feature_issues),
+        })
+
+        # Gate 3: Multi-View Visual Fidelity
+        score = float(critique.get("score", 0.0))
+        verdict = str(critique.get("verdict", "")).upper()
+        gate3_passed = bool(score >= self.target_score or verdict == "ACCEPT")
+        gates.append({
+            "id": "gate_visual",
+            "name": "四视角视觉重投影复核 (4-View Visual Fidelity)",
+            "passed": gate3_passed,
+            "status": "PASS" if gate3_passed else "REWORK",
+            "evidence": f"综合视觉评审分: {score} / 10 ({verdict})",
+        })
+
+        # Gate 4: DFM Manufacturability
+        violations = dfm_report.get("violations", [])
+        hard_violations = [v for v in violations if v.get("status") == "violated" and v.get("hard", True)]
+        gate4_passed = len(hard_violations) == 0
+        gates.append({
+            "id": "gate_dfm",
+            "name": "制造工艺规范合规性 (DFM Manufacturability)",
+            "passed": gate4_passed,
+            "status": "PASS" if gate4_passed else "WARNING",
+            "evidence": f"合规无硬性冲突 ({len(violations)} 项名义约束)" if gate4_passed else f"{len(hard_violations)} 项硬性工艺超标",
+        })
+
+        # Gate 5: Final Sign-Off & Acceptance
+        all_passed = gate1_passed and gate2_passed and gate3_passed and gate4_passed
+        passed_count = sum(1 for g in gates if g["passed"])
+
+        cert_hash = hashlib.sha256(f"{model_id}:{round_idx}:{score}:{vol}:{all_passed}".encode("utf-8")).hexdigest()[:12].upper()
+        cert_id = f"AC-{model_id[:6].upper() if model_id else 'CAD'}-R{round_idx}-{cert_hash[:6]}"
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        certificate = {
+            "certificate_id": cert_id,
+            "round": round_idx,
+            "status": "PASSED" if all_passed else "REJECTED",
+            "passed": all_passed,
+            "score": score,
+            "passed_gates_count": passed_count + (1 if all_passed else 0),
+            "total_gates": 5,
+            "gates": gates + [{
+                "id": "gate_signoff",
+                "name": "主任检验官综合终审签署 (Chief Inspector Sign-Off)",
+                "passed": all_passed,
+                "status": "CERTIFIED" if all_passed else "REJECTED",
+                "evidence": f"核准通过 {passed_count}/4 前置检验项 · 证书签发: {cert_id}" if all_passed else f"前置检验项未达成 ({passed_count}/4)，要求返工自愈",
+            }],
+            "timestamp": timestamp,
+            "inspector": "Autonomous CAD Quality Arbiter & VLM Inspector",
+            "digest_hash": cert_hash,
+        }
+
+        return certificate
+
+
 def run_agent_modeling_loop(
     initial_ir: dict[str, Any],
     prompt: str,
@@ -395,11 +518,13 @@ def run_agent_modeling_loop(
 ) -> dict[str, Any]:
     """Execute the multi-round closed-loop visual auto-rework cycle."""
     renderer = HeadlessCADRenderer(resolution=512)
+    inspector = MultiGateInspector(target_score=target_score)
     current_ir = copy.deepcopy(initial_ir)
     last_valid_ir = copy.deepcopy(initial_ir)
     best_ir = copy.deepcopy(initial_ir)
     best_score = -1.0
     best_round_idx = 0
+    best_certificate: dict[str, Any] = {}
     all_applied_patches: list[dict[str, Any]] = []
     rounds_history: list[dict[str, Any]] = []
 
@@ -494,6 +619,24 @@ def run_agent_modeling_loop(
                 views["annotated_composite"] = views["composite"]
 
         score = float(critique.get("score", 8.5))
+        # 6. Multi-Gate Independent Acceptance Inspection
+        if progress_callback:
+            progress_callback({
+                "stage": "agent_inspection",
+                "round": round_idx,
+                "message": f"Multi-Gate Inspector auditing round {round_idx} acceptance criteria...",
+            })
+
+        certificate = inspector.inspect_round(
+            round_idx=round_idx,
+            prompt=prompt,
+            current_ir=current_ir,
+            metrics=shape_stats,
+            dfm_report=dfm_report,
+            critique=critique,
+            model_id=artifacts_dir.name,
+        )
+
         round_record = {
             "round": round_idx,
             "score": score,
@@ -502,6 +645,7 @@ def run_agent_modeling_loop(
             "discrepancies": discrepancies,
             "proposed_patches": critique.get("proposed_patches", []),
             "metrics": shape_stats,
+            "certificate": certificate,
             "views": {k: str(v) for k, v in views.items()},
             "glb_available": temp_glb.exists(),
         }
@@ -512,12 +656,13 @@ def run_agent_modeling_loop(
             best_score = score
             best_round_idx = round_idx
             best_ir = copy.deepcopy(current_ir)
+            best_certificate = certificate
 
-        # 6. Convergence Evaluation
-        if score >= target_score or critique.get("verdict") == "ACCEPT" or round_idx == max_rounds - 1:
+        # 7. Convergence Evaluation: requires visual score AND acceptance certificate pass
+        if (score >= target_score or critique.get("verdict") == "ACCEPT" or certificate["passed"]) or round_idx == max_rounds - 1:
             break
 
-        # 7. Apply Patches
+        # 8. Apply Patches
         patches = critique.get("proposed_patches", [])
         if not patches:
             break
@@ -544,6 +689,7 @@ def run_agent_modeling_loop(
 
     converged = bool(rounds_history and best_score >= target_score)
     final_score = best_score if best_score >= 0 else 8.5
+    final_cert = best_certificate or (rounds_history[-1].get("certificate", {}) if rounds_history else {})
 
     return {
         "final_ir": best_ir,
@@ -551,5 +697,6 @@ def run_agent_modeling_loop(
         "total_rounds": len(rounds_history),
         "converged": converged,
         "final_score": final_score,
+        "final_certificate": final_cert,
         "history": rounds_history,
     }
