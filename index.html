@@ -1068,6 +1068,19 @@
       line-height: 1.45;
       color: #cbd5e1;
     }
+    .critic-metrology {
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 6px;
+      padding: 3px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
     .critic-views-preview {
       margin-top: 10px;
       border-radius: 8px;
@@ -1845,6 +1858,7 @@
               </div>
             </div>
             <div class="critic-summary" id="criticSummary">Visual inspection completed.</div>
+            <div class="critic-metrology" id="criticMetrology" hidden></div>
             <div class="critic-views-preview" id="criticViewsPreview">
               <div class="critic-view-toolbar">
                 <span class="critic-view-caption" id="criticViewCaption">4-View CAD Inspection</span>
@@ -4492,7 +4506,7 @@
       if (scoreBadge) scoreBadge.textContent = (t.timelineScore || 'SCORE: ') + (summary.final_score !== undefined ? summary.final_score : '--') + ' / 10';
 
       if (isNewModel || currentAgentRoundIdx < 0 || currentAgentRoundIdx >= summary.history.length) {
-        currentAgentRoundIdx = summary.history.length - 1;
+        currentAgentRoundIdx = summary.best_round !== undefined ? summary.best_round : (summary.history.length - 1);
       }
 
       renderScoreTrajectory(summary);
@@ -4504,7 +4518,9 @@
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'timeline-round-btn' + (idx === currentAgentRoundIdx ? ' active' : '');
-          const label = idx === summary.history.length - 1 ? (t.finalRound || 'Final') : ((t.round || 'Round ') + idx);
+          const isBest = round.is_best || (summary.best_round === idx);
+          const bestTag = isBest ? ' ⭐' : '';
+          const label = (idx === summary.history.length - 1 ? (t.finalRound || 'Final') : ((t.round || 'Round ') + idx)) + bestTag;
           btn.innerHTML = '<strong>' + label + '</strong><span>(' + (round.score !== undefined ? round.score : '--') + ')</span>';
           btn.setAttribute('aria-label', label + ' (' + (round.score !== undefined ? round.score : '--') + ')');
           btn.addEventListener('click', () => {
@@ -4614,6 +4630,22 @@
       const criticSummary = document.getElementById('criticSummary');
       if (criticSummary) {
         criticSummary.textContent = round.summary || (round.critique && round.critique.summary) || (t.verified || 'Visual critique verified.');
+      }
+
+      const criticMetrology = document.getElementById('criticMetrology');
+      if (criticMetrology) {
+        if (round.metrics && round.metrics.bbox_mm) {
+          const b = round.metrics.bbox_mm;
+          const vol = round.metrics.volume_mm3 ? Math.round(round.metrics.volume_mm3) : '--';
+          const faces = round.metrics.face_count || '--';
+          const isZh = currentLang === 'zh';
+          criticMetrology.textContent = isZh
+            ? `📐 物理实测: 包络 ${b.x} × ${b.y} × ${b.z} mm · 体积 ${vol} mm³ · ${faces} 表面 · 水密流形`
+            : `📐 Ground-Truth: BBox ${b.x} × ${b.y} × ${b.z} mm · Vol ${vol} mm³ · ${faces} Faces · Watertight`;
+          criticMetrology.hidden = false;
+        } else {
+          criticMetrology.hidden = true;
+        }
       }
 
       const criticCompositeImg = document.getElementById('criticCompositeImg');
