@@ -45,12 +45,15 @@ def suggest_repairs(ir: dict[str, Any], constraint_report: dict[str, Any]) -> li
     return patches
 
 
-def _clean_target_id(raw_id: Any, node_by_id: dict[str, Any], candidate: dict[str, Any], nodes: list[dict[str, Any]]) -> str:
+def _clean_target_id(raw_id: Any, node_by_id: dict[str, Any], candidate: dict[str, Any], nodes: list[dict[str, Any]]) -> str | None:
     fallback_id = None
     if candidate.get("outputs"):
         fallback_id = candidate["outputs"][0].get("node")
     elif nodes:
         fallback_id = nodes[-1].get("id")
+    # An omitted target can safely mean the current output. An explicitly
+    # unknown target must fail closed; silently falling back to another node
+    # lets a critic patch the wrong feature.
     if not raw_id:
         return fallback_id or "base"
     sid = str(raw_id).strip()
@@ -62,7 +65,7 @@ def _clean_target_id(raw_id: Any, node_by_id: dict[str, Any], candidate: dict[st
     for nid in node_by_id:
         if nid.lower() == sid_lower:
             return nid
-    return fallback_id or sid
+    return None
 
 
 def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> dict[str, Any]:
@@ -96,7 +99,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
         elif operation in {"add_node", "replace_node"}:
             node = patch.get("node")
             if not isinstance(node, dict) or not node.get("id"):
-                continue
+                raise ValueError(f"patch[{index}] has an invalid node")
             node_id = node["id"]
             if node_id in node_by_id:
                 old_node = node_by_id[node_id]
@@ -136,7 +139,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             if not isinstance(name, str) or name not in parameters:
                 raise ValueError(f"patch[{index}] references an unknown parameter '{name}'")
             factor = patch.get("factor")
-            if not isinstance(factor, (int, float)):
+            if not isinstance(factor, (int, float)) or not math.isfinite(float(factor)) or float(factor) <= 0 or float(factor) > 100:
                 raise ValueError(f"patch[{index}] factor must be numeric")
             current = parameters[name]
             if not isinstance(current, dict):
@@ -166,7 +169,9 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
                 circle_radius = abs(float(patch.get("circle_radius", patch.get("pitch_radius", patch.get("radius", 20.0)))))
             except (ValueError, TypeError):
                 circle_radius = 20.0
-            circle_radius = max(0.1, circle_radius)
+            if not math.isfinite(circle_radius):
+                raise ValueError(f"patch[{index}] circle_radius must be finite")
+            circle_radius = max(0.1, min(circle_radius, 1_000_000.0))
 
             if "hole_radius" in patch:
                 try:
@@ -185,13 +190,17 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
                     hole_radius = 2.0
             else:
                 hole_radius = 2.0
-            hole_radius = max(0.1, hole_radius)
+            if not math.isfinite(hole_radius):
+                raise ValueError(f"patch[{index}] hole radius must be finite")
+            hole_radius = max(0.1, min(hole_radius, 1_000_000.0))
 
             try:
                 depth = abs(float(patch.get("depth", 50.0)))
             except (ValueError, TypeError):
                 depth = 50.0
-            depth = max(0.5, depth)
+            if not math.isfinite(depth):
+                raise ValueError(f"patch[{index}] depth must be finite")
+            depth = max(0.5, min(depth, 1_000_000.0))
 
             pat_idx = 1
             while any(f"cutter_{pat_idx}_{i}" in node_by_id for i in range(count)) or f"cut_hole_pattern_{pat_idx}" in node_by_id:

@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 import logging
+import math
 from pathlib import Path
 import re
 import shutil
@@ -30,13 +31,212 @@ try:
     from .ir_repair import apply_patches
     from .ir_constraints import solve_constraints
     from .multiview_renderer import HeadlessCADRenderer
+    from .agent_contracts import extract_requirement_spec, make_repair_report, verify_requirement_spec
+    from .feature_catalog import retrieve_feature_recipes
 except ImportError:
     from ir_executor import execute_ir, IRExecutionError, shape_metrics
     from ir_repair import apply_patches
     from ir_constraints import solve_constraints
     from multiview_renderer import HeadlessCADRenderer
+    from agent_contracts import extract_requirement_spec, make_repair_report, verify_requirement_spec
+    from feature_catalog import retrieve_feature_recipes
 
 logger = logging.getLogger("agent_loop")
+
+_ALLOWED_CRITIQUE_PATCHES = {
+    "set_parameter", "scale_parameter", "replace_node_parameter",
+    "add_node", "replace_node", "add_hole_pattern", "add_chamfer",
+    "add_fillet", "shell_hollow", "remove_node",
+}
+_PROMPT_UNIT_TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}
+
+
+def _normalize_critique(payload: Any) -> dict[str, Any]:
+    """Fail closed on malformed or overly optimistic VLM responses."""
+    if not isinstance(payload, dict):
+        return {
+            "score": 0.0,
+            "verdict": "REVISE",
+            "summary": "Critic returned a non-object response.",
+            "discrepancies": [{
+                "severity": "high",
+                "feature": "critic_contract",
+                "issue": "Critic response did not match the required JSON object.",
+            }],
+            "proposed_patches": [],
+        }
+    try:
+        score = float(payload.get("score", 0.0))
+    except (TypeError, ValueError):
+        score = 0.0
+    score = max(0.0, min(10.0, score)) if math.isfinite(score) else 0.0
+    verdict = str(payload.get("verdict", "REVISE")).upper().strip()
+    if verdict not in {"ACCEPT", "REVISE"}:
+        verdict = "REVISE"
+
+    discrepancies: list[dict[str, Any]] = []
+    raw_discrepancies = payload.get("discrepancies", [])
+    if not isinstance(raw_discrepancies, list):
+        discrepancies.append({
+            "severity": "high",
+            "feature": "critic_contract",
+            "issue": "Critic discrepancies must be a JSON array.",
+        })
+        raw_discrepancies = []
+    for raw in raw_discrepancies:
+        if not isinstance(raw, dict):
+            discrepancies.append({"severity": "medium", "feature": "critic", "issue": str(raw)[:240]})
+            continue
+        severity = str(raw.get("severity", "medium")).lower().strip()
+        if severity not in {"high", "medium", "low"}:
+            severity = "medium"
+        discrepancies.append({
+            "severity": severity,
+            "feature": str(raw.get("feature", "feature"))[:120],
+            "issue": str(raw.get("issue", ""))[:500],
+        })
+
+    patches: list[dict[str, Any]] = []
+    raw_patches = payload.get("proposed_patches", [])
+    if not isinstance(raw_patches, list):
+        discrepancies.append({
+            "severity": "high",
+            "feature": "critic_patch_contract",
+            "issue": "Critic proposed_patches must be a JSON array.",
+        })
+        raw_patches = []
+    for raw in raw_patches:
+        if isinstance(raw, dict) and raw.get("op") in _ALLOWED_CRITIQUE_PATCHES:
+            patches.append(copy.deepcopy(raw))
+        else:
+            discrepancies.append({
+                "severity": "high",
+                "feature": "critic_patch_contract",
+                "issue": "Critic proposed an unsupported patch operation.",
+            })
+    # ACCEPT is meaningful only when the critic returned a valid high score.
+    if score < 9.0:
+        verdict = "REVISE"
+    return {
+        "score": round(score, 3),
+        "verdict": verdict,
+        "summary": str(payload.get("summary", "Visual inspection completed."))[:500],
+        "discrepancies": discrepancies,
+        "proposed_patches": patches,
+    }
+
+
+def _semantic_requirement_issues(
+    prompt: str,
+    current_ir: dict[str, Any],
+    metrics: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Check prompt features that can be verified without trusting a VLM score."""
+    text = str(prompt).lower()
+    nodes = current_ir.get("nodes", []) if isinstance(current_ir, dict) else []
+    node_text = " ".join(
+        f"{node.get('id', '')} {node.get('operation', '')} {json.dumps(node.get('parameters', {}), ensure_ascii=False)}"
+        for node in nodes if isinstance(node, dict)
+    ).lower()
+    operations = [str(node.get("operation", "")).lower() for node in nodes if isinstance(node, dict)]
+    issues: list[dict[str, Any]] = []
+    requirement_spec = extract_requirement_spec(prompt)
+    issues.extend(verify_requirement_spec(requirement_spec, current_ir, metrics))
+    existing_features = {str(item.get("feature", "")) for item in issues}
+
+    def require(pattern: str, label: str, predicate: bool) -> None:
+        already_reported = any(
+            label == feature
+            or label in feature
+            or feature in label
+            for feature in existing_features
+        )
+        if re.search(pattern, text, flags=re.IGNORECASE) and not predicate and not already_reported:
+            issues.append({
+                "severity": "high",
+                "feature": label,
+                "issue": f"Prompt requests {label}, but the IR has no verifiable corresponding feature.",
+            })
+
+    require(
+        r"(hole|through[- ]?hole|bore|通孔|内孔|穿孔|带孔|安装孔|螺栓孔)",
+        "hole",
+        any("cut" in op or "hole" in op or "pattern" in op for op in operations),
+    )
+    require(
+        r"(chamfer|fillet|round(?:ed)?|倒角|圆角)",
+        "edge treatment",
+        any(op in {"chamfer", "fillet"} for op in operations),
+    )
+    require(
+        r"(hollow|shell|pocket|掏空|抽壳|空心)",
+        "hollow shell",
+        any(op in {"shell", "cut_inner_volume", "cut_inner_cylinder", "cut_recess"} for op in operations)
+        or any(token in node_text for token in ("hollow", "shell", "pocket", "掏空", "抽壳", "空心")),
+    )
+    require(
+        r"(slot|groove|keyway|recess|槽|凹槽|键槽)",
+        "slot or recess",
+        any(op == "cut_recess" for op in operations)
+        or any(token in node_text for token in ("slot", "groove", "keyway", "recess", "槽", "凹槽", "键槽")),
+    )
+    require(
+        r"(fin(?:ned)?|rib|web|heat\s*sink|鳍片|散热片|加强筋)",
+        "fins or ribs",
+        any(op in {"linear_pattern", "polar_pattern"} for op in operations)
+        or any(token in node_text for token in ("fin", "rib", "web", "heat_sink", "散热", "鳍")),
+    )
+    require(
+        r"(boss|凸台|台座)",
+        "boss",
+        "boss" in node_text or "凸台" in node_text or "台座" in node_text,
+    )
+    require(
+        r"(dovetail|燕尾)",
+        "dovetail profile",
+        any(token in node_text for token in ("dovetail", "燕尾")),
+    )
+    require(
+        r"(gear|tooth|teeth|齿轮|轮齿)",
+        "teeth or gear profile",
+        any(op in {"linear_pattern", "polar_pattern"} for op in operations)
+        or any(token in node_text for token in ("tooth", "teeth", "gear", "齿轮", "轮齿")),
+    )
+
+    triplet = re.search(
+        r"(\d+(?:\.\d+)?)\s*(mm|cm|m|in)?\s*[x×]\s*"
+        r"(\d+(?:\.\d+)?)\s*(mm|cm|m|in)?\s*[x×]\s*"
+        r"(\d+(?:\.\d+)?)\s*(mm|cm|m|in)?",
+        text,
+        flags=re.IGNORECASE,
+    )
+    bbox = (metrics or {}).get("bbox_mm", {}) if isinstance(metrics, dict) else {}
+    if triplet and isinstance(bbox, dict) and all(axis in bbox for axis in ("x", "y", "z")):
+        explicit_unit = next(
+            (triplet.group(index).lower() for index in (2, 4, 6) if triplet.group(index)),
+            "mm",
+        )
+        expected = [
+            float(value) * _PROMPT_UNIT_TO_MM[(unit or explicit_unit).lower()]
+            for value, unit in ((triplet.group(1), triplet.group(2)),
+                                (triplet.group(3), triplet.group(4)),
+                                (triplet.group(5), triplet.group(6)))
+        ]
+        actual = [float(bbox[axis]) for axis in ("x", "y", "z")]
+        if any(abs(a - e) > max(0.5, e * 0.08) for a, e in zip(actual, expected)):
+            issues.append({
+                "severity": "high",
+                "feature": "overall dimensions",
+                "issue": f"Measured bounding box {actual} mm does not match requested {expected} mm.",
+            })
+    deduplicated: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for issue in issues:
+        key = (str(issue.get("feature", "")), str(issue.get("issue", "")))
+        if key not in seen:
+            seen.add(key)
+            deduplicated.append(issue)
+    return deduplicated
 
 
 def encode_image_base64(image_path: Path) -> str:
@@ -237,7 +437,23 @@ def _heuristic_fallback_critique(
             "reason": "VLM heuristic identified missing shell hollow feature.",
         })
 
-    score = 9.2 if not discrepancies else max(6.5, 8.8 - len(discrepancies) * 1.2 + round_idx * 0.8)
+    semantic_issues = _semantic_requirement_issues(prompt, current_ir, metrics)
+    known_semantic = bool(re.search(
+        r"(box|block|cube|cylinder|sphere|cone|torus|flange|disc|hole|bore|chamfer|fillet|round|shell|hollow|slot|groove|fin|rib|boss|gear|shaft|dovetail|方块|立方|圆柱|球|圆锥|法兰|孔|倒角|圆角|空心|槽|鳍片|凸台|齿轮|轴|燕尾)",
+        text,
+        flags=re.IGNORECASE,
+    ))
+    for issue in semantic_issues:
+        if not any(item.get("feature") == issue.get("feature") for item in discrepancies):
+            discrepancies.append(issue)
+    if not discrepancies and not known_semantic:
+        discrepancies.append({
+            "severity": "medium",
+            "feature": "semantic coverage",
+            "issue": "No deterministic feature validator recognized the requested object; visual acceptance requires an explicit VLM or clarification.",
+        })
+
+    score = 9.2 if not discrepancies else max(6.0, 8.8 - len(discrepancies) * 1.2 + round_idx * 0.8)
     verdict = "ACCEPT" if score >= 8.8 else "REVISE"
 
     return {
@@ -260,6 +476,7 @@ def call_vlm_critic(
     round_idx: int = 0,
     metrics: dict[str, Any] | None = None,
     patch_history: list[dict[str, Any]] | None = None,
+    repair_reports: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Query a Vision-Language Model to critique the 4-view CAD rendering against the design intent."""
     if not llm_api_url or not llm_api_key:
@@ -325,6 +542,25 @@ def call_vlm_critic(
             f"{json.dumps(patch_history, ensure_ascii=False, indent=2)}\n\n"
         )
 
+    repair_report_text = ""
+    if repair_reports:
+        repair_report_text = (
+            "Typed diagnostics from the previous inspection (repair these first):\n"
+            f"{json.dumps(repair_reports, ensure_ascii=False, indent=2)}\n\n"
+        )
+
+    feature_graph = [
+        {
+            "id": n.get("id"),
+            "operation": n.get("operation"),
+            "inputs": n.get("inputs", []),
+            "parameters": n.get("parameters", {}),
+        }
+        for n in current_ir.get("nodes", [])
+    ]
+    requirement_spec = extract_requirement_spec(prompt)
+    retrieved_recipes = retrieve_feature_recipes(prompt)
+
     user_content: list[dict[str, Any]] = [
         {
             "type": "text",
@@ -333,8 +569,12 @@ def call_vlm_critic(
                 f"Active Round: {round_idx}\n"
                 f"{ground_truth_text}"
                 f"{patch_history_text}"
+                f"{repair_report_text}"
+                f"Requirement Specification: {json.dumps(requirement_spec, ensure_ascii=False)}\n"
+                f"Relevant Feature Recipes: {json.dumps(retrieved_recipes, ensure_ascii=False)}\n"
                 f"Current Parameters: {json.dumps(current_ir.get('parameters', {}))}\n"
                 f"Current Node IDs: {[str(n.get('id', '')) for n in current_ir.get('nodes', [])]}\n"
+                f"Current Feature Graph: {json.dumps(feature_graph, ensure_ascii=False)}\n"
                 f"DFM Violations: {json.dumps(dfm_report.get('violations', []))}\n\n"
                 "Review the 4-view image alongside ground-truth measurements. If any feature is missing or misaligned, produce structured JSON patches to repair the CAD model."
             ),
@@ -380,7 +620,7 @@ def call_vlm_critic(
             parsed.setdefault("summary", "Visual inspection completed.")
             parsed.setdefault("discrepancies", [])
             parsed.setdefault("proposed_patches", [])
-            return parsed
+            return _normalize_critique(parsed)
     except Exception as exc:
         logger.warning(f"VLM Critic request failed, using heuristic critique: {exc}")
         return _heuristic_fallback_critique(prompt, current_ir, round_idx, metrics=metrics, patch_history=patch_history)
@@ -409,6 +649,7 @@ class MultiGateInspector:
         dfm_report: dict[str, Any],
         critique: dict[str, Any],
         model_id: str = "",
+        process_profile: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         gates: list[dict[str, Any]] = []
 
@@ -427,16 +668,10 @@ class MultiGateInspector:
         })
 
         # Gate 2: Dimensional & Feature Intent
-        p_text = prompt.lower()
-        nodes = current_ir.get("nodes", [])
         discrepancies = critique.get("discrepancies", [])
-        has_hole_intent = bool(re.search(r"(hole|through[- ]?hole|bore|通孔|内孔|穿孔|带孔|安装孔|螺栓孔)", p_text))
-        has_cut_op = any("cut" in str(n.get("operation", "")).lower() or "pattern" in str(n.get("operation", "")).lower() for n in nodes)
-        feature_ok = True
-        feature_issues = []
-        if has_hole_intent and not has_cut_op:
-            feature_ok = False
-            feature_issues.append("缺少布尔打孔特征 (Missing hole cut)")
+        semantic_issues = _semantic_requirement_issues(prompt, current_ir, metrics)
+        feature_ok = not semantic_issues
+        feature_issues = [str(item.get("issue", "")) for item in semantic_issues]
 
         high_sev = [d for d in discrepancies if d.get("severity") == "high"]
         if high_sev:
@@ -455,7 +690,7 @@ class MultiGateInspector:
         # Gate 3: Multi-View Visual Fidelity
         score = float(critique.get("score", 0.0))
         verdict = str(critique.get("verdict", "")).upper()
-        gate3_passed = bool(score >= self.target_score or verdict == "ACCEPT")
+        gate3_passed = bool(score >= self.target_score and verdict == "ACCEPT")
         gates.append({
             "id": "gate_visual",
             "name": "四视角视觉重投影复核 (4-View Visual Fidelity)",
@@ -466,14 +701,24 @@ class MultiGateInspector:
 
         # Gate 4: DFM Manufacturability
         violations = dfm_report.get("violations", [])
-        hard_violations = [v for v in violations if v.get("status") == "violated" and v.get("hard", True)]
-        gate4_passed = len(hard_violations) == 0
+        # ``deferred`` hard constraints are unresolved evidence, not a pass.
+        # This keeps an unsupported topology/manufacturing claim from being
+        # accepted merely because the scalar solver could not evaluate it.
+        hard_violations = [
+            v for v in violations
+            if v.get("status") in {"violated", "deferred"} and v.get("hard", True)
+        ]
+        gate4_passed = bool(dfm_report.get("valid", True)) and len(hard_violations) == 0
         gates.append({
             "id": "gate_dfm",
             "name": "制造工艺规范合规性 (DFM Manufacturability)",
             "passed": gate4_passed,
             "status": "PASS" if gate4_passed else "WARNING",
-            "evidence": f"合规无硬性冲突 ({len(violations)} 项名义约束)" if gate4_passed else f"{len(hard_violations)} 项硬性工艺超标",
+            "evidence": (
+                f"合规无硬性冲突 ({len(violations)} 项名义约束)"
+                if gate4_passed
+                else f"{len(hard_violations)} 项硬性工艺超标或约束未解析"
+            ),
         })
 
         # Gate 5: Final Sign-Off & Acceptance
@@ -507,6 +752,73 @@ class MultiGateInspector:
         return certificate
 
 
+def _patch_variants(patches: list[dict[str, Any]], max_candidates: int = 4) -> list[list[dict[str, Any]]]:
+    """Build a small beam of repair plans instead of trusting one patch list."""
+    if not patches:
+        return []
+    variants: list[list[dict[str, Any]]] = [copy.deepcopy(patches)]
+    for patch in patches:
+        if len(variants) >= max_candidates:
+            break
+        singleton = [copy.deepcopy(patch)]
+        if singleton not in variants:
+            variants.append(singleton)
+    return variants
+
+
+def _select_patch_candidate(
+    current_ir: dict[str, Any],
+    patches: list[dict[str, Any]],
+    prompt: str,
+    process_profile: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Apply and cheaply score a few repair branches before committing one."""
+    evaluations: list[dict[str, Any]] = []
+    best: dict[str, Any] | None = None
+    best_rank: tuple[int, int, int, int, int] = (-1, -1, -1, -10_000, -10_000)
+    for index, variant in enumerate(_patch_variants(patches)):
+        evaluation: dict[str, Any] = {
+            "candidate": index,
+            "patch_count": len(variant),
+            "patches": copy.deepcopy(variant),
+        }
+        try:
+            candidate_ir = apply_patches(current_ir, variant)
+            execution = execute_ir(candidate_ir)
+            metrics = shape_metrics(execution["shape"])
+            dfm_report = solve_constraints(candidate_ir, process_profile=process_profile)
+            issues = _semantic_requirement_issues(prompt, candidate_ir, metrics)
+            valid = bool(metrics.get("valid_brep") and metrics.get("solid_count") == 1 and metrics.get("volume_mm3", 0) > 0.1)
+            feature_ok = not any(str(item.get("severity", "high")).lower() == "high" for item in issues)
+            dfm_ok = bool(dfm_report.get("valid", True))
+            high_issue_count = sum(1 for item in issues if str(item.get("severity", "")).lower() == "high")
+            rank = (
+                1 if valid else 0,
+                1 if feature_ok else 0,
+                1 if dfm_ok else 0,
+                -high_issue_count,
+                -len(candidate_ir.get("nodes", [])),
+            )
+            evaluation.update({
+                "status": "valid" if valid else "invalid",
+                "rank": list(rank),
+                "metrics": metrics,
+                "dfm_valid": dfm_ok,
+                "semantic_issues": issues,
+            })
+            if rank > best_rank:
+                best_rank = rank
+                best = {"ir": candidate_ir, "patches": variant, "evaluation": evaluation}
+        except Exception as exc:
+            evaluation.update({
+                "status": "rejected",
+                "error": str(exc)[:500],
+                "rank": list(best_rank),
+            })
+        evaluations.append(evaluation)
+    return best, evaluations
+
+
 def run_agent_modeling_loop(
     initial_ir: dict[str, Any],
     prompt: str,
@@ -515,6 +827,7 @@ def run_agent_modeling_loop(
     llm_api_url: str | None = None,
     llm_api_key: str | None = None,
     llm_model: str | None = None,
+    process_profile: dict[str, Any] | None = None,
     max_rounds: int = 3,
     target_score: float = 9.0,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -528,8 +841,10 @@ def run_agent_modeling_loop(
     best_score = -1.0
     best_round_idx = 0
     best_certificate: dict[str, Any] = {}
+    best_rank = (-1, -1.0, 0)
     all_applied_patches: list[dict[str, Any]] = []
     rounds_history: list[dict[str, Any]] = []
+    repair_reports: list[dict[str, Any]] = []
 
     for round_idx in range(max(1, min(max_rounds, 4))):
         round_dir = artifacts_dir / "rounds" / str(round_idx)
@@ -550,6 +865,12 @@ def run_agent_modeling_loop(
             last_valid_ir = copy.deepcopy(current_ir)
         except Exception as exec_err:
             logger.warning(f"Round {round_idx} execution error: {exec_err}. Rolling back to last valid IR.")
+            repair_reports = [make_repair_report(
+                phase="execute",
+                code="KERNEL_EXECUTION_FAILED",
+                message=str(exec_err),
+                repair_hint="Regenerate the failing operation with registered inputs and parameters.",
+            )]
             current_ir = copy.deepcopy(last_valid_ir)
             execution = execute_ir(current_ir)
             primary_shape = execution["shape"]
@@ -585,7 +906,7 @@ def run_agent_modeling_loop(
         views = renderer.render_stl_multiview(temp_stl, round_dir / "views", metrics=shape_stats)
 
         # 4. Metric & DFM Check
-        dfm_report = solve_constraints(current_ir)
+        dfm_report = solve_constraints(current_ir, process_profile=process_profile)
 
         # 5. VLM Reflection / Critique
         if progress_callback:
@@ -595,7 +916,7 @@ def run_agent_modeling_loop(
                 "message": f"VLM Critic evaluating round {round_idx} visual fidelity...",
             })
 
-        critique = call_vlm_critic(
+        critique = _normalize_critique(call_vlm_critic(
             prompt=prompt,
             composite_image_path=views["composite"],
             current_ir=current_ir,
@@ -606,7 +927,8 @@ def run_agent_modeling_loop(
             round_idx=round_idx,
             metrics=shape_stats,
             patch_history=all_applied_patches,
-        )
+            repair_reports=repair_reports,
+        ))
 
         discrepancies = critique.get("discrepancies", [])
         annotated_view_path = round_dir / "views" / "annotated_composite.png"
@@ -638,7 +960,41 @@ def run_agent_modeling_loop(
             dfm_report=dfm_report,
             critique=critique,
             model_id=artifacts_dir.name,
+            process_profile=process_profile,
         )
+
+        semantic_issues = _semantic_requirement_issues(prompt, current_ir, shape_stats)
+        repair_reports = [make_repair_report(
+            phase="requirements",
+            code=str(item.get("code", "FEATURE_MISSING")),
+            message=str(item.get("issue", "Requirement is not satisfied.")),
+            severity=str(item.get("severity", "high")),
+            evidence=item.get("evidence") if isinstance(item.get("evidence"), dict) else {},
+            repair_hint=item.get("repair_hint"),
+        ) for item in semantic_issues]
+        reported_messages = {str(item.get("message", "")) for item in repair_reports}
+        reported_features = {
+            str(item.get("feature", "")).lower().replace("_", " ").strip()
+            for item in semantic_issues
+        }
+        for discrepancy in discrepancies:
+            if not isinstance(discrepancy, dict):
+                continue
+            message = str(discrepancy.get("issue", "")).strip()
+            feature_key = str(discrepancy.get("feature", "")).lower().replace("_", " ").strip()
+            if not message or message in reported_messages or feature_key in reported_features:
+                continue
+            repair_reports.append(make_repair_report(
+                phase="visual",
+                code="VISUAL_DISCREPANCY",
+                message=message,
+                severity=str(discrepancy.get("severity", "medium")),
+                repair_hint="Use a typed patch for this feature and verify the measured result before acceptance.",
+            ))
+            reported_messages.add(message)
+            reported_features.add(feature_key)
+        if not repair_reports:
+            repair_reports = []
 
         round_record = {
             "round": round_idx,
@@ -649,20 +1005,30 @@ def run_agent_modeling_loop(
             "proposed_patches": critique.get("proposed_patches", []),
             "metrics": shape_stats,
             "certificate": certificate,
+            "requirement_spec": extract_requirement_spec(prompt),
+            "retrieved_feature_recipes": retrieve_feature_recipes(prompt),
+            "repair_reports": copy.deepcopy(repair_reports),
             "views": {k: str(v) for k, v in views.items()},
             "glb_available": temp_glb.exists(),
         }
         rounds_history.append(round_record)
 
         # Track Best-of-N Candidate
-        if score > best_score:
+        high_issue_count = sum(
+            1 for item in discrepancies
+            if isinstance(item, dict) and str(item.get("severity", "")).lower() == "high"
+        )
+        candidate_rank = (1 if certificate.get("passed") else 0, score, -high_issue_count)
+        if candidate_rank > best_rank:
+            best_rank = candidate_rank
             best_score = score
             best_round_idx = round_idx
             best_ir = copy.deepcopy(current_ir)
             best_certificate = certificate
 
-        # 7. Convergence Evaluation: requires visual score AND acceptance certificate pass
-        if (score >= target_score or critique.get("verdict") == "ACCEPT" or certificate["passed"]) or round_idx == max_rounds - 1:
+        # 7. Convergence requires every independent gate to pass. A high VLM
+        # score alone is never enough for an autonomous CAD acceptance.
+        if (certificate["passed"] and score >= target_score and critique.get("verdict") == "ACCEPT") or round_idx == max_rounds - 1:
             break
 
         # 8. Apply Patches
@@ -679,18 +1045,42 @@ def run_agent_modeling_loop(
             })
 
         try:
-            patched_ir = apply_patches(current_ir, patches)
-            current_ir = patched_ir
-            all_applied_patches.extend(patches)
+            selected_candidate, candidate_evaluations = _select_patch_candidate(
+                current_ir,
+                patches,
+                prompt,
+                process_profile,
+            )
+            round_record["candidate_evaluations"] = candidate_evaluations
+            if selected_candidate is None:
+                repair_reports.append(make_repair_report(
+                    phase="repair",
+                    code="NO_VALID_REPAIR_CANDIDATE",
+                    message="All proposed repair branches failed plan or kernel validation.",
+                    repair_hint="Generate a new feature plan or retrieve a different feature fragment.",
+                ))
+                break
+            current_ir = selected_candidate["ir"]
+            all_applied_patches.extend(selected_candidate["patches"])
         except Exception as patch_err:
             logger.warning(f"Failed to apply proposed patches: {patch_err}")
+            repair_reports.append(make_repair_report(
+                phase="repair",
+                code="REPAIR_APPLICATION_FAILED",
+                message=str(patch_err),
+                repair_hint="Emit a smaller typed patch that targets existing nodes.",
+            ))
             break
 
     # Tag best round in history
     for r in rounds_history:
         r["is_best"] = (r["round"] == best_round_idx)
 
-    converged = bool(rounds_history and best_score >= target_score)
+    converged = bool(
+        rounds_history
+        and best_score >= target_score
+        and best_certificate.get("passed") is True
+    )
     final_score = best_score if best_score >= 0 else 8.5
     final_cert = best_certificate or (rounds_history[-1].get("certificate", {}) if rounds_history else {})
 

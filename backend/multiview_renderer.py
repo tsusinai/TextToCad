@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+import re
+import struct
 from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -50,6 +52,46 @@ SEVERITY_PALETTE: dict[str, dict[str, Any]] = {
         "priority": 2,
     },
 }
+
+
+def _load_stl_triangles(stl_path: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load binary or ASCII STL without requiring trimesh.
+
+    The Agent renderer is part of the acceptance loop, so a missing optional
+    mesh convenience package must not turn a valid CadQuery export into a
+    failed modeling run.
+    """
+    data = Path(stl_path).read_bytes()
+    if len(data) >= 84:
+        triangle_count = struct.unpack_from("<I", data, 80)[0]
+        record_size = 50
+        if 0 < triangle_count <= 10_000_000 and 84 + record_size * triangle_count <= len(data):
+            record_dtype = np.dtype([
+                ("normal", "<f4", (3,)),
+                ("vertices", "<f4", (3, 3)),
+                ("attribute", "<u2"),
+            ])
+            records = np.frombuffer(
+                data,
+                dtype=record_dtype,
+                count=triangle_count,
+                offset=84,
+            )
+            vertices = np.asarray(records["vertices"], dtype=float).reshape(-1, 3)
+            faces = np.arange(len(vertices), dtype=np.int64).reshape(-1, 3)
+            return vertices, faces
+
+    text = data.decode("utf-8", errors="ignore")
+    matches = re.findall(
+        r"\bvertex\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if len(matches) >= 3 and len(matches) % 3 == 0:
+        vertices = np.asarray([[float(x), float(y), float(z)] for x, y, z in matches], dtype=float)
+        faces = np.arange(len(vertices), dtype=np.int64).reshape(-1, 3)
+        return vertices, faces
+    raise ValueError(f"Could not load valid binary or ASCII STL from {stl_path}")
 
 
 def _get_font(size: int = 12, bold: bool = False) -> ImageFont.ImageFont | None:
@@ -297,16 +339,8 @@ class HeadlessCADRenderer:
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-        import trimesh
 
-        mesh = trimesh.load(stl_path)
-        if isinstance(mesh, trimesh.Scene):
-            mesh = mesh.dump(concatenate=True)
-        if hasattr(mesh, "vertices") and len(mesh.vertices) > 0:
-            verts = np.array(mesh.vertices)
-            faces = np.array(mesh.faces)
-        else:
-            raise ValueError(f"Could not load valid mesh from {stl_path}")
+        verts, faces = _load_stl_triangles(stl_path)
 
         tri_verts = verts[faces]
         all_v = tri_verts.reshape(-1, 3)
