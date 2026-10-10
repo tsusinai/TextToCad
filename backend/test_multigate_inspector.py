@@ -10,7 +10,10 @@ def test_multigate_inspector_pass_all_gates():
             {"id": "base", "operation": "cylinder"},
             {"id": "bore", "operation": "cylinder"},
             {"id": "cutter_0", "operation": "cylinder"},
-            {"id": "cut_holes", "operation": "cut", "inputs": ["base", "bore", "cutter_0"]}
+            {"id": "cutter_1", "operation": "cylinder"},
+            {"id": "cutter_2", "operation": "cylinder"},
+            {"id": "cutter_3", "operation": "cylinder"},
+            {"id": "cut_holes", "operation": "cut", "inputs": ["base", "bore", "cutter_0", "cutter_1", "cutter_2", "cutter_3"]}
         ],
         "outputs": [{"id": "primary", "node": "cut_holes"}]
     }

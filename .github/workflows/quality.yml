@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install lightweight test dependencies
-        run: python -m pip install --upgrade pytest fastapi pydantic
+        run: python -m pip install --upgrade pytest fastapi pydantic numpy pillow
       - name: Run text-to-CAD contract tests
         run: pytest -q backend/test_quality.py
 

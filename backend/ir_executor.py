@@ -14,6 +14,11 @@ from typing import Any
 logger = logging.getLogger("ir_executor")
 
 try:
+    from .feature_metrics import measure_occt_features
+except ImportError:  # pragma: no cover - direct backend module execution
+    from feature_metrics import measure_occt_features
+
+try:
     import cadquery as cq
 except ImportError as exc:  # pragma: no cover
     cq = None
@@ -799,7 +804,7 @@ def shape_metrics(shape: Any) -> dict[str, Any]:
         raise IRExecutionError("CadQuery is unavailable")
     solid = shape.val()
     bbox = solid.BoundingBox()
-    return {
+    metrics = {
         "volume_mm3": round(float(solid.Volume()), 6),
         "bbox_mm": {
             "x": round(float(bbox.xlen), 6),
@@ -810,3 +815,8 @@ def shape_metrics(shape: Any) -> dict[str, Any]:
         "face_count": len(solid.Faces()),
         "valid_brep": bool(solid.isValid()),
     }
+    # Functional feature checks must read the final B-Rep, not only the IR
+    # operation names.  The measurement helper is conservative and returns a
+    # capability/error record when OCCT adaptors are unavailable.
+    metrics["feature_metrics"] = measure_occt_features(shape)
+    return metrics

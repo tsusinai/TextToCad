@@ -105,12 +105,25 @@ def solve_constraints(
             deferred += 1
             add(constraint, "deferred", f"constraint type '{kind}' requires geometry validation")
 
-    hard_violations = [item for item in violations if item["severity"] == "error" and item["status"] == "violated"]
+    # A hard constraint that the scalar solver cannot evaluate is unresolved,
+    # not satisfied. Treating deferred hard constraints as valid allowed an
+    # LLM to claim symmetry/topology/manufacturing guarantees without any
+    # corresponding kernel measurement.
+    hard_violations = [
+        item
+        for item in violations
+        if item["severity"] == "error" and item["status"] in {"violated", "deferred"}
+    ]
+    unresolved_hard_count = sum(
+        1 for item in hard_violations if item["status"] == "deferred"
+    )
     return {
         "valid": not hard_violations,
         "evaluated": evaluated,
         "deferred": deferred,
         "hard_violation_count": len(hard_violations),
+        "unresolved_hard_count": unresolved_hard_count,
         "violations": violations,
         "parameters": resolved,
+        "process_profile": process_profile or {},
     }

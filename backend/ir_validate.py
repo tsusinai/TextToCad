@@ -14,8 +14,10 @@ from pydantic import ValidationError
 
 try:
     from .ir_schema import CADIRDocument, IR_ID_PATTERN
+    from .ir_registry import ALLOWED_OPERATIONS, validate_operation_node
 except ImportError:  # pragma: no cover - direct backend module execution
     from ir_schema import CADIRDocument, IR_ID_PATTERN
+    from ir_registry import ALLOWED_OPERATIONS, validate_operation_node
 
 
 class IRValidationError(ValueError):
@@ -25,20 +27,8 @@ class IRValidationError(ValueError):
         super().__init__(message or "invalid Semantic CAD IR")
 
 
-# This is a compatibility superset for the v0.1 planner and the v0.2
-# executor. New operations must be registered here before they can reach a
-# kernel adapter.
-ALLOWED_OPERATIONS = {
-    "box", "cylinder", "sphere", "cone", "torus", "polygon_prism", "regular_polygon", "profile",
-    "sketch", "component",
-    "rounded_box", "l_profile_extrusion", "airframe_fusion",
-    "extrude", "revolve", "sweep", "loft", "shell",
-    "union", "cut", "intersect", "translate", "rotate", "align", "mirror",
-    "linear_pattern", "polar_pattern", "fillet", "chamfer",
-    "cut_inner_volume", "cut_inner_cylinder", "cut_relief", "cut_cylinders",
-    "cut_recess", "union_l_legs", "fuse_fuselage_wings_tail",
-    "check_single_solid", "clearance_check", "single_solid_check",
-}
+# The registry is the compatibility superset for the v0.1 planner and v0.2
+# executor. New operations must be registered before the planner can emit them.
 ALLOWED_KINDS = {
     "primitive", "feature", "sketch", "component", "operation", "inspection",
     "profile", "shell", "cut", "pattern", "edge", "divider", "union",
@@ -159,13 +149,19 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
     known_datums = set(datum_ids)
     known_parameters = set(parameter_ids)
     adjacency: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
-    def validate_selector(selector: Any, path: str) -> None:
+    def validate_selector(selector: Any, path: str, input_ids: list[str] | None = None) -> None:
         if not isinstance(selector, dict):
             issues.append(_issue("selector_type", "selector must be an object", path))
             return
         entity = selector.get("entity")
         if not isinstance(entity, str) or entity not in known_nodes:
             issues.append(_issue("selector_entity", "selector entity must reference an existing node", f"{path}.entity"))
+        elif input_ids is not None and entity not in input_ids:
+            issues.append(_issue(
+                "selector_input",
+                "selector entity must be one of the operation inputs",
+                f"{path}.entity",
+            ))
         topology = selector.get("topology", "face")
         if topology not in {"solid", "shell", "face", "edge", "vertex"}:
             issues.append(_issue("selector_topology", f"topology '{topology}' is not registered", f"{path}.topology"))
@@ -186,6 +182,8 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
             issues.append(_issue("kind_not_allowed", f"node kind '{node.kind}' is not registered", f"{path}.kind"))
         if node.operation not in ALLOWED_OPERATIONS:
             issues.append(_issue("operation_not_allowed", f"operation '{node.operation}' is not registered", f"{path}.operation"))
+        else:
+            issues.extend(validate_operation_node(node.model_dump(mode="json"), path))
         _validate_geometry_parameters(node, path, issues)
         for input_index, reference in enumerate(node.inputs):
             if reference not in known_nodes:
@@ -196,9 +194,9 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
             issues.append(_issue("missing_datum", f"frame '{node.frame}' does not exist", f"{path}.frame"))
         for name, value in node.parameters.items():
             if name in {"selector", "face_selector", "edge_selector"}:
-                validate_selector(value, f"{path}.parameters.{name}")
+                validate_selector(value, f"{path}.parameters.{name}", node.inputs)
             if isinstance(value, dict) and "selector" in value:
-                validate_selector(value["selector"], f"{path}.parameters.{name}.selector")
+                validate_selector(value["selector"], f"{path}.parameters.{name}.selector", node.inputs)
             if name == "expression" and isinstance(value, str):
                 if not EXPRESSION_RE.fullmatch(value.strip()):
                     issues.append(_issue("unsafe_expression", "parameter expression contains unsupported syntax", f"{path}.parameters.{name}"))
