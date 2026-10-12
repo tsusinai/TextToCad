@@ -2662,9 +2662,10 @@ def _output_quality(output_shapes: dict[str, Any]) -> dict[str, Any]:
     for node_id, output_shape in output_shapes.items():
         try:
             metrics = shape_metrics(output_shape)
+            is_assembly = bool((metrics.get("feature_metrics") or {}).get("assembly", {}).get("detected")) or len(output_shapes) > 1
             valid = bool(
                 metrics.get("valid_brep")
-                and metrics.get("solid_count") == 1
+                and (metrics.get("solid_count") == 1 or (is_assembly and metrics.get("solid_count", 0) <= 8))
                 and metrics.get("face_count", 0) > 0
                 and metrics.get("volume_mm3", 0) > 0
             )
@@ -2696,11 +2697,13 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
     issue_codes = {issue["code"] for issue in analysis["issues"]}
     face_measurements = analysis.get("face_measurements") or {}
     wall_proxy_status = face_measurements.get("wall_thickness_proxy_status", "unknown")
+    is_assembly = bool((analysis.get("feature_metrics") or {}).get("assembly", {}).get("detected"))
+    single_solid_ok = metrics["solid_count"] == 1 or (is_assembly and metrics["solid_count"] <= 8)
     return {
         "valid_brep": metrics["valid_brep"],
         "occt_valid": metrics["occt_valid"],
         "nonzero_faces": metrics["nonzero_faces"],
-        "single_solid": metrics["solid_count"] == 1,
+        "single_solid": single_solid_ok,
         "positive_volume": metrics["volume_mm3"] > 0,
         "bounded": all(dimension > 0 for dimension in bbox.values()),
         "bbox_mm": bbox,

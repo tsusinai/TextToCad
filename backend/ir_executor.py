@@ -583,8 +583,9 @@ def _apply_mount(
 
     align = str(mount.get("align") or "center").strip().lower()
 
+    overlap = float(mount.get("overlap", 0.0))
     if canonical_face == ">Z":
-        dz = host_bb.zmax - child_bb.zmin
+        dz = (host_bb.zmax - child_bb.zmin) - overlap
         if align == "flush":
             dx = host_bb.xmin - child_bb.xmin
             dy = host_bb.ymin - child_bb.ymin
@@ -593,7 +594,7 @@ def _apply_mount(
             dy = host_bb.ymid - child_bb.ymid
 
     elif canonical_face == "<Z":
-        dz = host_bb.zmin - child_bb.zmax
+        dz = (host_bb.zmin - child_bb.zmax) + overlap
         if align == "flush":
             dx = host_bb.xmin - child_bb.xmin
             dy = host_bb.ymin - child_bb.ymin
@@ -602,7 +603,7 @@ def _apply_mount(
             dy = host_bb.ymid - child_bb.ymid
 
     elif canonical_face == ">Y":
-        dy = host_bb.ymax - child_bb.ymin
+        dy = (host_bb.ymax - child_bb.ymin) - overlap
         if align == "flush":
             dx = host_bb.xmin - child_bb.xmin
             dz = host_bb.zmin - child_bb.zmin
@@ -611,7 +612,7 @@ def _apply_mount(
             dz = host_bb.zmid - child_bb.zmid
 
     elif canonical_face == "<Y":
-        dy = host_bb.ymin - child_bb.ymax
+        dy = (host_bb.ymin - child_bb.ymax) + overlap
         if align == "flush":
             dx = host_bb.xmin - child_bb.xmin
             dz = host_bb.zmin - child_bb.zmin
@@ -620,7 +621,7 @@ def _apply_mount(
             dz = host_bb.zmid - child_bb.zmid
 
     elif canonical_face == ">X":
-        dx = host_bb.xmax - child_bb.xmin
+        dx = (host_bb.xmax - child_bb.xmin) - overlap
         if align == "flush":
             dy = host_bb.ymin - child_bb.ymin
             dz = host_bb.zmin - child_bb.zmin
@@ -629,7 +630,7 @@ def _apply_mount(
             dz = host_bb.zmid - child_bb.zmid
 
     elif canonical_face == "<X":
-        dx = host_bb.xmin - child_bb.xmax
+        dx = (host_bb.xmin - child_bb.xmax) + overlap
         if align == "flush":
             dy = host_bb.ymin - child_bb.ymin
             dz = host_bb.zmin - child_bb.zmin
