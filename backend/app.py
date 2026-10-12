@@ -1186,19 +1186,20 @@ def _normalize_ir_draft(
     if isinstance(raw_constraints, list):
         valid_constraints = []
         node_id_set = {str(n.get("id")) for n in nodes if isinstance(n, dict) and n.get("id")}
+        param_set = set(normalized_parameters.keys())
         for index, raw_c in enumerate(raw_constraints):
             if not isinstance(raw_c, dict):
                 continue
             c = copy.deepcopy(raw_c)
             param_name = c.get("parameter")
-            if param_name and str(param_name) in parameters:
+            if param_name and str(param_name) in param_set:
                 valid_constraints.append(c)
             elif param_name and str(param_name) in node_id_set:
                 c["target"] = str(param_name)
                 c.pop("parameter", None)
                 c["type"] = "geometric"
                 valid_constraints.append(c)
-            elif c.get("target") and str(c.get("target")) in parameters:
+            elif c.get("target") and str(c.get("target")) in param_set:
                 c["parameter"] = str(c["target"])
                 valid_constraints.append(c)
             elif c.get("target") and str(c.get("target")) in node_id_set:
