@@ -119,6 +119,8 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 | GET | /v1/models/{id}/ir | Semantic CAD IR |
 | GET | /v1/models/{id}/analysis | 壁厚采样和制造问题 |
 | GET | /v1/models/{id}/download?format=step | 下载 STEP、STL、3MF 或 GLB |
+| GET | /v1/models/{id}/rounds/{round_idx}/views/{view_name} | 查看 Agent 模式各轮次多视向渲染图 (iso, top, front, right, composite, annotated_composite) |
+| GET | /v1/models/{id}/rounds/{round_idx}/model.glb | 查看 Agent 模式各轮次中间 CAD 3D GLB 实体 |
 | POST | /v1/ir/plan | 自然语言编译为通用 v0.2 IR 草案 |
 | POST | /v1/ir/validate | 静态校验 IR 语法、DAG、原语和约束 |
 | POST | /v1/ir/compile | 内存直接编译执行通用 IR |
@@ -149,6 +151,21 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
   "generation_strategy": "ir"
 }
 ~~~
+
+## Agent 智能视觉自反思返工模式与多关卡独立工程验收
+
+系统在标准与高级模式之上，集成了面向复杂工业几何体的 **Agent 智能建模模式 (`mode: "agent"`)**，实现端到端闭环自愈建模：
+
+1. **无头多视向正交投影渲染 (`multiview_renderer.py`)**：每个迭代轮次完成后，后端自动光栅化输出等轴测 (ISO)、俯视 (TOP)、主视 (FRONT)、右视 (RIGHT) 4 个标准工程视向，并拼装为 1024×1024 紧凑联排巡检大图，支持红线缺陷高亮标注。
+2. **确定性几何测度与特征图配方检索 (`feature_catalog.py` & `feature_metrics.py`)**：通过本地稀疏 TF-IDF 向量匹配工程结构配方（均布孔群、阶梯传动轴、散热片阵列、燕尾槽等），并通过 OCCT 适配器直测包络尺寸、零件体积、表面数与水密流形状态，作为确定事实基准注入评审 Prompt。
+3. **多模态 VLM / 启发式视觉评审与靶向修补 (`agent_loop.py` & `ir_repair.py`)**：VLM 评审官对照设计意图与投影联排图识别空间拓扑缺陷，生成受限 Patch（支持 `add_hole_pattern`、`scale_parameter`、`add_chamfer`、`add_fillet`、`shell_hollow` 等高阶工程原语），并建立补丁记忆账本防止重复震荡。
+4. **Best-of-N 最优候选保护与防退化回退**：迭代过程中全局追踪历史最高分轮次作为主交付物（`final_ir`），即使后续轮次出现几何退化也能自动回退至历史最优模型。
+5. **五重独立多关卡工程验收核准体系 (`MultiGateInspector`)**：每一轮次严格执行 5 重硬性门禁（拓扑流形与几何水密性、关键特征与设计意图约束、四视角视觉重投影复核、制造工艺规范合规性、主任检验官综合终审签署），全通后自动签发带 SHA-256 数字指纹的正式《工业工程质量验收合格证》。
+6. **专业工作台级 UI 重构与交互革新 (`index.html`)**：
+   - 3D CAD 主视口置顶聚焦，配备纯净中性工作室布光与对数深度缓冲，消除距离雾化偏色；
+   - 视口下方配备可一键收拢/展开的抽屉式 Agent 演化工作台，支持历史轮次 3D 模型动态回溯、Clean/Annotated 批注切换与高分辨率灯箱；
+   - 左侧栏整合制造工艺、尺寸基准单位与生成引擎配置，并以工整的双行结构化卡片排版呈现本地版本历史；
+   - CAD 特征构建树改造为独立抽屉框，默认保持折叠，支持一键展开审计。
 
 ## 为什么采用混合架构
 
