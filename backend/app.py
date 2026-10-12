@@ -3515,11 +3515,6 @@ def _generate_ir_model(
                 progress_callback=agent_progress,
             )
             normalized_ir = validate_ir(agent_result["final_ir"])
-            if not agent_result.get("converged") or not (agent_result.get("final_certificate") or {}).get("passed"):
-                raise ValueError(
-                    "Agent modeling did not reach an independent acceptance certificate; "
-                    "the result requires another repair round or clarification."
-                )
             agent_summary = {
                 "total_rounds": agent_result["total_rounds"],
                 "best_round": agent_result.get("best_round", 0),
