@@ -1182,6 +1182,30 @@ def _normalize_ir_draft(
         datums.append({"id": frame_id, "type": "plane", "origin": [0, 0, 0], "normal": [0, 0, 1]})
     candidate["datums"] = datums
 
+    raw_constraints = candidate.get("constraints")
+    if isinstance(raw_constraints, list):
+        valid_constraints = []
+        node_id_set = {str(n.get("id")) for n in nodes if isinstance(n, dict) and n.get("id")}
+        for index, raw_c in enumerate(raw_constraints):
+            if not isinstance(raw_c, dict):
+                continue
+            c = copy.deepcopy(raw_c)
+            param_name = c.get("parameter")
+            if param_name and str(param_name) in parameters:
+                valid_constraints.append(c)
+            elif param_name and str(param_name) in node_id_set:
+                c["target"] = str(param_name)
+                c.pop("parameter", None)
+                c["type"] = "geometric"
+                valid_constraints.append(c)
+            elif c.get("target") and str(c.get("target")) in parameters:
+                c["parameter"] = str(c["target"])
+                valid_constraints.append(c)
+            elif c.get("target") and str(c.get("target")) in node_id_set:
+                c["type"] = "geometric"
+                valid_constraints.append(c)
+        candidate["constraints"] = valid_constraints
+
     outputs = candidate.get("outputs")
     if not isinstance(outputs, list):
         outputs = []

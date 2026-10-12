@@ -5367,6 +5367,17 @@
         }
       }
     }
+    function formatDetailError(payload, defaultMsg) {
+      if (!payload) return defaultMsg || '';
+      const d = payload.detail || payload.error || payload;
+      if (typeof d === 'string') return d;
+      if (Array.isArray(d)) return d.map(x => typeof x === 'string' ? x : (x.message || x.msg || JSON.stringify(x))).join('; ');
+      if (d && Array.isArray(d.issues)) return d.issues.map(x => x.message || x.code || JSON.stringify(x)).join('; ');
+      if (d && d.message) return d.message;
+      if (d && d.detail) return typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail);
+      return JSON.stringify(d);
+    }
+
     async function requestBackend(value, process, signal, onProgress) {
       if (!backendUrl) return null;
       const activeProcess = process || selectedProcess;
@@ -5389,19 +5400,15 @@
       if (jobResponse.status === 404) {
         const response = await backendFetch(backendUrl + '/v1/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          const detail = payload && payload.detail
-            ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
-            : '';
+          const errPayload = await response.json().catch(() => ({}));
+          const detail = formatDetailError(errPayload);
           throw new Error('geometry backend returned ' + response.status + (detail ? ': ' + detail : ''));
         }
         return response.json();
       }
       if (!jobResponse.ok) {
-        const payload = await jobResponse.json().catch(() => ({}));
-        const detail = payload && payload.detail
-          ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
-          : '';
+        const errPayload = await jobResponse.json().catch(() => ({}));
+        const detail = formatDetailError(errPayload);
         throw new Error('geometry job endpoint returned ' + jobResponse.status + (detail ? ': ' + detail : ''));
       }
       const job = await jobResponse.json();
@@ -5413,10 +5420,8 @@
         while (true) {
           const statusResponse = await backendFetch(backendUrl + '/v1/jobs/' + jobId, { signal });
           if (!statusResponse.ok) {
-            const payload = await statusResponse.json().catch(() => ({}));
-            const detail = payload && payload.detail
-              ? (typeof payload.detail === 'string' ? payload.detail : (payload.detail.message || payload.detail.code || JSON.stringify(payload.detail)))
-              : '';
+            const errPayload = await statusResponse.json().catch(() => ({}));
+            const detail = formatDetailError(errPayload);
             throw new Error('geometry job status returned ' + statusResponse.status + (detail ? ': ' + detail : ''));
           }
           const status = await statusResponse.json();
@@ -5424,15 +5429,7 @@
           if (status.status === 'succeeded') return status.result;
           if (status.status === 'cancelled') throw Object.assign(new Error('job cancelled'), { name: 'AbortError' });
           if (status.status === 'failed') {
-            const err = status.error;
-            let msg = 'geometry job failed';
-            if (err) {
-              if (typeof err.detail === 'string') msg = err.detail;
-              else if (err.detail && typeof err.detail.message === 'string') msg = err.detail.message;
-              else if (typeof err.message === 'string') msg = err.message;
-              else if (typeof err === 'string') msg = err;
-              else msg = JSON.stringify(err.detail || err);
-            }
+            const msg = formatDetailError(status.error, 'geometry job failed');
             throw new Error(msg);
           }
           await waitWithSignal(350, signal);
