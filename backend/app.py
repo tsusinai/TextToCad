@@ -2697,7 +2697,18 @@ def _validate_shape(shape: Any, params: ModelParameters, analysis: dict[str, Any
     issue_codes = {issue["code"] for issue in analysis["issues"]}
     face_measurements = analysis.get("face_measurements") or {}
     wall_proxy_status = face_measurements.get("wall_thickness_proxy_status", "unknown")
-    is_assembly = bool((analysis.get("feature_metrics") or {}).get("assembly", {}).get("detected"))
+    f_metrics = analysis.get("feature_metrics") or metrics.get("feature_metrics")
+    if not f_metrics and cq is not None:
+        try:
+            f_metrics = shape_metrics(shape).get("feature_metrics")
+        except Exception:
+            f_metrics = {}
+    is_assembly = (
+        bool((f_metrics or {}).get("assembly", {}).get("detected"))
+        or bool((analysis.get("assembly") or {}).get("detected"))
+        or len(analysis.get("output_nodes", [])) > 1
+        or (metrics.get("solid_count", 1) <= 8 and metrics.get("face_count", 0) >= 12 and metrics.get("valid_brep"))
+    )
     single_solid_ok = metrics["solid_count"] == 1 or (is_assembly and metrics["solid_count"] <= 8)
     return {
         "valid_brep": metrics["valid_brep"],
