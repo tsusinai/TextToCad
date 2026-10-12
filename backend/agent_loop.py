@@ -47,6 +47,7 @@ _ALLOWED_CRITIQUE_PATCHES = {
     "set_parameter", "scale_parameter", "replace_node_parameter",
     "add_node", "replace_node", "add_hole_pattern", "add_chamfer",
     "add_fillet", "shell_hollow", "remove_node",
+    "mount_component", "orient_component", "scale_component",
 }
 _PROMPT_UNIT_TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}
 
@@ -437,9 +438,132 @@ def _heuristic_fallback_critique(
             "reason": "VLM heuristic identified missing shell hollow feature.",
         })
 
+    # 4. Check for assembly intent (e.g. tank/vehicle with turret/barrel/wheels)
+    assembly_keywords = (
+        r"tank|vehicle|car|truck|rover|robot|assembly|chassis|turret|barrel|"
+        r"坦克|战车|装甲车|车辆|车体|炮塔|炮管|底盘|装配体"
+    )
+    is_assembly = bool(re.search(assembly_keywords, text)) or any(
+        any(k in str(n.get("id", "")).lower() for k in ("turret", "barrel", "hull", "chassis", "wheel", "炮塔", "炮管", "车体"))
+        for n in nodes
+    )
+    if is_assembly:
+        # Check barrel orientation: if vertical (axis=[0,0,1] or no rotation), suggest orient_component: axis='x', degrees=90
+        barrel_node = next(
+            (n for n in nodes if any(k in str(n.get("id", "")).lower() for k in ("barrel", "cannon", "gun", "炮管"))),
+            None,
+        )
+        if barrel_node:
+            rot = (
+                barrel_node.get("rotation")
+                or barrel_node.get("orientation")
+                or (barrel_node.get("parameters") or {}).get("rotation")
+                or (barrel_node.get("parameters") or {}).get("orientation")
+            )
+            is_vertical = False
+            if not rot:
+                is_vertical = True
+            elif isinstance(rot, dict):
+                axis = rot.get("axis")
+                if isinstance(axis, str):
+                    axis = axis.strip().lower()
+                degrees = float(rot.get("degrees", rot.get("angle", 0.0)))
+                if degrees == 0:
+                    is_vertical = True
+                elif axis in ("z", "+z", "-z", [0, 0, 1], [0, 0, -1], (0, 0, 1), (0, 0, -1)):
+                    is_vertical = True
+                elif axis in ("x", "+x", "-x", "y", "+y", "-y") and degrees % 360 == 0:
+                    is_vertical = True
+
+            already_oriented = patch_history and any(
+                p.get("op") == "orient_component" and p.get("node") == barrel_node["id"]
+                for p in patch_history
+            )
+            if is_vertical and not already_oriented:
+                discrepancies.append({
+                    "severity": "high",
+                    "feature": "barrel_orientation",
+                    "issue": f"Barrel '{barrel_node['id']}' is oriented vertically (axis=[0,0,1] or no rotation); expected horizontal orientation.",
+                })
+                patches.append({
+                    "op": "orient_component",
+                    "node": barrel_node["id"],
+                    "axis": "x",
+                    "degrees": 90,
+                    "reason": "VLM heuristic identified vertical barrel; rotating around X by 90 degrees to point forward horizontally.",
+                })
+
+        # Check turret placement: if turret is buried or at low Z while hull is tall, suggest mount_component: target='hull', face='>Z'
+        turret_node = next(
+            (n for n in nodes if any(k in str(n.get("id", "")).lower() for k in ("turret", "tower", "炮塔"))),
+            None,
+        )
+        if turret_node:
+            hull_node = next(
+                (n for n in nodes if any(k in str(n.get("id", "")).lower() for k in ("hull", "chassis", "body", "base", "车体", "底盘"))),
+                None,
+            )
+            target_id = "hull" if any(str(n.get("id", "")).lower() == "hull" for n in nodes) else (hull_node["id"] if hull_node else "hull")
+
+            hull_height = 20.0
+            if hull_node:
+                h_params = hull_node.get("parameters") or {}
+                if "height" in h_params:
+                    try:
+                        hull_height = float(h_params["height"])
+                    except (ValueError, TypeError):
+                        pass
+                elif "size" in h_params and isinstance(h_params["size"], (list, tuple)) and len(h_params["size"]) >= 3:
+                    try:
+                        hull_height = float(h_params["size"][2])
+                    except (ValueError, TypeError):
+                        pass
+
+            turret_params = turret_node.get("parameters") or {}
+            pos = turret_params.get("position") or turret_params.get("origin") or [0, 0, 0]
+            if isinstance(pos, (list, tuple)) and len(pos) >= 3:
+                try:
+                    turret_z = float(pos[2])
+                except (ValueError, TypeError):
+                    turret_z = 0.0
+            elif isinstance(pos, dict):
+                try:
+                    turret_z = float(pos.get("z", 0.0))
+                except (ValueError, TypeError):
+                    turret_z = 0.0
+            else:
+                try:
+                    turret_z = float(turret_params.get("z", 0.0))
+                except (ValueError, TypeError):
+                    turret_z = 0.0
+
+            mount = turret_node.get("mount") or turret_params.get("mount")
+            is_mounted_z = bool(isinstance(mount, dict) and mount.get("face") == ">Z")
+
+            is_buried = not is_mounted_z and (turret_z < hull_height or turret_z <= 5.0)
+            already_mounted = patch_history and any(
+                p.get("op") == "mount_component" and p.get("node") == turret_node["id"]
+                for p in patch_history
+            )
+            if is_buried and not already_mounted:
+                discrepancies.append({
+                    "severity": "high",
+                    "feature": "turret_placement",
+                    "issue": f"Turret '{turret_node['id']}' is buried or at low Z (z={turret_z}mm) while hull '{target_id}' is tall ({hull_height}mm).",
+                })
+                patches.append({
+                    "op": "mount_component",
+                    "node": turret_node["id"],
+                    "target": target_id,
+                    "face": ">Z",
+                    "align": "center",
+                    "offset": [0.0, 0.0, 0.0],
+                    "reason": f"VLM heuristic identified buried turret; mounting onto '{target_id}' face '>Z'.",
+                })
+
     semantic_issues = _semantic_requirement_issues(prompt, current_ir, metrics)
     known_semantic = bool(re.search(
-        r"(box|block|cube|cylinder|sphere|cone|torus|flange|disc|hole|bore|chamfer|fillet|round|shell|hollow|slot|groove|fin|rib|boss|gear|shaft|dovetail|方块|立方|圆柱|球|圆锥|法兰|孔|倒角|圆角|空心|槽|鳍片|凸台|齿轮|轴|燕尾)",
+        r"(box|block|cube|cylinder|sphere|cone|torus|flange|disc|hole|bore|chamfer|fillet|round|shell|hollow|slot|groove|fin|rib|boss|gear|shaft|dovetail|tank|vehicle|car|truck|assembly|方块|立方|圆柱|球|圆锥|法兰|孔|倒角|圆角|空心|槽|鳍片|凸台|齿轮|轴|燕尾|坦克|战车|车辆|装配体)",
         text,
         flags=re.IGNORECASE,
     ))
@@ -509,10 +633,16 @@ def call_vlm_critic(
         '    {"op": "add_chamfer", "target_node": "<node_id>", "distance": <float>},\n'
         '    {"op": "add_fillet", "target_node": "<node_id>", "radius": <float>},\n'
         '    {"op": "shell_hollow", "target_node": "<node_id>", "thickness": <float>, "open_face": ">Z"},\n'
+        '    {"op": "mount_component", "node": "<child_node_id>", "target": "<host_node_id>", "face": ">Z|>Y|<Y|>X|<X", "align": "center", "offset": [dx, dy, dz]},\n'
+        '    {"op": "orient_component", "node": "<node_id>", "axis": "x|y|z", "degrees": 90},\n'
+        '    {"op": "scale_component", "node": "<node_id>", "factor": <float>},\n'
         '    {"op": "add_node", "node": {"id": "...", "kind": "feature", "operation": "cut|union|chamfer|...", "inputs": ["..."], "parameters": {...}}}\n'
         "  ]\n"
         "}\n"
         "Supported High-Level Patch Operations Guide:\n"
+        "- 'mount_component': mounts a buried, floating, or misplaced component directly onto a face of a host component (e.g. mount turret onto hull face '>Z', mount barrel onto turret face '>Y').\n"
+        "- 'orient_component': rotates a misaligned component (e.g. rotating a vertical barrel around X by 90 degrees to point forward horizontally).\n"
+        "- 'scale_component': multiplies the dimensions of an individual component node by factor (e.g. factor 0.5 halves dimensions).\n"
         "- 'scale_parameter': scales an existing parameter value by factor (e.g. factor 1.25 enlarges by 25%, factor 0.8 shrinks).\n"
         "- 'add_hole_pattern': expands into polar array cut nodes: generating count cutter cylinders placed at (circle_radius * cos(theta), circle_radius * sin(theta)) and subtracting them from target_node.\n"
         "- 'add_chamfer' / 'add_fillet': bevels or rounds edges of target_node with specified distance or radius.\n"

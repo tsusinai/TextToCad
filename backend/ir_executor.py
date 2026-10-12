@@ -474,26 +474,223 @@ def _topology_selection(
     return shape.newObject(selected)
 
 
-def _node_shape(
+class _BBoxValues:
+    def __init__(self, xmin: float, xmax: float, ymin: float, ymax: float, zmin: float, zmax: float):
+        self.xmin = float(xmin)
+        self.xmax = float(xmax)
+        self.ymin = float(ymin)
+        self.ymax = float(ymax)
+        self.zmin = float(zmin)
+        self.zmax = float(zmax)
+        self.xlen = self.xmax - self.xmin
+        self.ylen = self.ymax - self.ymin
+        self.zlen = self.zmax - self.zmin
+        self.xmid = (self.xmin + self.xmax) / 2.0
+        self.ymid = (self.ymin + self.ymax) / 2.0
+        self.zmid = (self.zmin + self.zmax) / 2.0
+
+
+def _get_shape_bbox(obj: Any) -> _BBoxValues:
+    bbox = None
+    if hasattr(obj, "val") and callable(obj.val):
+        try:
+            solid = obj.val()
+            if hasattr(solid, "BoundingBox") and callable(solid.BoundingBox):
+                bbox = solid.BoundingBox()
+            elif hasattr(solid, "BoundingBox"):
+                bbox = solid.BoundingBox
+        except Exception:
+            pass
+    if bbox is None:
+        if hasattr(obj, "BoundingBox") and callable(obj.BoundingBox):
+            bbox = obj.BoundingBox()
+        elif hasattr(obj, "BoundingBox"):
+            bbox = obj.BoundingBox
+    if bbox is None:
+        raise IRExecutionError("cannot compute BoundingBox of shape")
+
+    return _BBoxValues(
+        getattr(bbox, "xmin", 0.0),
+        getattr(bbox, "xmax", 0.0),
+        getattr(bbox, "ymin", 0.0),
+        getattr(bbox, "ymax", 0.0),
+        getattr(bbox, "zmin", 0.0),
+        getattr(bbox, "zmax", 0.0),
+    )
+
+
+def _apply_mount(
+    child: Any,
+    node: dict[str, Any],
+    mount: dict[str, Any],
+    shapes: dict[str, Any],
+    parameters: dict[str, Any],
+) -> Any:
+    target_id = mount.get("target")
+    if not target_id:
+        raise IRExecutionError(f"node '{node.get('id')}' mount missing 'target'")
+    if target_id not in shapes:
+        raise IRExecutionError(f"node '{node.get('id')}' mount target '{target_id}' not found in shapes")
+    host_solid = shapes[target_id]
+    if host_solid is None:
+        raise IRExecutionError(f"node '{node.get('id')}' mount target '{target_id}' has no shape")
+
+    raw_face = str(mount.get("face") or ">Z").strip()
+    face_upper = raw_face.upper()
+    face_lower = raw_face.lower()
+    if face_upper in {">Z", "+Z"} or face_lower == "top":
+        canonical_face = ">Z"
+    elif face_upper in {"<Z", "-Z"} or face_lower == "bottom":
+        canonical_face = "<Z"
+    elif face_upper in {">Y", "+Y"} or face_lower == "front":
+        canonical_face = ">Y"
+    elif face_upper in {"<Y", "-Y"} or face_lower == "back":
+        canonical_face = "<Y"
+    elif face_upper in {">X", "+X"} or face_lower == "right":
+        canonical_face = ">X"
+    elif face_upper in {"<X", "-X"} or face_lower == "left":
+        canonical_face = "<X"
+    else:
+        canonical_face = ">Z"
+
+    orientation = str(mount.get("orientation") or "auto").strip().lower()
+    child_op = str(node.get("operation") or "").lower()
+    child_id = str(node.get("id") or "").lower()
+    is_cylinder_or_extrusion = (
+        child_op in {"cylinder", "extrude"}
+        or any(kw in child_id for kw in ("barrel", "piston", "shaft", "cylinder", "axle", "rod", "pin", "wheel", "gun", "pipe", "tube"))
+    )
+
+    should_orient = (
+        orientation in {"auto", "forward", "normal"}
+        and (is_cylinder_or_extrusion or orientation in {"forward", "normal"})
+    )
+
+    if should_orient and hasattr(child, "rotate") and callable(child.rotate):
+        if canonical_face == ">Y":
+            child = child.rotate((0, 0, 0), (1, 0, 0), -90)
+        elif canonical_face == "<Y":
+            child = child.rotate((0, 0, 0), (1, 0, 0), 90)
+        elif canonical_face == ">X":
+            child = child.rotate((0, 0, 0), (0, 1, 0), 90)
+        elif canonical_face == "<X":
+            child = child.rotate((0, 0, 0), (0, 1, 0), -90)
+        elif canonical_face == "<Z" and orientation in {"forward", "normal"}:
+            child = child.rotate((0, 0, 0), (1, 0, 0), 180)
+
+    host_bb = _get_shape_bbox(host_solid)
+    child_bb = _get_shape_bbox(child)
+
+    align = str(mount.get("align") or "center").strip().lower()
+
+    if canonical_face == ">Z":
+        dz = host_bb.zmax - child_bb.zmin
+        if align == "flush":
+            dx = host_bb.xmin - child_bb.xmin
+            dy = host_bb.ymin - child_bb.ymin
+        else:
+            dx = host_bb.xmid - child_bb.xmid
+            dy = host_bb.ymid - child_bb.ymid
+
+    elif canonical_face == "<Z":
+        dz = host_bb.zmin - child_bb.zmax
+        if align == "flush":
+            dx = host_bb.xmin - child_bb.xmin
+            dy = host_bb.ymin - child_bb.ymin
+        else:
+            dx = host_bb.xmid - child_bb.xmid
+            dy = host_bb.ymid - child_bb.ymid
+
+    elif canonical_face == ">Y":
+        dy = host_bb.ymax - child_bb.ymin
+        if align == "flush":
+            dx = host_bb.xmin - child_bb.xmin
+            dz = host_bb.zmin - child_bb.zmin
+        else:
+            dx = host_bb.xmid - child_bb.xmid
+            dz = host_bb.zmid - child_bb.zmid
+
+    elif canonical_face == "<Y":
+        dy = host_bb.ymin - child_bb.ymax
+        if align == "flush":
+            dx = host_bb.xmin - child_bb.xmin
+            dz = host_bb.zmin - child_bb.zmin
+        else:
+            dx = host_bb.xmid - child_bb.xmid
+            dz = host_bb.zmid - child_bb.zmid
+
+    elif canonical_face == ">X":
+        dx = host_bb.xmax - child_bb.xmin
+        if align == "flush":
+            dy = host_bb.ymin - child_bb.ymin
+            dz = host_bb.zmin - child_bb.zmin
+        else:
+            dy = host_bb.ymid - child_bb.ymid
+            dz = host_bb.zmid - child_bb.zmid
+
+    elif canonical_face == "<X":
+        dx = host_bb.xmin - child_bb.xmax
+        if align == "flush":
+            dy = host_bb.ymin - child_bb.ymin
+            dz = host_bb.zmin - child_bb.zmin
+        else:
+            dy = host_bb.ymid - child_bb.ymid
+            dz = host_bb.zmid - child_bb.zmid
+
+    raw_offset = mount.get("offset")
+    if raw_offset is None and isinstance(node.get("parameters"), dict):
+        raw_offset = node["parameters"].get("offset")
+
+    if raw_offset is not None:
+        ox, oy, oz = _vector(parameters, raw_offset, "mount.offset")
+        dx += ox
+        dy += oy
+        dz += oz
+
+    if hasattr(child, "translate") and callable(child.translate):
+        child = child.translate((dx, dy, dz))
+
+    return child
+
+
+def _raw_node_shape(
     node: dict[str, Any],
     inputs: list[Any],
     parameters: dict[str, Any],
     selector_metadata: dict[str, Any] | None = None,
+    has_mount: bool = False,
 ) -> Any:
     operation = str(node.get("operation", ""))
     values = node.get("parameters") or {}
     frame = node.get("frame")
 
     def _apply_inline_transform(res: Any) -> Any:
-        pos = values.get("position") or values.get("origin") or values.get("center")
-        if pos is not None:
-            if isinstance(pos, (list, tuple)) and len(pos) == 3:
-                res = res.translate(_vector(parameters, pos, f"{operation}.position"))
-            elif isinstance(pos, dict):
-                x = _number(parameters, pos.get("x", 0), f"{operation}.position.x", -1e12)
-                y = _number(parameters, pos.get("y", 0), f"{operation}.position.y", -1e12)
-                z = _number(parameters, pos.get("z", 0), f"{operation}.position.z", -1e12)
-                res = res.translate((x, y, z))
+        rot = (
+            node.get("rotation")
+            or node.get("orientation")
+            or values.get("rotation")
+            or values.get("orientation")
+        )
+        if rot is not None and isinstance(rot, dict):
+            axis_val = rot.get("axis", [0, 0, 1])
+            axis = _vector(parameters, axis_val, f"{operation}.rotation.axis")
+            ang_val = rot.get("degrees", rot.get("angle", 0.0))
+            angle = _number(parameters, ang_val, f"{operation}.rotation.angle", -360.0)
+            orig_val = rot.get("origin", [0, 0, 0])
+            origin = _vector(parameters, orig_val, f"{operation}.rotation.origin")
+            res = res.rotate(origin, axis, angle)
+
+        if not has_mount:
+            pos = values.get("position") or values.get("origin") or values.get("center")
+            if pos is not None:
+                if isinstance(pos, (list, tuple)) and len(pos) == 3:
+                    res = res.translate(_vector(parameters, pos, f"{operation}.position"))
+                elif isinstance(pos, dict):
+                    x = _number(parameters, pos.get("x", 0), f"{operation}.position.x", -1e12)
+                    y = _number(parameters, pos.get("y", 0), f"{operation}.position.y", -1e12)
+                    z = _number(parameters, pos.get("z", 0), f"{operation}.position.z", -1e12)
+                    res = res.translate((x, y, z))
+
         return res
 
     if operation == "box":
@@ -726,6 +923,26 @@ def _node_shape(
     raise IRExecutionError(f"operation '{operation}' is not implemented by the IR executor")
 
 
+def _node_shape(
+    node: dict[str, Any],
+    inputs: list[Any],
+    parameters: dict[str, Any],
+    selector_metadata: dict[str, Any] | None = None,
+    shapes: dict[str, Any] | None = None,
+) -> Any:
+    mount = node.get("mount")
+    if mount is None and isinstance(node.get("parameters"), dict):
+        mount = node["parameters"].get("mount")
+
+    has_mount = mount is not None and isinstance(mount, dict)
+    res = _raw_node_shape(node, inputs, parameters, selector_metadata, has_mount=has_mount)
+    if has_mount and res is not None:
+        if shapes is None:
+            raise IRExecutionError(f"node '{node.get('id')}' has mount configuration but shapes mapping is not provided")
+        res = _apply_mount(res, node, mount, shapes, parameters)
+    return res
+
+
 def _topological_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_id = {str(node["id"]): node for node in nodes}
     state: dict[str, int] = {}
@@ -737,7 +954,13 @@ def _topological_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if state.get(node_id) == 2:
             return
         state[node_id] = 1
-        for dependency in by_id[node_id].get("inputs", []):
+        deps = list(by_id[node_id].get("inputs", []))
+        mount = by_id[node_id].get("mount") or (by_id[node_id].get("parameters") or {}).get("mount")
+        if isinstance(mount, dict):
+            target = mount.get("target")
+            if target and target not in deps:
+                deps.append(str(target))
+        for dependency in deps:
             if dependency not in by_id:
                 raise IRExecutionError(f"missing node input '{dependency}'")
             visit(dependency)
@@ -762,7 +985,7 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
         node_id = str(node["id"])
         inputs = [shapes[reference] for reference in node.get("inputs", [])]
         selector_metadata: dict[str, Any] = {}
-        shape = _node_shape(node, inputs, parameters, selector_metadata)
+        shape = _node_shape(node, inputs, parameters, selector_metadata, shapes=shapes)
         shapes[node_id] = _as_shape(shape, node_id)
         if selector_metadata:
             _finalize_selector_metadata(selector_metadata, shapes[node_id])
@@ -772,6 +995,9 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
             "status": "succeeded",
             "inputs": list(node.get("inputs", [])),
         }
+        mount = node.get("mount") or (node.get("parameters") or {}).get("mount")
+        if isinstance(mount, dict):
+            trace_event["mount"] = mount
         selector = (node.get("parameters") or {}).get("selector")
         if not isinstance(selector, dict):
             selector = (node.get("parameters") or {}).get("face_selector") or (node.get("parameters") or {}).get("edge_selector")

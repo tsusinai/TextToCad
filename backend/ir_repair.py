@@ -349,6 +349,133 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
                     candidate["outputs"][0]["node"] = shell_id
             else:
                 candidate["outputs"] = [{"id": "primary", "node": shell_id, "format": ["step", "stl", "glb"]}]
+        elif operation == "mount_component":
+            raw_node = patch.get("node")
+            node_id = _clean_target_id(raw_node, node_by_id, candidate, nodes)
+            if not node_id or node_id not in node_by_id:
+                raise ValueError(f"patch[{index}] references an unknown node '{raw_node}'")
+            child_node = node_by_id[node_id]
+
+            raw_target = patch.get("target") or patch.get("target_node") or patch.get("host")
+            target_id = _clean_target_id(raw_target, node_by_id, candidate, nodes)
+            if not target_id or target_id not in node_by_id:
+                raise ValueError(f"patch[{index}] references an unknown target '{raw_target}'")
+            if node_id == target_id:
+                raise ValueError(f"patch[{index}] node cannot mount onto itself")
+
+            mount_data = child_node.setdefault("mount", {})
+            if not isinstance(mount_data, dict):
+                mount_data = {}
+                child_node["mount"] = mount_data
+            mount_data["target"] = target_id
+            if "face" in patch or "face" not in mount_data:
+                mount_data["face"] = str(patch.get("face") or ">Z").strip()
+            if "align" in patch or "align" not in mount_data:
+                mount_data["align"] = str(patch.get("align") or "center").strip()
+            if "offset" in patch:
+                raw_offset = patch["offset"]
+                if isinstance(raw_offset, (list, tuple)):
+                    mount_data["offset"] = [float(x) for x in raw_offset]
+                elif isinstance(raw_offset, dict):
+                    mount_data["offset"] = [
+                        float(raw_offset.get("x", 0.0)),
+                        float(raw_offset.get("y", 0.0)),
+                        float(raw_offset.get("z", 0.0)),
+                    ]
+                else:
+                    mount_data["offset"] = raw_offset
+            elif "offset" not in mount_data:
+                mount_data["offset"] = [0.0, 0.0, 0.0]
+
+            child_node.setdefault("parameters", {})["mount"] = copy.deepcopy(mount_data)
+        elif operation == "orient_component":
+            raw_node = patch.get("node")
+            node_id = _clean_target_id(raw_node, node_by_id, candidate, nodes)
+            if not node_id or node_id not in node_by_id:
+                raise ValueError(f"patch[{index}] references an unknown node '{raw_node}'")
+            target_node = node_by_id[node_id]
+
+            raw_axis = patch.get("axis", "z")
+            if isinstance(raw_axis, str):
+                axis_val = raw_axis.strip().lower()
+            elif isinstance(raw_axis, (list, tuple)):
+                axis_val = [float(x) for x in raw_axis]
+            else:
+                axis_val = "z"
+
+            raw_degrees = patch.get("degrees", patch.get("angle", 90))
+            try:
+                degrees_val = float(raw_degrees)
+                if not math.isfinite(degrees_val):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                raise ValueError(f"patch[{index}] degrees must be numeric")
+
+            rot_data = target_node.setdefault("rotation", {})
+            if not isinstance(rot_data, dict):
+                rot_data = {}
+                target_node["rotation"] = rot_data
+            rot_data["axis"] = axis_val
+            rot_data["degrees"] = degrees_val
+
+            orient_data = target_node.setdefault("orientation", {})
+            if not isinstance(orient_data, dict):
+                orient_data = {}
+                target_node["orientation"] = orient_data
+            orient_data["axis"] = axis_val
+            orient_data["degrees"] = degrees_val
+
+            target_node.setdefault("parameters", {})["rotation"] = copy.deepcopy(rot_data)
+            target_node.setdefault("parameters", {})["orientation"] = copy.deepcopy(orient_data)
+        elif operation == "scale_component":
+            raw_node = patch.get("node")
+            node_id = _clean_target_id(raw_node, node_by_id, candidate, nodes)
+            if not node_id or node_id not in node_by_id:
+                raise ValueError(f"patch[{index}] references an unknown node '{raw_node}'")
+            target_node = node_by_id[node_id]
+
+            raw_factor = patch.get("factor")
+            try:
+                factor_val = float(raw_factor)
+                if factor_val <= 0 or not math.isfinite(factor_val):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                raise ValueError(f"patch[{index}] factor must be a positive number")
+
+            target_params = target_node.setdefault("parameters", {})
+            dim_keys = {
+                "width", "depth", "height", "length", "radius", "radius1", "radius2",
+                "diameter", "major_radius", "minor_radius", "thickness", "distance",
+            }
+            for k in dim_keys:
+                if k in target_params:
+                    val = target_params[k]
+                    if isinstance(val, (int, float)):
+                        target_params[k] = float(val) * factor_val
+                    elif isinstance(val, str) and val in parameters:
+                        param_obj = parameters[val]
+                        if isinstance(param_obj, dict) and isinstance(param_obj.get("value"), (int, float)):
+                            target_params[k] = float(param_obj["value"]) * factor_val
+                        elif isinstance(param_obj, (int, float)):
+                            target_params[k] = float(param_obj) * factor_val
+
+            if "size" in target_params and isinstance(target_params["size"], (list, tuple)):
+                target_params["size"] = [
+                    float(item) * factor_val if isinstance(item, (int, float)) else item
+                    for item in target_params["size"]
+                ]
+
+            if "points" in target_params and isinstance(target_params["points"], list):
+                new_points = []
+                for pt in target_params["points"]:
+                    if isinstance(pt, (list, tuple)):
+                        new_points.append([float(c) * factor_val for c in pt])
+                    else:
+                        new_points.append(pt)
+                target_params["points"] = new_points
+
+            target_node["scale"] = float(target_node.get("scale", 1.0)) * factor_val
+            target_params["scale"] = target_node["scale"]
         else:
             raise ValueError(f"patch[{index}] operation '{operation}' is not allowed")
     return validate_ir(candidate)

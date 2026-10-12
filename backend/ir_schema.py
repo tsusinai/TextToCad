@@ -50,6 +50,7 @@ class IRNode(IRBaseModel):
     frame: str | None = None
     status: str = "planned"
     actual_operation: str | None = None
+    mount: dict[str, Any] | None = None
 
 
 class IRConstraint(IRBaseModel):
