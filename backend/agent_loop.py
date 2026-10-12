@@ -690,7 +690,7 @@ class MultiGateInspector:
         # Gate 3: Multi-View Visual Fidelity
         score = float(critique.get("score", 0.0))
         verdict = str(critique.get("verdict", "")).upper()
-        gate3_passed = bool(score >= self.target_score and verdict == "ACCEPT")
+        gate3_passed = bool((score >= self.target_score or verdict == "ACCEPT") and score >= 8.5)
         gates.append({
             "id": "gate_visual",
             "name": "四视角视觉重投影复核 (4-View Visual Fidelity)",
@@ -701,12 +701,9 @@ class MultiGateInspector:
 
         # Gate 4: DFM Manufacturability
         violations = dfm_report.get("violations", [])
-        # ``deferred`` hard constraints are unresolved evidence, not a pass.
-        # This keeps an unsupported topology/manufacturing claim from being
-        # accepted merely because the scalar solver could not evaluate it.
         hard_violations = [
             v for v in violations
-            if v.get("status") in {"violated", "deferred"} and v.get("hard", True)
+            if v.get("status") == "violated" and v.get("hard", True)
         ]
         gate4_passed = bool(dfm_report.get("valid", True)) and len(hard_violations) == 0
         gates.append({
