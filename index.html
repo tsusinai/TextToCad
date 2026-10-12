@@ -5442,9 +5442,10 @@
       if (generationController) generationController.abort();
       const sequence = ++generationSeq;
       generationController = new AbortController();
-      const timeoutId = setTimeout(() => { generationController.abort(); }, 30000);
+      const timeoutLimit = selectedMode === 'agent' ? 90000 : 45000;
+      const timeoutId = setTimeout(() => { generationController.abort(); }, timeoutLimit);
       let timedOut = false;
-      const timeoutWatcher = setTimeout(() => { timedOut = true; }, 29950);
+      const timeoutWatcher = setTimeout(() => { timedOut = true; }, timeoutLimit - 50);
       generate.classList.add('loading');
       if (cancelGeneration) cancelGeneration.hidden = false;
       setGenerationError('');
