@@ -33,6 +33,13 @@ ALLOWED_KINDS = {
     "primitive", "feature", "sketch", "component", "operation", "inspection",
     "profile", "shell", "cut", "pattern", "edge", "divider", "union",
 }
+ALLOWED_MOUNT_FACES = {
+    ">Z", "<Z", ">Y", "<Y", ">X", "<X",
+    "+Z", "-Z", "+Y", "-Y", "+X", "-X",
+    "top", "bottom", "front", "back", "left", "right",
+}
+ALLOWED_MOUNT_ALIGNS = {"center", "flush", "tangent"}
+ALLOWED_MOUNT_ORIENTATIONS = {"auto", "normal", "forward", "axial"}
 EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_().]+(?:\s*(?:[+\-*/%()]|\*\*)\s*[A-Za-z0-9_().]+)*$")
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 ID_RE = re.compile(IR_ID_PATTERN)
@@ -115,6 +122,79 @@ def _validate_geometry_parameters(
         if dimension is not None and isinstance(dimension, (int, float)) and not math.isfinite(float(dimension)):
             issues.append(_issue("feature_value", "feature extent must be finite", f"{path}.parameters"))
 
+
+def _validate_mount(
+    node: Any,
+    path: str,
+    known_nodes: set[str],
+    known_parameters: set[str],
+    adjacency: dict[str, list[str]],
+    issues: list[dict[str, Any]],
+) -> None:
+    mount = getattr(node, "mount", None)
+    if mount is None and isinstance(node.parameters, dict):
+        mount = node.parameters.get("mount")
+    if mount is None:
+        return
+    if not isinstance(mount, dict):
+        issues.append(_issue("mount_type", "mount attribute must be a dictionary", f"{path}.mount"))
+        return
+
+    target = mount.get("target")
+    if target is None:
+        issues.append(_issue("mount_target", "mount configuration requires a 'target'", f"{path}.mount.target"))
+    elif not isinstance(target, str):
+        issues.append(_issue("mount_target", "mount target must be a string", f"{path}.mount.target"))
+    elif target not in known_nodes:
+        issues.append(_issue("mount_target", f"mount target '{target}' does not exist", f"{path}.mount.target"))
+    elif target == node.id:
+        issues.append(_issue("mount_target", f"node '{node.id}' cannot mount onto itself", f"{path}.mount.target"))
+    else:
+        adjacency[node.id].append(target)
+
+    face = mount.get("face")
+    if face is not None:
+        if not isinstance(face, str):
+            issues.append(_issue("mount_face", "mount face must be a string", f"{path}.mount.face"))
+        elif (
+            face.strip() not in ALLOWED_MOUNT_FACES
+            and face.strip().lower() not in ALLOWED_MOUNT_FACES
+            and face.strip().upper() not in ALLOWED_MOUNT_FACES
+        ):
+            issues.append(_issue("mount_face", f"mount face '{face}' is not registered", f"{path}.mount.face"))
+
+    align = mount.get("align")
+    if align is not None:
+        if not isinstance(align, str) or align.strip().lower() not in ALLOWED_MOUNT_ALIGNS:
+            issues.append(_issue("mount_align", f"mount align '{align}' is not registered; must be center, flush, or tangent", f"{path}.mount.align"))
+
+    orientation = mount.get("orientation")
+    if orientation is not None:
+        if not isinstance(orientation, str) or orientation.strip().lower() not in ALLOWED_MOUNT_ORIENTATIONS:
+            issues.append(_issue("mount_orientation", f"mount orientation '{orientation}' is not registered; must be auto, normal, forward, or axial", f"{path}.mount.orientation"))
+
+    offset = mount.get("offset")
+    if offset is not None:
+        if not isinstance(offset, (list, tuple)) or len(offset) != 3:
+            issues.append(_issue("mount_offset", "mount offset must be a 3-element list or tuple [dx, dy, dz]", f"{path}.mount.offset"))
+        else:
+            for offset_idx, val in enumerate(offset):
+                if isinstance(val, bool):
+                    issues.append(_issue("mount_offset", "mount offset components must be numeric", f"{path}.mount.offset[{offset_idx}]"))
+                elif isinstance(val, (int, float)):
+                    if not math.isfinite(float(val)):
+                        issues.append(_issue("mount_offset", "mount offset components must be finite", f"{path}.mount.offset[{offset_idx}]"))
+                elif isinstance(val, str):
+                    if not EXPRESSION_RE.fullmatch(val.strip()):
+                        issues.append(_issue("unsafe_expression", "mount offset expression contains unsupported syntax", f"{path}.mount.offset[{offset_idx}]"))
+                    else:
+                        missing = sorted(_expression_names(val.strip()) - known_parameters - set(node.parameters))
+                        if missing:
+                            issues.append(_issue("unknown_parameter", f"expression references unknown name(s): {', '.join(missing)}", f"{path}.mount.offset[{offset_idx}]"))
+                else:
+                    issues.append(_issue("mount_offset", "mount offset components must be numeric or expressions", f"{path}.mount.offset[{offset_idx}]"))
+
+
 def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraints: int = 256) -> dict[str, Any]:
     """Validate and normalize an IR document, raising IRValidationError on failure."""
     if not isinstance(payload, dict):
@@ -185,6 +265,7 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
         else:
             issues.extend(validate_operation_node(node.model_dump(mode="json"), path))
         _validate_geometry_parameters(node, path, issues)
+        _validate_mount(node, path, known_nodes, known_parameters, adjacency, issues)
         for input_index, reference in enumerate(node.inputs):
             if reference not in known_nodes:
                 issues.append(_issue("missing_reference", f"node input '{reference}' does not exist", f"{path}.inputs[{input_index}]"))

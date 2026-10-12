@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -76,6 +77,7 @@ except Exception:
     pass
 
 APP_DIR = Path(__file__).resolve().parent
+logger = logging.getLogger("app")
 ARTIFACT_ROOT = Path(os.getenv("ARTIFACT_ROOT", APP_DIR / "artifacts"))
 ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 MAX_PROMPT_LENGTH = 4000
@@ -891,7 +893,8 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "nodes": [{
             "id": "node-id", "kind": "primitive|sketch|feature",
             "operation": "box|cylinder|sphere|cone|torus|polygon_prism|regular_polygon|sketch|extrude|revolve|sweep|loft|union|cut|intersect|translate|rotate|mirror|shell|fillet|chamfer|linear_pattern|polar_pattern",
-            "inputs": [], "parameters": {}, "frame": "xy"
+            "inputs": [], "parameters": {}, "frame": "xy",
+            "mount": {"target": "parent-node-id", "face": ">Z|<Z|>X|<X|>Y|<Y", "orientation": "forward|auto|normal|axial"}
         }],
         "constraints": [{"id": "constraint-id", "type": "range|geometric|topology|manufacturing", "parameter": "name", "hard": True}],
         "outputs": [{"id": "main", "node": "node-id", "format": ["step", "stl", "glb"]}],
@@ -911,6 +914,24 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "For a regular N-gon or polygon prism, emit regular_polygon with parameters.sides, parameters.points (planar [x,y] pairs) or width/depth, and parameters.height. Use polygon_prism only for an explicit irregular polygon profile. "
         "Do not infer rounded edges from generic words such as model, part, body, or solid. "
         "Engineering Assembly & Multi-Feature Guidelines: "
+        "- Hierarchical Assembly Decomposition (CoT) for Open-Ended & Composite Objects: "
+        "When modeling composite multi-part objects (such as tanks, vehicles, airplanes, robots, pulley mechanisms, gearboxes, fixtures / 坦克、小车、机器人、起重机、机械臂): "
+        "1) Identify the Base/Chassis/Hull component (e.g. tank hull). "
+        "2) Identify the attached functional components (e.g. turret, tracks, wheels). "
+        "3) Identify projecting features/actuators (e.g. gun barrel, antenna, axle). "
+        "4) Use the new `mount` property to position attached components relative to their parent surfaces rather than guessing or hardcoding absolute coordinates: "
+        "   - E.g. turret on hull: \"mount\": {\"target\": \"hull\", \"face\": \">Z\"} (never hardcode z coordinate inside the hull!). "
+        "   - E.g. barrel on turret: \"mount\": {\"target\": \"turret\", \"face\": \">Y\", \"orientation\": \"forward\"} (points horizontally forward along Y!). "
+        "   - E.g. left tracks on hull: \"mount\": {\"target\": \"hull\", \"face\": \"<X\"}. "
+        "   - E.g. right tracks on hull: \"mount\": {\"target\": \"hull\", \"face\": \">X\"}. "
+        "5) Combine them cleanly using `union`. "
+        "- Canonical Desktop Scale Normalization: "
+        "When the user prompt contains NO explicit dimensions (e.g. '一个简易坦克模型', 'a simple vehicle', 'a robot gripper'): "
+        "- Strictly enforce realistic desktop model envelope bounds: "
+        "  - Width (length along Y or X): 80 to 140 mm (default ~120 mm). "
+        "  - Depth (transverse width): 50 to 80 mm (default ~60 mm). "
+        "  - Height: 30 to 60 mm (default ~40 mm). "
+        "- FORBID 10x dimension blowups (such as 1200 mm or 1000 mm)! All dimensions must remain in the 10 mm to 200 mm desktop manufacturing range unless the user explicitly specified meter units or large numbers. "
         "- For multi-tier/stepped drive shafts (阶梯传动轴/阶梯轴), do NOT leave all cylinders concentric at the origin! Each cylinder stage must be sequentially stacked along the axis: create each cylinder and translate it along Z (e.g. stage 1 at z=0, stage 2 at z=length1, stage 3 at z=length1+length2) before union. For keyways (键槽), position a cutter box at the output shaft surface and subtract with cut. "
         "- For finned heat sinks (芯片散热器/散热片), model the baseplate box, and for fins, translate each fin box across the top surface of the baseplate (at z = base_height) along X with even spacing, union with base, and subtract any chip pocket (贴合槽) from the bottom face (z = 0). "
         "- For L-brackets or angle mounting brackets (L型角码/L型支架/角码): remember box(w, d, h) is centered in X and Y (from -w/2 to +w/2, -d/2 to +d/2) and extends from Z=0 to h. If horizontal arm extends along X (width=L1, depth=W, height=T), its end corner is at x = -L1/2. Translate vertical arm (width=T, depth=W, height=L2) to the end corner at x = -L1/2 + T/2, z = T to form a flush L-joint, then union! For through-holes: on horizontal arm, drill along Z (default cylinder); on vertical arm (thickness along X), rotate cylinder 90° around Y (axis=[0, 1, 0], angle=90) so it drills through the wall along X! "
@@ -1055,6 +1076,126 @@ def _normalize_node_parameters(value: Any, source_units: str, key: str | None = 
     return value
 
 
+def _prompt_has_explicit_large_scale_or_units(prompt: str, units: str) -> bool:
+    """Return True if prompt or request explicitly specifies meter/centimeter units or numbers > 300."""
+    requested_units = str(units).strip().lower()
+    if requested_units in {"m", "meter", "meters", "metre", "metres", "cm", "centimeter", "centimeters", "centimetre", "centimetres"}:
+        return True
+    text = str(prompt).strip()
+    if not text:
+        return False
+
+    # Check for meter or centimeter unit mentions in prompt
+    # English meter / centimeter: e.g. "1.5m", "2 meters", "50cm", "30 centimeters"
+    if re.search(r"(?i)\b\d+(?:\.\d+)?\s*(?:meter|meters|metre|metres|cm|centimeter|centimeters|centimetre|centimetres)\b", text):
+        return True
+    # English "m" (avoid "mm"): e.g. "2 m" or "1.5m"
+    for m in re.finditer(r"(?i)\b(\d+(?:\.\d+)?)\s*m\b", text):
+        span = m.span()
+        after = text[span[1]:span[1] + 1]
+        if after.lower() != "m":
+            return True
+
+    # Chinese meter / centimeter: e.g. "1.5米", "2米", "50厘米", "30公分", "分米" (excluding "毫米")
+    if re.search(r"\d+(?:\.\d+)?\s*(?:(?<!毫)米|厘米|公分|分米)", text):
+        return True
+
+    # Check for explicit large numbers (> 300) in prompt, e.g. "1200", "500 mm", "长1000", "800x600", "1200mm"
+    for num_str in re.findall(r"\d+(?:\.\d+)?", text):
+        try:
+            if float(num_str) > 300.0:
+                return True
+        except ValueError:
+            pass
+
+    return False
+
+
+def _get_max_bounding_dimension(
+    parameters: dict[str, Any],
+    nodes: list[dict[str, Any]],
+) -> float:
+    """Scan parameters and node definitions for the maximum bounding dimension."""
+    max_dim = 0.0
+
+    # 1. Inspect parameters
+    for p_name, p_data in parameters.items():
+        name_lower = str(p_name).lower()
+        if name_lower in _IR_UNITLESS_PARAMETER_KEYS or name_lower.endswith(("_count", "_index")):
+            continue
+        val = p_data.get("value") if isinstance(p_data, dict) else p_data
+        role = p_data.get("role", "dimension") if isinstance(p_data, dict) else "dimension"
+        if role in {"count", "boolean", "index"}:
+            continue
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            max_dim = max(max_dim, abs(float(val)))
+        elif isinstance(val, (list, tuple)):
+            for item in val:
+                if isinstance(item, (int, float)) and not isinstance(item, bool):
+                    max_dim = max(max_dim, abs(float(item)))
+
+    # 2. Inspect nodes
+    for node in nodes:
+        params = node.get("parameters") or {}
+        # Dimensional scalar / list keys
+        for key in (
+            "size", "width", "depth", "height", "length", "distance",
+            "spacing", "offset", "thickness", "extent", "profile_size",
+        ):
+            val = params.get(key)
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                max_dim = max(max_dim, abs(float(val)))
+            elif isinstance(val, (list, tuple)):
+                for item in val:
+                    if isinstance(item, (int, float)) and not isinstance(item, bool):
+                        max_dim = max(max_dim, abs(float(item)))
+        # Radius or diameter
+        for r_key in ("radius", "hole_radius", "outer_radius", "inner_radius", "major_radius"):
+            r_val = params.get(r_key)
+            if isinstance(r_val, (int, float)) and not isinstance(r_val, bool):
+                max_dim = max(max_dim, abs(float(r_val)) * 2.0)
+        for d_key in ("diameter", "outer_diameter", "inner_diameter", "hole_diameter"):
+            d_val = params.get(d_key)
+            if isinstance(d_val, (int, float)) and not isinstance(d_val, bool):
+                max_dim = max(max_dim, abs(float(d_val)))
+        # Position / origin / center / translation
+        for pos_key in ("position", "origin", "center", "translation"):
+            pos = params.get(pos_key)
+            if isinstance(pos, (list, tuple)):
+                for item in pos:
+                    if isinstance(item, (int, float)) and not isinstance(item, bool):
+                        max_dim = max(max_dim, abs(float(item)))
+            elif isinstance(pos, dict):
+                for item in pos.values():
+                    if isinstance(item, (int, float)) and not isinstance(item, bool):
+                        max_dim = max(max_dim, abs(float(item)))
+        # Points in polyline / regular_polygon / polygon_prism
+        points = params.get("points")
+        if isinstance(points, (list, tuple)):
+            for pt in points:
+                if isinstance(pt, (list, tuple)):
+                    for coord in pt:
+                        if isinstance(coord, (int, float)) and not isinstance(coord, bool):
+                            max_dim = max(max_dim, abs(float(coord)) * 2.0)
+        # Sketch geometry elements
+        for geom_key in ("geometry", "elements"):
+            elements = params.get(geom_key)
+            if isinstance(elements, list):
+                for elem in elements:
+                    if isinstance(elem, dict):
+                        for elem_k in ("width", "depth", "height", "length", "size"):
+                            e_val = elem.get(elem_k)
+                            if isinstance(e_val, (int, float)) and not isinstance(e_val, bool):
+                                max_dim = max(max_dim, abs(float(e_val)))
+                        for r_k in ("radius", "diameter"):
+                            e_r = elem.get(r_k)
+                            if isinstance(e_r, (int, float)) and not isinstance(e_r, bool):
+                                factor = 2.0 if r_k == "radius" else 1.0
+                                max_dim = max(max_dim, abs(float(e_r)) * factor)
+
+    return max_dim
+
+
 def _normalize_ir_draft(
     payload: dict[str, Any],
     prompt: str,
@@ -1169,6 +1310,11 @@ def _normalize_ir_draft(
             node["parameters"] = _normalize_node_parameters(node["parameters"], source_units)
         if node.get("frame") is not None:
             node["frame"] = str(node["frame"])
+        mount = raw_node.get("mount")
+        if not isinstance(mount, dict) and isinstance(raw_params, dict):
+            mount = raw_params.get("mount")
+        if isinstance(mount, dict):
+            node["mount"] = copy.deepcopy(mount)
         nodes.append(node)
     candidate["nodes"] = nodes
     candidate.pop("features", None)
@@ -1206,6 +1352,60 @@ def _normalize_ir_draft(
                 c["type"] = "geometric"
                 valid_constraints.append(c)
         candidate["constraints"] = valid_constraints
+
+    # Canonical Desktop Scale Normalization check:
+    # If the prompt has no explicit meter/centimeter units or large numbers (>300),
+    # but the LLM emitted a bounding dimension > 300 mm (e.g. 1200 mm):
+    # Automatically scale down all dimensional parameters by 0.1 (or normalize envelope to max dimension ~120 mm)!
+    # Log a warning: Normalizing hallucinated 10x scale to canonical desktop scale (120mm)
+    if not _prompt_has_explicit_large_scale_or_units(prompt, units):
+        max_bounding_dim = _get_max_bounding_dimension(normalized_parameters, nodes)
+        if max_bounding_dim > 300.0:
+            scale_factor = 0.1 if max_bounding_dim <= 2400.0 else round(120.0 / max_bounding_dim, 6)
+            logger.warning("Normalizing hallucinated 10x scale to canonical desktop scale (120mm)")
+            # 1. Scale parameters
+            for p_name, p_data in normalized_parameters.items():
+                name_lower = str(p_name).lower()
+                if name_lower in _IR_UNITLESS_PARAMETER_KEYS or name_lower.endswith(("_count", "_index")):
+                    continue
+                role = str(p_data.get("role", "dimension")).lower() if isinstance(p_data, dict) else "dimension"
+                if role in {"count", "boolean", "index"}:
+                    continue
+                if isinstance(p_data, dict) and "value" in p_data:
+                    p_data["value"] = _scale_ir_geometry_value(p_data["value"], scale_factor)
+
+            # 2. Scale nodes
+            for n in nodes:
+                n_params = n.get("parameters") or {}
+                for p_key, p_val in n_params.items():
+                    if p_key in _IR_DIMENSIONAL_PARAMETER_KEYS:
+                        n_params[p_key] = _scale_ir_geometry_value(p_val, scale_factor)
+                    elif p_key in {"geometry", "elements"} and isinstance(p_val, list):
+                        for elem in p_val:
+                            if isinstance(elem, dict):
+                                for e_key in ("width", "depth", "height", "length", "size", "radius", "diameter"):
+                                    if e_key in elem:
+                                        elem[e_key] = _scale_ir_geometry_value(elem[e_key], scale_factor)
+                if isinstance(n.get("mount"), dict) and "offset" in n["mount"]:
+                    n["mount"]["offset"] = _scale_ir_geometry_value(n["mount"]["offset"], scale_factor)
+
+            # 3. Scale constraints
+            for c in candidate.get("constraints", []):
+                if not isinstance(c, dict):
+                    continue
+                for c_key in ("min_mm", "max_mm", "minimum_mm", "maximum_mm"):
+                    if c_key in c and isinstance(c[c_key], (int, float)) and not isinstance(c[c_key], bool):
+                        c[c_key] = round(float(c[c_key]) * scale_factor, 9)
+                if "value" in c and isinstance(c["value"], (int, float)) and not isinstance(c["value"], bool):
+                    if c.get("type") in {"range", "manufacturing"}:
+                        c["value"] = round(float(c["value"]) * scale_factor, 9)
+
+            candidate.setdefault("provenance", {})["canonical_desktop_scale_normalized"] = True
+            candidate["provenance"]["scale_normalization"] = {
+                "applied": True,
+                "scale_factor": scale_factor,
+                "original_max_dimension": max_bounding_dim,
+            }
 
     outputs = candidate.get("outputs")
     if not isinstance(outputs, list):

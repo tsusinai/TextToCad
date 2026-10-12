@@ -72,6 +72,45 @@ FEATURE_RECIPES: tuple[dict[str, Any], ...] = (
         ],
         "checks": ["tooth count", "bore diameter", "outer diameter", "radial symmetry"],
     },
+    {
+        "id": "tank_chassis_assembly",
+        "keywords": ("tank", "chassis", "turret", "barrel", "tracks", "坦克", "炮塔", "炮管", "战车"),
+        "intent": "assemble a tracked vehicle with hull box, left/right track boxes, top-mounted turret, and forward-oriented barrel",
+        "graph": [
+            "hull box at base (100x50x20 mm)",
+            "left_track box mounted on hull.face('<X')",
+            "right_track box mounted on hull.face('>X')",
+            "turret cylinder mounted on hull.face('>Z')",
+            "barrel cylinder mounted on turret.face('>Y') with forward orientation",
+            "union(all components)",
+        ],
+        "checks": ["hull proportions", "turret top mounting", "barrel forward orientation", "track symmetry"],
+    },
+    {
+        "id": "vehicle_chassis_wheels",
+        "keywords": ("car", "vehicle", "wheels", "automobile", "小车", "汽车", "底盘", "车轮"),
+        "intent": "assemble a wheeled vehicle with chassis body, top cabin, and 4 wheels on side faces",
+        "graph": [
+            "chassis box at base",
+            "cabin box mounted on chassis.face('>Z')",
+            "left front/rear wheel cylinders mounted on chassis.face('<X')",
+            "right front/rear wheel cylinders mounted on chassis.face('>X')",
+            "union(all components)",
+        ],
+        "checks": ["chassis proportions", "cabin top mounting", "wheel placement", "wheel symmetry"],
+    },
+    {
+        "id": "pulley_bracket_assembly",
+        "keywords": ("pulley", "bracket", "sheave", "clevis", "滑轮", "滑轮支架"),
+        "intent": "assemble a U-bracket housing with a center shaft and grooved pulley wheel",
+        "graph": [
+            "u_bracket base and side flanges",
+            "shaft cylinder mounted through bracket flanges",
+            "grooved pulley wheel cylinder coaxial with shaft",
+            "union(bracket, shaft, pulley)",
+        ],
+        "checks": ["bracket u-profile", "shaft alignment", "pulley coaxial mounting", "clearance"],
+    },
 )
 
 
@@ -89,6 +128,15 @@ _SEMANTIC_ALIASES: dict[str, tuple[str, ...]] = {
     "rotary": ("gear", "tooth", "teeth", "齿轮"),
     "cog": ("gear", "tooth", "teeth", "齿轮"),
     "axle": ("shaft", "stepped", "传动轴", "阶梯轴"),
+    "armor": ("tank", "turret", "chassis", "坦克"),
+    "cannon": ("barrel", "turret", "tank", "炮管"),
+    "track": ("tracks", "tank", "chassis", "履带"),
+    "tracks": ("track", "tank", "chassis", "履带"),
+    "treads": ("tracks", "tank", "履带"),
+    "automobile": ("car", "vehicle", "wheels", "汽车"),
+    "truck": ("vehicle", "car", "chassis", "wheels", "卡车"),
+    "sheave": ("pulley", "bracket", "clevis", "滑轮"),
+    "clevis": ("bracket", "pulley", "sheave", "支架"),
 }
 
 
