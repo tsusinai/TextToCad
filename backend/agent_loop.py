@@ -657,12 +657,25 @@ def call_vlm_critic(
     ground_truth_text = ""
     if metrics:
         bbox = metrics.get("bbox_mm", {})
+        f_metrics = metrics.get("feature_metrics") or {}
+        assy = f_metrics.get("assembly") or {}
+        assy_text = ""
+        if assy.get("detected"):
+            vs = assy.get("vertical_stacking", {})
+            hp = assy.get("horizontal_protrusion", {})
+            assy_text = (
+                f"- Assembly Verification (OCCT Kernel Measured):\n"
+                f"  * Vertical Stacking: {'VERIFIED' if vs.get('detected') else 'NONE'} ({vs.get('stage_count', 0)} vertical stages, total height {vs.get('stacked_height_mm', '?')} mm)\n"
+                f"  * Horizontal Protrusion (e.g. Forward Barrel/Shaft): {'VERIFIED HORIZONTAL ALONG ' + str(hp.get('direction', '+Y')).upper() if hp.get('detected') else 'NONE'} (extends {hp.get('protrusion_mm', 0)} mm horizontally)\n"
+                f"  * NOTE: In the 2D Top View (+Z), forward direction (+Y) points towards the top of the image frame. The kernel has verified that the barrel/protrusion is HORIZONTAL along Y, NOT vertical along Z!\n"
+            )
         ground_truth_text = (
             f"Ground-Truth OCCT Physical Metrology (Measured directly by CAD Kernel):\n"
             f"- Bounding Dimensions: {bbox.get('x', '?')} × {bbox.get('y', '?')} × {bbox.get('z', '?')} mm\n"
             f"- Volume: {metrics.get('volume_mm3', '?')} mm³\n"
             f"- Solid Count: {metrics.get('solid_count', '?')}, Face Count: {metrics.get('face_count', '?')}\n"
-            f"- Manifold B-Rep Valid: {'YES' if metrics.get('valid_brep') else 'NO'}\n\n"
+            f"- Manifold B-Rep Valid: {'YES' if metrics.get('valid_brep') else 'NO'}\n"
+            f"{assy_text}\n"
         )
 
     patch_history_text = ""

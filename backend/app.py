@@ -1407,6 +1407,29 @@ def _normalize_ir_draft(
                 "original_max_dimension": max_bounding_dim,
             }
 
+    # Assembly Axis & Aspect-Ratio Harmonization:
+    # When side components (tracks/wheels) are mounted on <X / >X and forward components (barrel/nose) on >Y / <Y:
+    # Ensure Y (depth) is the longitudinal forward axis and X (width) is the transverse side axis!
+    has_side_x_mounts = any(
+        isinstance(n.get("mount"), dict) and str(n["mount"].get("face", "")).upper() in {"<X", ">X", "-X", "+X", "LEFT", "RIGHT"}
+        for n in nodes
+    )
+    has_forward_y_mounts = any(
+        isinstance(n.get("mount"), dict) and str(n["mount"].get("face", "")).upper() in {">Y", "<Y", "+Y", "-Y", "FRONT", "BACK"}
+        for n in nodes
+    )
+    if has_side_x_mounts and has_forward_y_mounts:
+        for n in nodes:
+            if str(n.get("operation", "")).lower() == "box":
+                n_params = n.get("parameters") or {}
+                w_val = n_params.get("width")
+                d_val = n_params.get("depth")
+                w_num = normalized_parameters[w_val]["value"] if isinstance(w_val, str) and w_val in normalized_parameters else (w_val.get("value") if isinstance(w_val, dict) else w_val)
+                d_num = normalized_parameters[d_val]["value"] if isinstance(d_val, str) and d_val in normalized_parameters else (d_val.get("value") if isinstance(d_val, dict) else d_val)
+                if isinstance(w_num, (int, float)) and isinstance(d_num, (int, float)) and w_num > d_num:
+                    n_params["width"] = d_num
+                    n_params["depth"] = w_num
+
     outputs = candidate.get("outputs")
     if not isinstance(outputs, list):
         outputs = []
