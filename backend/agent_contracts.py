@@ -129,7 +129,10 @@ def verify_requirement_spec(
         elif kind == "shell":
             present = any(op in {"shell", "cut_inner_volume", "cut_inner_cylinder", "cut_recess"} for op in operations)
         elif kind == "slot":
-            present = any(op == "cut_recess" for op in operations) or any(word in graph_text for word in ("slot", "groove", "keyway", "recess", "槽"))
+            present = (
+                any(op in {"cut", "cut_recess", "subtract"} for op in operations)
+                or any(word in graph_text for word in ("slot", "groove", "keyway", "recess", "pocket", "notch", "ear", "耳", "槽"))
+            )
         elif kind == "fins":
             present = measured_fin_count > 0 if occt_available else (
                 any(op in {"linear_pattern", "polar_pattern"} for op in operations)

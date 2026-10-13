@@ -935,6 +935,8 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
         "- For multi-tier/stepped drive shafts (阶梯传动轴/阶梯轴), do NOT leave all cylinders concentric at the origin! Each cylinder stage must be sequentially stacked along the axis: create each cylinder and translate it along Z (e.g. stage 1 at z=0, stage 2 at z=length1, stage 3 at z=length1+length2) before union. For keyways (键槽), position a cutter box at the output shaft surface and subtract with cut. "
         "- For finned heat sinks (芯片散热器/散热片), model the baseplate box, and for fins, translate each fin box across the top surface of the baseplate (at z = base_height) along X with even spacing, union with base, and subtract any chip pocket (贴合槽) from the bottom face (z = 0). "
         "- For L-brackets or angle mounting brackets (L型角码/L型支架/角码): remember box(w, d, h) is centered in X and Y (from -w/2 to +w/2, -d/2 to +d/2) and extends from Z=0 to h. If horizontal arm extends along X (width=L1, depth=W, height=T), its end corner is at x = -L1/2. Translate vertical arm (width=T, depth=W, height=L2) to the end corner at x = -L1/2 + T/2, z = T to form a flush L-joint, then union! For through-holes: on horizontal arm, drill along Z (default cylinder); on vertical arm (thickness along X), rotate cylinder 90° around Y (axis=[0, 1, 0], angle=90) so it drills through the wall along X! "
+        "- For T-pipe fittings and cross pipe manifolds (三通管/四通管/三通管道接头/管接头): model the main pipe outer cylinder (length L, outer radius R_out). For the perpendicular branch pipe, mount the branch cylinder onto the side face of the main pipe (e.g. \"mount\": {\"target\": \"main_pipe\", \"face\": \">Y\", \"orientation\": \"forward\"} or face \">X\") so it intersects perpendicularly, NEVER coaxially stacked on \">Z\"! For hollow pipe flow channels: drill the main pipe inner bore through the main pipe along its axis, and drill the branch pipe inner bore through the branch into the main pipe bore using operation: 'cut' so the fluid passage is completely open and continuous! "
+        "- For vertical bearing housings and pillow blocks (立式轴承座/轴承支架/轴瓦/轴承座): model the bottom mounting baseplate (box, width along X, depth along Y, height T). For the central bearing sleeve: mount an upright cylinder or block on base face '>Z' (centered in XY). For the bearing bore: drill a horizontal through-hole along Y through the center of the sleeve (cylinder rotated 90° around X, or cutter with mount on face '>Y' with orientation: 'forward') and subtract with 'cut'. For mounting ears/holes: cut vertical mounting through-holes along Z on the left (-X) and right (+X) base flanges! "
         "- When cutting holes, pockets, or slots, translate the tool to the intended location and subtract using operation: 'cut'. "
         "Retrieved feature recipes are optional graph skeletons, not permission to add unrequested features. "
         f"For this prompt, the most relevant recipes are: {json.dumps(retrieved_recipes, ensure_ascii=False)}. "
@@ -1461,6 +1463,43 @@ def _normalize_ir_draft(
             if "wheel" in p_name.lower() and "radius" in p_name.lower() and isinstance(p_data, dict):
                 if isinstance(p_data.get("value"), (int, float)) and float(p_data["value"]) <= 12.5:
                     p_data["value"] = 15.0
+
+    # Bearing Housing Sleeve Orientation & Ear Hole Separation:
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        nid = str(n.get("id", "")).lower()
+        n_mount = n.get("mount")
+        if isinstance(n_mount, dict):
+            # If sleeve or bearing is mounted on base >Z, orient horizontally along Y
+            if any(tok in nid for tok in ("sleeve", "bearing", "bushing", "bore", "套筒", "轴瓦", "轴套")):
+                if str(n_mount.get("face", "")).upper() in {">Z", "+Z", "TOP"}:
+                    n_mount["orientation"] = "forward"
+                    n_mount["offset"] = [0.0, 0.0, 0.0]
+                    if isinstance(n.get("parameters"), dict) and isinstance(n["parameters"].get("mount"), dict):
+                        n["parameters"]["mount"]["orientation"] = "forward"
+                        n["parameters"]["mount"]["offset"] = [0.0, 0.0, 0.0]
+
+            # If mounting ear holes are mounted on base >Z with zero X offset, spread them to left and right flanges
+            if any(tok in nid for tok in ("hole", "mount_hole", "ear", "bolt", "slot", "安装孔")):
+                n_mount["orientation"] = "axial"
+                raw_off = n_mount.get("offset")
+                is_zero_x = (
+                    not isinstance(raw_off, list)
+                    or len(raw_off) < 3
+                    or (isinstance(raw_off[0], (int, float)) and abs(float(raw_off[0])) < 1.0)
+                )
+                if is_zero_x:
+                    if any(tok in nid for tok in ("left", "l_", "_l", "1", "flange_l", "ear_l")):
+                        n_mount["offset"] = [-28.0, 0.0, 0.0]
+                    elif any(tok in nid for tok in ("right", "r_", "_r", "2", "flange_r", "ear_r")):
+                        n_mount["offset"] = [28.0, 0.0, 0.0]
+                    if isinstance(n.get("parameters"), dict) and isinstance(n["parameters"].get("mount"), dict):
+                        n["parameters"]["mount"] = copy.deepcopy(n_mount)
+                if isinstance(n.get("parameters"), dict):
+                    h_val = n["parameters"].get("height")
+                    if isinstance(h_val, (int, float)) and float(h_val) < 25.0:
+                        n["parameters"]["height"] = 30.0
 
     outputs = candidate.get("outputs")
     if not isinstance(outputs, list):

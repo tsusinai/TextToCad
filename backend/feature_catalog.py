@@ -113,6 +113,21 @@ FEATURE_RECIPES: tuple[dict[str, Any], ...] = (
         ],
         "checks": ["bracket u-profile", "shaft alignment", "pulley coaxial mounting", "clearance"],
     },
+    {
+        "id": "pillow_block_bearing_housing",
+        "keywords": ("bearing", "housing", "pillow", "block", "bushing", "pedestal", "轴承座", "立式轴承座", "轴承支架", "轴瓦", "轴承"),
+        "intent": "assemble a pillow block bearing housing with bottom mounting base, central upright bearing sleeve arch with horizontal through-bore, and left/right ear bolt mounting slots",
+        "graph": [
+            "base box (width=80, depth=40, height=12 mm; X=transverse width, Y=depth)",
+            "sleeve cylinder (radius=20, height=40 mm) mounted on base.face('>Z') with orientation='forward' and offset=[0, 0, 0]",
+            "bore cylinder (radius=12.5, height=50 mm) coaxial with sleeve along Y (orientation='forward')",
+            "slot_left box (width=8, depth=16, height=30 mm) mounted on base.face('>Z') with offset=[-28, 0, 0]",
+            "slot_right box (width=8, depth=16, height=30 mm) mounted on base.face('>Z') with offset=[28, 0, 0]",
+            "housing_solid = union(base, sleeve)",
+            "bearing_housing = cut(housing_solid, bore, slot_left, slot_right)",
+        ],
+        "checks": ["base flange dimensions", "horizontal bore alignment", "ear mounting slot spacing", "bore clearance"],
+    },
 )
 
 
