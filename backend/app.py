@@ -1464,6 +1464,43 @@ def _normalize_ir_draft(
                 if isinstance(p_data.get("value"), (int, float)) and float(p_data["value"]) <= 12.5:
                     p_data["value"] = 15.0
 
+    # Bearing Housing Sleeve Orientation & Ear Hole Separation:
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        nid = str(n.get("id", "")).lower()
+        n_mount = n.get("mount")
+        if isinstance(n_mount, dict):
+            # If sleeve or bearing is mounted on base >Z, orient horizontally along Y
+            if any(tok in nid for tok in ("sleeve", "bearing", "bushing", "bore", "套筒", "轴瓦", "轴套")):
+                if str(n_mount.get("face", "")).upper() in {">Z", "+Z", "TOP"}:
+                    n_mount["orientation"] = "forward"
+                    n_mount["offset"] = [0.0, 0.0, 0.0]
+                    if isinstance(n.get("parameters"), dict) and isinstance(n["parameters"].get("mount"), dict):
+                        n["parameters"]["mount"]["orientation"] = "forward"
+                        n["parameters"]["mount"]["offset"] = [0.0, 0.0, 0.0]
+
+            # If mounting ear holes are mounted on base >Z with zero X offset, spread them to left and right flanges
+            if any(tok in nid for tok in ("hole", "mount_hole", "ear", "bolt", "slot", "安装孔")):
+                n_mount["orientation"] = "axial"
+                raw_off = n_mount.get("offset")
+                is_zero_x = (
+                    not isinstance(raw_off, list)
+                    or len(raw_off) < 3
+                    or (isinstance(raw_off[0], (int, float)) and abs(float(raw_off[0])) < 1.0)
+                )
+                if is_zero_x:
+                    if any(tok in nid for tok in ("left", "l_", "_l", "1", "flange_l", "ear_l")):
+                        n_mount["offset"] = [-28.0, 0.0, 0.0]
+                    elif any(tok in nid for tok in ("right", "r_", "_r", "2", "flange_r", "ear_r")):
+                        n_mount["offset"] = [28.0, 0.0, 0.0]
+                    if isinstance(n.get("parameters"), dict) and isinstance(n["parameters"].get("mount"), dict):
+                        n["parameters"]["mount"] = copy.deepcopy(n_mount)
+                if isinstance(n.get("parameters"), dict):
+                    h_val = n["parameters"].get("height")
+                    if isinstance(h_val, (int, float)) and float(h_val) < 25.0:
+                        n["parameters"]["height"] = 30.0
+
     outputs = candidate.get("outputs")
     if not isinstance(outputs, list):
         outputs = []

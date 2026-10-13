@@ -578,6 +578,8 @@ def _apply_mount(
             child = child.rotate((0, 0, 0), (0, 1, 0), -90)
         elif canonical_face == "<Z" and orientation in {"forward", "normal"}:
             child = child.rotate((0, 0, 0), (1, 0, 0), 180)
+        elif canonical_face == ">Z" and orientation == "forward":
+            child = child.rotate((0, 0, 0), (1, 0, 0), -90)
 
     host_bb = _get_shape_bbox(host_solid)
     child_bb = _get_shape_bbox(child)
@@ -591,7 +593,26 @@ def _apply_mount(
         else (1.5 if canonical_face in {">Y", "<Y", ">X", "<X"} and is_cylinder_or_extrusion else 0.05)
     )
     overlap = float(mount.get("overlap", default_overlap))
-    if canonical_face == ">Z":
+
+    is_cutter = any(kw in child_id for kw in ("bore", "hole", "cutter", "drill", "subtractor", "tool"))
+    if is_cutter and not is_mock:
+        if canonical_face in {">Z", "<Z"}:
+            dz = host_bb.zmid - child_bb.zmid
+            dx = host_bb.xmid - child_bb.xmid
+            dy = host_bb.ymid - child_bb.ymid
+        elif canonical_face in {">Y", "<Y"}:
+            dy = host_bb.ymid - child_bb.ymid
+            dx = host_bb.xmid - child_bb.xmid
+            dz = host_bb.zmid - child_bb.zmid
+        elif canonical_face in {">X", "<X"}:
+            dx = host_bb.xmid - child_bb.xmid
+            dy = host_bb.ymid - child_bb.ymid
+            dz = host_bb.zmid - child_bb.zmid
+        else:
+            dx = host_bb.xmid - child_bb.xmid
+            dy = host_bb.ymid - child_bb.ymid
+            dz = host_bb.zmid - child_bb.zmid
+    elif canonical_face == ">Z":
         dz = (host_bb.zmax - child_bb.zmin) - overlap
         if align == "flush":
             dx = host_bb.xmin - child_bb.xmin
