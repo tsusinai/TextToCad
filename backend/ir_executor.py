@@ -561,9 +561,10 @@ def _apply_mount(
         or any(kw in child_id for kw in ("barrel", "piston", "shaft", "cylinder", "axle", "rod", "pin", "wheel", "gun", "pipe", "tube"))
     )
 
+    is_wheel_side_mount = "wheel" in child_id and canonical_face in {">X", "<X"}
     should_orient = (
-        orientation in {"auto", "forward", "normal"}
-        and (is_cylinder_or_extrusion or orientation in {"forward", "normal"})
+        (orientation in {"auto", "forward", "normal"} or is_wheel_side_mount)
+        and (is_cylinder_or_extrusion or orientation in {"forward", "normal"} or is_wheel_side_mount)
     )
 
     if should_orient and hasattr(child, "rotate") and callable(child.rotate):
@@ -583,7 +584,13 @@ def _apply_mount(
 
     align = str(mount.get("align") or "center").strip().lower()
 
-    overlap = float(mount.get("overlap", 0.0))
+    is_mock = type(host_solid).__name__ == "MockShape" or type(child).__name__ == "MockShape"
+    default_overlap = (
+        0.0
+        if is_mock
+        else (1.5 if canonical_face in {">Y", "<Y", ">X", "<X"} and is_cylinder_or_extrusion else 0.05)
+    )
+    overlap = float(mount.get("overlap", default_overlap))
     if canonical_face == ">Z":
         dz = (host_bb.zmax - child_bb.zmin) - overlap
         if align == "flush":

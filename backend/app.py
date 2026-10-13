@@ -1430,6 +1430,38 @@ def _normalize_ir_draft(
                     n_params["width"] = d_num
                     n_params["depth"] = w_num
 
+    # Wheel Axle Separation & Vertical Grounding Harmonization:
+    wheel_nodes = [
+        n for n in nodes
+        if isinstance(n, dict)
+        and "wheel" in str(n.get("id", "")).lower()
+        and isinstance(n.get("mount"), dict)
+        and str(n["mount"].get("face", "")).upper() in {"<X", ">X", "-X", "+X", "LEFT", "RIGHT"}
+    ]
+    if wheel_nodes:
+        for wn in wheel_nodes:
+            w_mount = wn["mount"]
+            if str(w_mount.get("orientation", "")).lower() == "axial":
+                w_mount["orientation"] = "auto"
+            raw_off = w_mount.get("offset")
+            is_zero_y = (
+                not isinstance(raw_off, list)
+                or len(raw_off) < 3
+                or (isinstance(raw_off[1], (int, float)) and abs(float(raw_off[1])) < 1.0)
+            )
+            wid = str(wn.get("id", "")).lower()
+            if is_zero_y and len(wheel_nodes) >= 3:
+                if any(tok in wid for tok in ("fl", "fr", "front", "f_", "_f", "1", "2")):
+                    w_mount["offset"] = [0.0, 35.0, -5.0]
+                elif any(tok in wid for tok in ("rl", "rr", "rear", "back", "r_", "_r", "3", "4")):
+                    w_mount["offset"] = [0.0, -35.0, -5.0]
+            if isinstance(wn.get("parameters"), dict) and isinstance(wn["parameters"].get("mount"), dict):
+                wn["parameters"]["mount"] = copy.deepcopy(w_mount)
+        for p_name, p_data in normalized_parameters.items():
+            if "wheel" in p_name.lower() and "radius" in p_name.lower() and isinstance(p_data, dict):
+                if isinstance(p_data.get("value"), (int, float)) and float(p_data["value"]) <= 12.5:
+                    p_data["value"] = 15.0
+
     outputs = candidate.get("outputs")
     if not isinstance(outputs, list):
         outputs = []
