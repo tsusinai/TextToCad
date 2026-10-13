@@ -40,7 +40,7 @@ ALLOWED_MOUNT_FACES = {
 }
 ALLOWED_MOUNT_ALIGNS = {"center", "flush", "tangent"}
 ALLOWED_MOUNT_ORIENTATIONS = {"auto", "normal", "forward", "axial"}
-EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_().]+(?:\s*(?:[+\-*/%()]|\*\*)\s*[A-Za-z0-9_().]+)*$")
+EXPRESSION_RE = re.compile(r"^[+\-\s]*[A-Za-z0-9_().]+(?:\s*(?:[+\-*/%()]|\*\*)\s*[+\-\s]*[A-Za-z0-9_().]+)*$")
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 ID_RE = re.compile(IR_ID_PATTERN)
 
