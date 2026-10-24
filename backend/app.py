@@ -2629,6 +2629,57 @@ def _classify_clearance(
     }
 
 
+def _assembly_clearance_report(
+    output_shapes: dict[str, Any],
+    process_profile: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Pairwise mating check across the output entities of one IR document.
+
+    Warning-level by design: interference between separate output entities is
+    reported (into ``checks["assembly_clearance"]``) but never fails the
+    generation. Mounted assemblies that already fuse into one solid have a
+    single output and are skipped entirely.
+    """
+    ids = [str(key) for key in output_shapes]
+    if len(ids) < 2:
+        return None
+    profile = process_profile or PROCESS_PROFILES["fdm"]
+    required = float(profile.get("clearance", 0.3))
+    tolerance = float(profile.get("tolerance", 0.1))
+    pairs: list[dict[str, Any]] = []
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            left = output_shapes[ids[i]]
+            right = output_shapes[ids[j]]
+            distance_mm, method = _shape_distance(left, right)
+            intersection_mm3, intersection_method = _shape_intersection_volume(left, right)
+            verdict = _classify_clearance(distance_mm, required, tolerance, intersection_mm3)
+            verdict["pair"] = [ids[i], ids[j]]
+            if method:
+                verdict["method"] = method
+            if intersection_method:
+                verdict["intersection_method"] = intersection_method
+            pairs.append(verdict)
+    statuses = [str(pair.get("status", "unknown")) for pair in pairs]
+    if "interference" in statuses:
+        overall = "interference"
+    elif "warning" in statuses:
+        overall = "warning"
+    elif "contact" in statuses:
+        overall = "contact"
+    elif statuses and all(status == "pass" for status in statuses):
+        overall = "pass"
+    else:
+        overall = "unknown"
+    return {
+        "status": overall,
+        "checked_pairs": len(pairs),
+        "required_clearance_mm": round(required, 6),
+        "pairs": pairs,
+        "hard": False,
+    }
+
+
 def _face_level_dfm(
     shape: Any,
     process: str,
@@ -4141,6 +4192,13 @@ def _generate_ir_model(
         checks["ir_execution"] = execution.get("trace", [])
         checks["output_quality"] = output_quality
         checks["all_outputs_valid"] = output_quality["valid"]
+        clearance_report = _assembly_clearance_report(
+            execution.get("output_shapes") or {},
+            PROCESS_PROFILES.get(params.process),
+        )
+        if clearance_report is not None:
+            # Warning-level: multi-entity interference is surfaced, never fatal.
+            checks["assembly_clearance"] = clearance_report
         hard_checks = {
             key: checks[key]
             for key in ("valid_brep", "occt_valid", "nonzero_faces", "single_solid", "positive_volume", "bounded", "all_outputs_valid")
