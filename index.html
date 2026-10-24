@@ -35,6 +35,27 @@
       --shadow-main: 0 32px 80px rgba(10, 14, 11, 0.14), 0 2px 10px rgba(10, 14, 11, 0.04);
       --shadow-card: 0 2px 8px rgba(18, 20, 18, 0.04);
       --shadow-glow: 0 0 25px rgba(212, 255, 79, 0.35);
+
+      /* Lucian UX/UI Theme Tokens mapped to TextTo3D Dark Studio Palette */
+      --ux-page: #121517;
+      --ux-surface: #1a1e22;
+      --ux-surface-2: #24292f;
+      --ux-surface-3: #2d333b;
+      --ux-ink: #f0f6fc;
+      --ux-ink-2: #c9d1d9;
+      --ux-ink-3: #8b949e;
+      --ux-line: rgba(255, 255, 255, 0.08);
+      --ux-line-2: rgba(255, 255, 255, 0.18);
+      --ux-accent: #d4ff4f;
+      --ux-accent-soft: rgba(212, 255, 79, 0.16);
+      --ux-accent-ink: #131517;
+      --ux-mint: #48bb78;
+      --ux-warn: #f59e0b;
+      --ux-danger: #ef4444;
+      --ux-shadow: rgba(0, 0, 0, 0.35);
+      --ux-shadow-strong: rgba(0, 0, 0, 0.65);
+      --ux-ease: cubic-bezier(.2, .8, .2, 1);
+      --ux-spring: cubic-bezier(.34, 1.45, .64, 1);
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
@@ -730,13 +751,14 @@
     .issue-item.error { border-left-color: var(--coral); background: #fef2f2; color: #991b1b; }
     .issue-empty { color: var(--muted); font-size: 11px; }
 
+    /* Lucian UX/UI Prompt #001 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#001 */
     .generate {
       width: 100%;
-      height: 50px;
+      height: 52px;
       margin-top: 18px;
       border: 0;
       border-radius: 14px;
-      background: linear-gradient(135deg, #1d201e 0%, #111311 100%);
+      background: linear-gradient(150deg, #222623, #131513 55%, #1b1e1c);
       color: #ffffff;
       display: flex;
       align-items: center;
@@ -746,24 +768,269 @@
       font-size: 14px;
       font-weight: 700;
       letter-spacing: 0.02em;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 8px 20px -8px rgba(0, 0, 0, 0.4);
       cursor: pointer;
       position: relative;
       overflow: hidden;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      isolation: isolate;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .generate:hover {
-      background: linear-gradient(135deg, #2b302c 0%, #171a17 100%);
+      background: linear-gradient(150deg, #2d342e, #171a17 55%, #232924);
       transform: translateY(-2px);
-      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22), 0 0 16px rgba(212, 255, 79, 0.2);
+      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(212, 255, 79, 0.35), 0 12px 28px -10px rgba(0, 0, 0, 0.55), 0 0 20px rgba(212, 255, 79, 0.25);
     }
     .generate:active {
-      transform: scale(0.985);
+      transform: scale(0.985, 0.95);
     }
-    .generate.loading {
-      background: linear-gradient(135deg, #374a32 0%, #243321 100%);
-      box-shadow: 0 0 20px rgba(72, 117, 65, 0.35);
+    .u001-sheen {
+      position: absolute;
+      top: -40%;
+      bottom: -40%;
+      left: 0;
+      width: 38%;
+      pointer-events: none;
+      background: linear-gradient(100deg, transparent, rgba(255,255,255,0.22) 50%, transparent);
+      transform: translateX(-150%) skewX(-12deg);
+      transition: transform 0.9s cubic-bezier(.2, .8, .2, 1);
     }
+    .generate:hover .u001-sheen {
+      transform: translateX(360%) skewX(-12deg);
+    }
+    .u001-txt {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      transition: opacity .25s ease, filter .25s ease;
+    }
+    .u001-spin {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 26px;
+      height: 26px;
+      margin: -13px 0 0 -13px;
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity .25s ease, transform .35s cubic-bezier(.34, 1.45, .64, 1);
+      pointer-events: none;
+    }
+    .u001-spin svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: var(--lime, #d4ff4f);
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      animation: u001-rot 1s linear infinite;
+    }
+    .u001-spin circle {
+      stroke-dasharray: 1 56;
+      animation: u001-arc 1.4s ease-in-out infinite;
+    }
+    @keyframes u001-rot { to { transform: rotate(360deg); } }
+    @keyframes u001-arc { 0%,100% { stroke-dasharray: 1 56; } 50% { stroke-dasharray: 38 19; } }
+    .u001-done {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      opacity: 0;
+      transform: translateY(10px);
+      filter: blur(4px);
+      transition: opacity .3s ease, transform .4s cubic-bezier(.34, 1.45, .64, 1), filter .3s ease;
+      pointer-events: none;
+      color: #d4ff4f;
+    }
+    .u001-done b {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #48bb78;
+      color: #171816;
+    }
+    .u001-done svg {
+      width: 13px;
+      height: 13px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .generate[data-state="load"], .generate.loading {
+      cursor: progress;
+      box-shadow: 0 0 24px rgba(212, 255, 79, 0.35);
+    }
+    .generate[data-state="load"] .u001-txt, .generate.loading .u001-txt {
+      opacity: 0;
+      filter: blur(4px);
+    }
+    .generate[data-state="load"] .u001-spin, .generate.loading .u001-spin {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .generate[data-state="ok"] .u001-txt {
+      opacity: 0;
+    }
+    .generate[data-state="ok"] .u001-done {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+
+    /* Lucian UX/UI Prompt #039 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#039 */
+    .u039-mode-tabs {
+      position: relative;
+      display: flex;
+      margin-top: 8px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--card-surface, #ffffff);
+      box-shadow: 0 0 0 1px var(--line, rgba(0,0,0,0.08)), 0 2px 6px rgba(0,0,0,0.04);
+    }
+    .u039-pill {
+      position: absolute;
+      left: 0;
+      top: 4px;
+      bottom: 4px;
+      width: var(--w, 33%);
+      border-radius: 9px;
+      background: #171816;
+      transform: translateX(var(--x, 4px));
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 10px rgba(212, 255, 79, 0.25);
+      transition: transform .42s cubic-bezier(.34, 1.45, .64, 1), width .42s cubic-bezier(.34, 1.45, .64, 1);
+      pointer-events: none;
+    }
+    .u039-tab {
+      position: relative;
+      flex: 1;
+      height: 36px;
+      border: 0;
+      padding: 0 6px;
+      border-radius: 9px;
+      background: none;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: #555a52;
+      white-space: nowrap;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: color .25s ease;
+      user-select: none;
+    }
+    .u039-tab[aria-selected="true"] {
+      color: #d4ff4f;
+    }
+    .u039-tab:focus-visible {
+      outline: 2px solid #99bf58;
+      outline-offset: 1px;
+    }
+    .u039-tab .tab-badge {
+      font-size: 13px;
+      display: inline-block;
+      line-height: 1;
+    }
+
+    /* Lucian UX/UI Prompt #070 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#070 */
+    .u070-stack {
+      position: fixed;
+      right: 28px;
+      bottom: 28px;
+      width: 320px;
+      max-width: calc(100vw - 40px);
+      z-index: 9999;
+      pointer-events: none;
+    }
+    .u070-zone {
+      position: relative;
+      width: 100%;
+      min-height: 60px;
+      pointer-events: auto;
+    }
+    .u070-t {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 54px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      background: rgba(23, 24, 22, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f7f8f5;
+      box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5), 0 0 16px -4px var(--c, #d4ff4f);
+      transform-origin: 50% 100%;
+      transform: translate(var(--dx, 0px), var(--y, 0px)) scale(var(--s, 1));
+      opacity: var(--o, 1);
+      transition: transform .45s cubic-bezier(.34, 1.45, .64, 1), opacity .3s ease;
+      user-select: none;
+    }
+    .u070-t.enter { transform: translateY(60px) scale(.85); opacity: 0; }
+    .u070-t.leave { transform: translateY(40px) scale(.9); opacity: 0; pointer-events: none; }
+    .u070-t.side { transform: translate(calc(var(--dir, 1) * 360px), var(--y, 0px)) rotate(calc(var(--dir, 1) * 10deg)); }
+    .u070-t.back > * { opacity: 0; }
+    .u070-ic {
+      width: 28px;
+      height: 28px;
+      flex: none;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: color-mix(in srgb, var(--c, #d4ff4f) 22%, transparent);
+      color: var(--c, #d4ff4f);
+    }
+    .u070-ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .u070-ic i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: u070-spin .7s linear infinite; }
+    .u070-tx { flex: 1; min-width: 0; }
+    .u070-tx b { display: block; font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: #ffffff; }
+    .u070-tx small { display: block; margin-top: 1px; font-size: 11px; color: #a1a69c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .u070-x {
+      width: 22px;
+      height: 22px;
+      flex: none;
+      border: 0;
+      padding: 0;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      color: #a1a69c;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .u070-x:hover { background: rgba(255, 255, 255, 0.2); color: #ffffff; }
+    .u070-x svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+    .u070-bar {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 0;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--c, #d4ff4f);
+      opacity: .8;
+      transform-origin: 0 50%;
+      transform: scaleX(var(--left, 1));
+    }
+    .u070-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .shortcut {
       color: rgba(255, 255, 255, 0.6);
       font-family: 'JetBrains Mono', monospace;
@@ -1028,6 +1295,371 @@
       transition: opacity .2s ease, transform .2s ease;
     }
     .viewport-transform-bar.hidden { display: none !important; }
+
+    /* 3D Cross-Section (剖切) Bar */
+    .viewport-section-bar {
+      position: absolute;
+      top: 56px;
+      left: 16px;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      background: rgba(18, 22, 26, 0.9);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      font-size: 11px;
+      color: #e2e8f0;
+      flex-wrap: wrap;
+    }
+    .section-tool-group, .section-slider-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-tool-label {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .section-axis-btn, .section-flip-btn {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      padding: 3px 8px;
+      color: #f1f5f9;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .section-axis-btn:hover, .section-flip-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(212, 255, 79, 0.4);
+      color: #d4ff4f;
+    }
+    .section-axis-btn.active {
+      background: #d4ff4f;
+      color: #121517;
+      border-color: #d4ff4f;
+      font-weight: 700;
+    }
+    .section-depth-slider {
+      width: 100px;
+      height: 4px;
+      accent-color: #d4ff4f;
+      cursor: pointer;
+    }
+    .section-depth-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      min-width: 48px;
+      color: #d4ff4f;
+    }
+
+    /* CAD Metrology HUD Overlay */
+    .viewport-measure-hud {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 7;
+      width: 280px;
+      padding: 12px 14px;
+      border: 1px solid rgba(212, 255, 79, 0.3);
+      border-radius: 14px;
+      background: rgba(18, 22, 26, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(212, 255, 79, 0.12);
+      color: #f8fafc;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      animation: hudFadeIn 0.25s ease-out;
+    }
+    @keyframes hudFadeIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .measure-hud-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .measure-hud-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #d4ff4f;
+    }
+    .measure-hud-close {
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .measure-hud-close:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+    .measure-hud-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .measure-hud-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .measure-hud-item:first-child {
+      grid-column: span 2;
+    }
+    .measure-hud-label {
+      font-size: 9.5px;
+      font-weight: 600;
+      color: #94a3b8;
+      letter-spacing: 0.02em;
+    }
+    .measure-hud-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .measure-hud-bbox-detail {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      color: #64748b;
+    }
+
+    /* 2D Blueprint In-Page Modal */
+    .drawing-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .drawing-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 14, 18, 0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .drawing-modal-content {
+      position: relative;
+      width: min(1080px, 95vw);
+      height: min(780px, 90vh);
+      background: #f8fafc;
+      border-radius: 20px;
+      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .drawing-modal-header {
+      height: 58px;
+      padding: 0 20px;
+      background: #0f172a;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .drawing-modal-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      color: #d4ff4f;
+    }
+    .drawing-modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .drawing-action-btn {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .drawing-action-btn:hover {
+      background: rgba(212, 255, 79, 0.2);
+      border-color: #d4ff4f;
+      color: #d4ff4f;
+    }
+    .drawing-modal-close {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      cursor: pointer;
+      font-size: 14px;
+      display: grid;
+      place-items: center;
+      transition: background 0.2s ease;
+    }
+    .drawing-modal-close:hover {
+      background: rgba(239, 68, 68, 0.4);
+      color: #ffffff;
+    }
+    .drawing-modal-body {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+    }
+    .drawing-modal-svg-wrap {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .drawing-modal-svg-wrap svg {
+      max-width: 100%;
+      max-height: 100%;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      background: #ffffff;
+      border-radius: 8px;
+    }
+
+    .ir-param-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 99998;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .ir-param-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 14, 12, 0.62);
+      backdrop-filter: blur(6px);
+    }
+    .ir-param-content {
+      position: relative;
+      width: min(560px, 92vw);
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+      background: #f8fafc;
+      border-radius: 16px;
+      box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .ir-param-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+    }
+    .ir-param-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      color: #0f172a;
+    }
+    .ir-param-close {
+      border: none;
+      background: transparent;
+      font-size: 16px;
+      cursor: pointer;
+      color: #475569;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+    .ir-param-close:hover { background: rgba(15, 23, 42, 0.08); }
+    .ir-param-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      padding: 10px 18px;
+      font-size: 12px;
+      color: #334155;
+      background: rgba(226, 232, 240, 0.55);
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    }
+    .ir-param-list {
+      padding: 12px 18px 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ir-param-row {
+      display: grid;
+      grid-template-columns: 130px 1fr 84px;
+      align-items: center;
+      gap: 10px;
+    }
+    .ir-param-row label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #0f172a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ir-param-row input[type='range'] { width: 100%; accent-color: #65a30d; }
+    .ir-param-row input[type='number'] {
+      width: 100%;
+      padding: 5px 6px;
+      border: 1px solid rgba(15, 23, 42, 0.22);
+      border-radius: 8px;
+      font-size: 12.5px;
+      color: #0f172a;
+      background: #ffffff;
+    }
+    .ir-param-empty {
+      padding: 18px;
+      font-size: 13px;
+      color: #475569;
+    }
     .agent-timeline {
       margin-top: 14px;
       margin-bottom: 8px;
@@ -1361,6 +1993,38 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
     .critic-discrepancies { display: grid; gap: 6px; margin-top: 10px; }
+    .critic-candidates {
+      margin-top: 10px;
+      display: grid;
+      gap: 6px;
+    }
+    .critic-candidates-head {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      color: #9ab08a;
+    }
+    .critic-candidates-list { display: grid; gap: 5px; }
+    .candidate-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      cursor: default;
+    }
+    .candidate-row.is-best { border: 1px solid rgba(212, 255, 79, 0.55); background: rgba(212, 255, 79, 0.08); }
+    .candidate-idx { font-weight: 700; color: #e2e8f0; min-width: 30px; }
+    .candidate-status { padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+    .candidate-status.valid { background: rgba(72, 187, 120, 0.22); color: #68d391; }
+    .candidate-status.invalid { background: rgba(100, 116, 139, 0.28); color: #a8b3c2; }
+    .candidate-status.budget_exhausted { background: rgba(236, 201, 75, 0.22); color: #ecc94b; }
+    .candidate-patches-count { color: #9ab08a; min-width: 54px; }
+    .candidate-metrics { color: #a8b3c2; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .candidate-best-tag { color: #d4ff4f; font-weight: 700; }
     .critic-item {
       padding: 6px 10px;
       border-radius: 6px;
@@ -2141,7 +2805,13 @@
           <strong class="interpretation-summary" id="interpretationSummary">Precision mounting flange · Ø 60 × 10 mm</strong>
           <small class="interpretation-details" id="interpretationDetails">Watertight B-Rep solid · 4 mounting holes · 12 mm central bore</small>
         </div>
-        <button class="generate" id="generate" type="button"><span id="generateLabel">Generate Model</span><span class="shortcut" id="generateShortcut">Ctrl ↵</span></button>
+        <!-- Lucian UX/UI Prompt #001 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#001 -->
+        <button class="generate" id="generate" type="button" data-state="idle">
+          <span class="u001-sheen" aria-hidden="true"></span>
+          <span class="u001-txt"><span id="generateLabel">Generate Model</span><span class="shortcut" id="generateShortcut">Ctrl ↵</span></span>
+          <span class="u001-spin" aria-hidden="true"><svg viewBox="0 0 30 30"><circle cx="15" cy="15" r="10"/></svg></span>
+          <span class="u001-done" aria-hidden="true"><b><svg viewBox="0 0 16 16"><path d="M3.5 8.4l3 3 6-6.4"/></svg></b><span id="generateDoneLabel">Ready</span></span>
+        </button>
         <button class="cancel-generation" id="cancelGeneration" type="button" hidden>Cancel</button>
         <div class="generation-error" id="generationError" role="status" aria-live="polite"></div>
         <div class="sidebar-config-card">
@@ -2172,11 +2842,18 @@
           </div>
           <div class="mode-controls">
             <div class="mode-copy"><span class="section-label" id="modeLabel">GENERATION ENGINE</span><small id="modeHint">Parametric rule parser · Deterministic, ultra-fast & private</small></div>
-            <select class="mode-select" id="generationMode" aria-label="Generation mode">
+            <select class="mode-select" id="generationMode" aria-label="Generation mode" style="display:none">
               <option value="standard">Standard</option>
               <option value="advanced">Advanced · LLM</option>
               <option value="agent">Agent · Vision Auto-Rework</option>
             </select>
+            <!-- Lucian UX/UI Prompt #039 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#039 -->
+            <div class="ux u039-mode-tabs" id="u039ModeTabs" role="tablist" aria-label="Generation engine mode">
+              <span class="u039-pill" id="u039ModePill" aria-hidden="true"></span>
+              <button class="u039-tab" type="button" role="tab" data-val="standard" aria-selected="true"><span class="tab-badge">⚡</span><span class="tab-text">Std</span></button>
+              <button class="u039-tab" type="button" role="tab" data-val="advanced" aria-selected="false"><span class="tab-badge">🧠</span><span class="tab-text">Adv</span></button>
+              <button class="u039-tab" type="button" role="tab" data-val="agent" aria-selected="false"><span class="tab-badge">🤖</span><span class="tab-text">Agent</span></button>
+            </div>
           </div>
         </div>
         <div class="starter">
@@ -2208,6 +2885,14 @@
               <button class="view-pill" type="button" data-view="top" aria-pressed="false">TOP</button>
               <button class="view-pill" type="button" data-view="front" aria-pressed="false">FRONT</button>
               <span class="toolbar-divider" aria-hidden="true"></span>
+              <button class="view-pill" id="toggleMeasureHud" type="button" aria-pressed="false" title="切换 CAD 空间尺寸与拓扑量测卡">📐 测量</button>
+              <button class="view-pill" id="toggleSectionBar" type="button" aria-pressed="false" title="切换 3D 实时剖切审查工具">✂ 剖切</button>
+              <select class="unit-view-select" id="renderModeSelect" aria-label="渲染材质模式" title="切换渲染模式">
+                <option value="shaded">Shaded</option>
+                <option value="xray">X-Ray (透视)</option>
+                <option value="wireframe">Wireframe (线框)</option>
+              </select>
+              <span class="toolbar-divider" aria-hidden="true"></span>
               <select class="unit-view-select" id="viewerUnitSelect" aria-label="Viewer units">
                 <option value="mm">mm</option>
                 <option value="cm">cm</option>
@@ -2218,6 +2903,7 @@
               <button class="view-pill" id="fitView" type="button" aria-label="Fit view">FIT</button>
               <span class="toolbar-divider" aria-hidden="true"></span>
               <button class="view-pill" id="toggleTransformBar" type="button" aria-pressed="true" title="展开/收起模型姿态变换栏">TRANSFORM</button>
+              <button class="view-pill" id="irParamBtn" type="button" aria-pressed="false" title="IR 参数化即时再编译面板">⚙ 参数</button>
             </div>
           </div>
           <div class="model-stage" id="modelStage" tabindex="0" aria-label="Interactive 3D viewport. Drag to orbit, scroll to zoom.">
@@ -2245,6 +2931,49 @@
               </div>
               <span class="transform-bar-divider" aria-hidden="true"></span>
               <button type="button" class="transform-tool-btn reset" id="btnResetTransform" title="重置模型旋转与镜像">⟲ 重置</button>
+            </div>
+            <div class="viewport-section-bar" id="viewportSectionBar" role="toolbar" aria-label="3D 剖切平面审查工具" style="display:none">
+              <div class="section-tool-group">
+                <span class="section-tool-label">剖切平面:</span>
+                <button type="button" class="section-axis-btn active" data-section-axis="none">关 (None)</button>
+                <button type="button" class="section-axis-btn" data-section-axis="x">X轴 (YZ面)</button>
+                <button type="button" class="section-axis-btn" data-section-axis="y">Y轴 (XZ面)</button>
+                <button type="button" class="section-axis-btn" data-section-axis="z">Z轴 (XY面)</button>
+              </div>
+              <span class="transform-bar-divider" aria-hidden="true"></span>
+              <div class="section-slider-group" id="sectionSliderGroup" style="display:none">
+                <span class="section-tool-label">深度:</span>
+                <input type="range" class="section-depth-slider" id="sectionDepthSlider" min="-100" max="100" value="0" step="0.5">
+                <span class="section-depth-val" id="sectionDepthVal">0.0 mm</span>
+                <button type="button" class="section-flip-btn" id="sectionFlipBtn" title="反转剖切方向">⇄ 反向</button>
+              </div>
+            </div>
+            <div class="viewport-measure-hud" id="viewportMeasureHud" role="region" aria-label="CAD 尺寸量测数据" style="display:none">
+              <div class="measure-hud-header">
+                <span class="measure-hud-title">📐 CAD METROLOGY & METRICS</span>
+                <button type="button" class="measure-hud-close" id="closeMeasureHud" aria-label="Close">✕</button>
+              </div>
+              <div class="measure-hud-grid">
+                <div class="measure-hud-item">
+                  <span class="measure-hud-label">ENVELOPE (包络长×宽×高)</span>
+                  <strong class="measure-hud-value" id="measureBbox">-- × -- × -- mm</strong>
+                </div>
+                <div class="measure-hud-item">
+                  <span class="measure-hud-label">VOLUME (体积)</span>
+                  <strong class="measure-hud-value" id="measureVolume">-- mm³</strong>
+                </div>
+                <div class="measure-hud-item">
+                  <span class="measure-hud-label">SURFACE AREA (表面积)</span>
+                  <strong class="measure-hud-value" id="measureSurface">-- mm²</strong>
+                </div>
+                <div class="measure-hud-item">
+                  <span class="measure-hud-label">TOPOLOGY (流形状态)</span>
+                  <strong class="measure-hud-value" id="measureTopology">Watertight B-Rep</strong>
+                </div>
+              </div>
+              <div class="measure-hud-bbox-detail" id="measureBboxDetail">
+                Center: (0.0, 0.0, 0.0) · ISO Compliant
+              </div>
             </div>
             <div class="viewport-gizmo" id="viewGizmo" aria-label="View orientation">
               <svg class="gizmo-axis" viewBox="0 0 64 64" role="img" aria-label="XYZ orientation">
@@ -2293,6 +3022,7 @@
               <button class="export" id="export3mf" type="button" style="display:none" title="导出用于 3D 打印切片的 3MF 增材制造档案">3MF</button>
               <button class="export" id="exportGlb" type="button" style="display:none" title="导出轻量化 GLB 3D 预览模型">GLB</button>
               <button class="export" id="exportGlbEntities" type="button" style="display:none" title="导出多实体拓扑 GLB">多实体 GLB</button>
+              <button class="export" id="exportDrawing" type="button" style="display:none" title="查看 ISO 标准三视图 2D 矢量工程制图蓝图">2D BLUEPRINT</button>
               <button class="export" id="exportObj" type="button" title="导出三维网格 OBJ 文件">OBJ</button>
             </div>
           </div>
@@ -2335,6 +3065,10 @@
               </div>
             </div>
             <div class="critic-discrepancies" id="criticDiscrepancies"></div>
+            <div class="critic-candidates" id="criticCandidates" hidden>
+              <div class="critic-candidates-head" id="criticCandidatesHead">BEST-OF-N CANDIDATES</div>
+              <div class="critic-candidates-list" id="criticCandidatesList"></div>
+            </div>
             <details class="critic-patches" id="criticPatchesDetails">
               <summary class="critic-patches-summary" id="criticPatchesSummary">Applied Patches</summary>
               <div class="critic-patches-content" id="criticPatchesContent"></div>
@@ -2424,6 +3158,49 @@
         </section>
       </div>
     </section>
+    <!-- 2D Blueprint In-Page Lightbox Modal -->
+    <div class="drawing-modal" id="drawingModal" role="dialog" aria-modal="true" aria-label="2D Engineering Blueprint" style="display:none">
+      <div class="drawing-modal-backdrop" id="drawingModalBackdrop"></div>
+      <div class="drawing-modal-content">
+        <div class="drawing-modal-header">
+          <div class="drawing-modal-title">
+            <span class="drawing-modal-icon">📐</span>
+            <strong id="drawingModalLabel">ISO Standard 2D Technical Drawing (矢量工程蓝图)</strong>
+          </div>
+          <div class="drawing-modal-actions">
+            <button type="button" class="drawing-action-btn" id="btnDownloadSvg" title="下载 SVG 矢量蓝图">⬇ 下载 SVG</button>
+            <button type="button" class="drawing-action-btn" id="btnPrintDrawing" title="打印/导出 PDF">🖨 打印</button>
+            <button type="button" class="drawing-modal-close" id="closeDrawingModal" aria-label="Close">✕</button>
+          </div>
+        </div>
+        <div class="drawing-modal-body" id="drawingModalBody">
+          <div class="drawing-modal-svg-wrap" id="drawingModalSvgWrap"></div>
+        </div>
+      </div>
+    </div>
+    <!-- IR Parametric Re-compile Panel -->
+    <div class="ir-param-modal" id="irParamModal" role="dialog" aria-modal="true" aria-label="IR 参数化再编译" style="display:none">
+      <div class="ir-param-backdrop" id="irParamBackdrop"></div>
+      <div class="ir-param-content">
+        <div class="ir-param-header">
+          <div class="ir-param-title">
+            <span aria-hidden="true">⚙</span>
+            <strong id="irParamTitle">IR PARAMETERS · 参数化即时再编译</strong>
+          </div>
+          <button type="button" class="ir-param-close" id="closeIrParamModal" aria-label="Close">✕</button>
+        </div>
+        <div class="ir-param-metrics" id="irParamMetrics">
+          <span id="irParamMetricsText">--</span>
+        </div>
+        <div class="ir-param-list" id="irParamList"></div>
+      </div>
+    </div>
+    <!-- Lucian UX/UI Prompt #070 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#070 -->
+    <div class="ux u070-stack" id="cadToastStack">
+      <div class="u070-zone" id="cadToastZone" role="region" aria-label="CAD notifications" tabindex="-1">
+        <div class="u070-live" aria-live="polite"></div>
+      </div>
+    </div>
   </main>
   <script>
     const prompt = document.getElementById('prompt');
@@ -2469,6 +3246,7 @@
     const export3mf = document.getElementById('export3mf');
     const exportGlb = document.getElementById('exportGlb');
     const exportGlbEntities = document.getElementById('exportGlbEntities');
+    const exportDrawing = document.getElementById('exportDrawing');
     const issueBadge = document.getElementById('issueBadge');
     const analysisLabel = document.getElementById('analysisLabel');
     const analysisSummary = document.getElementById('analysisSummary');
@@ -2564,6 +3342,7 @@
       return fetch(targetUrl, Object.assign({}, options, { headers }));
     }
     let backendArtifact = null;
+    let currentModelId = null;
     let llmAssumptions = [];
     let interpretationSource = 'draft';
     let currentView = 'iso';
@@ -2600,6 +3379,7 @@
         export3mf: '3MF',
         exportGlb: 'GLB',
         exportGlbEntities: 'Entities',
+        exportDrawing: 'BLUEPRINT',
         fit: 'FIT',
         grid: 'GRID',
         viewerUnits: 'Units',
@@ -2776,6 +3556,7 @@
         export3mf: '3MF',
         exportGlb: 'GLB',
         exportGlbEntities: '多实体 GLB',
+        exportDrawing: '2D工程图',
         fit: '视角复位',
         grid: '参考网格',
         viewerUnits: '视口单位',
@@ -2988,6 +3769,7 @@
       document.querySelector('.prompt-panel h1').textContent = t.title;
       document.querySelector('.helper').textContent = t.helper;
       generateLabel.textContent = generate.classList.contains('loading') ? t.generating : (generateLabel.textContent === copy.en.regenerate || generateLabel.textContent === copy.zh.regenerate ? t.regenerate : t.generate);
+      if (document.getElementById('generateDoneLabel')) document.getElementById('generateDoneLabel').textContent = currentLang === 'zh' ? '已就绪' : 'Ready';
       document.querySelector('.starter .section-label').textContent = t.starter;
       document.querySelector('.recent .section-label').textContent = t.recent;
       const starterLabels = currentLang === 'zh' ? ['法兰底座', 'L型角码', '散热底板', '阶梯传动轴'] : ['Mounting flange', 'L-bracket', 'Finned heat sink', 'Stepped shaft'];
@@ -3017,6 +3799,7 @@
       if (export3mf) export3mf.textContent = t.export3mf;
       if (exportGlb) exportGlb.textContent = t.exportGlb;
       if (exportGlbEntities) exportGlbEntities.textContent = t.exportGlbEntities;
+      if (exportDrawing) exportDrawing.textContent = t.exportDrawing;
       if (fitView) fitView.textContent = t.fit;
       if (toggleGrid) toggleGrid.textContent = t.grid;
       if (viewerUnitSelect) {
@@ -3420,6 +4203,9 @@
           delete node.userData._selectorBaseEmissive;
           delete node.userData.edgeOverlay;
         }
+        while (node !== object && node.children && node.children.length > 0) {
+          node.remove(node.children[0]);
+        }
       });
       textures.forEach((tex) => { try { tex.dispose(); } catch (e) {} });
       materials.forEach((mat) => { try { mat.dispose(); } catch (e) {} });
@@ -3428,20 +4214,42 @@
         object.remove(object.children[0]);
       }
     }
+    threeState.needsRender = true;
+    function requestThreeRender() {
+      threeState.needsRender = true;
+      if (!threeState.animationFrame && threeState.active) {
+        startThreeRenderLoop();
+      }
+    }
     function stopThreeRenderLoop() {
       if (threeState.animationFrame) cancelAnimationFrame(threeState.animationFrame);
       threeState.animationFrame = null;
     }
     function startThreeRenderLoop() {
       if (threeState.animationFrame || !threeState.active) return;
+      // Callers start the loop because something changed; guarantee one paint even
+      // when no controls motion follows (idle frames would otherwise stop it dry).
+      threeState.needsRender = true;
+      let idleFrames = 0;
       const render = () => {
         threeState.animationFrame = null;
         if (!threeState.active || !threeState.renderer || !threeState.scene || !threeState.camera) return;
-        if (threeState.controls) threeState.controls.update();
-        threeState.renderer.render(threeState.scene, threeState.camera);
-        threeState.animationFrame = requestAnimationFrame(render);
+        let controlsActive = false;
+        if (threeState.controls) {
+          controlsActive = Boolean(threeState.controls.update());
+        }
+        if (controlsActive || threeState.needsRender) {
+          threeState.renderer.render(threeState.scene, threeState.camera);
+          threeState.needsRender = false;
+          idleFrames = 0;
+        } else {
+          idleFrames++;
+        }
+        if (controlsActive || idleFrames < 4) {
+          threeState.animationFrame = requestAnimationFrame(render);
+        }
       };
-      render();
+      threeState.animationFrame = requestAnimationFrame(render);
     }
     function hideThreePreview() {
       threeState.loadSeq += 1;
@@ -3586,6 +4394,7 @@
         toggleGrid.setAttribute('aria-pressed', String(threeState.gridVisible));
         toggleGrid.classList.toggle('active', threeState.gridVisible);
       }
+      requestThreeRender();
     }
     function updateViewportGizmo() {
       if (!viewGizmo || !threeState.camera || !threeState.THREE) return;
@@ -3661,7 +4470,9 @@
         if ('outputColorSpace' in threeState.renderer) threeState.renderer.outputColorSpace = THREE.SRGBColorSpace;
         threeViewport.appendChild(threeState.renderer.domElement);
         threeState.controls = new OrbitControls(threeState.camera, threeState.renderer.domElement);
-        threeState.controls.addEventListener('change', updateViewportGizmo);
+        threeState.controls.addEventListener('change', () => { updateViewportGizmo(); requestThreeRender(); });
+        threeState.controls.addEventListener('start', requestThreeRender);
+        threeState.controls.addEventListener('end', requestThreeRender);
         threeState.controls.enableDamping = true;
         threeState.controls.dampingFactor = .08;
         threeState.controls.screenSpacePanning = true;
@@ -3691,6 +4502,7 @@
           threeState.camera.aspect = width / height;
           threeState.camera.updateProjectionMatrix();
           threeState.renderer.setSize(width, height, false);
+          requestThreeRender();
         };
         threeState.resize = resize;
         threeState.resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
@@ -3727,6 +4539,7 @@
           material.needsUpdate = true;
         });
       });
+      requestThreeRender();
     }
 
     function addModelEdgeLines(THREE, root) {
@@ -4392,6 +5205,7 @@
       if (threeState.model) {
         highlightThreeModel(threeState.model, selected !== null);
         highlightSelectorFaces(threeState.model, backendArtifact && backendArtifact.analysis);
+        requestThreeRender();
       }
     }
     function highlightThreeModel(root, active) {
@@ -4898,6 +5712,12 @@
         button.disabled = !available;
         button.setAttribute('aria-disabled', String(!available));
       });
+      if (exportDrawing) {
+        const available = Boolean(backendUrl && currentModelId);
+        exportDrawing.style.display = available ? 'inline-flex' : 'none';
+        exportDrawing.disabled = !available;
+        exportDrawing.setAttribute('aria-disabled', String(!available));
+      }
     }
     let currentAgentSummary = null;
     let currentAgentModelId = null;
@@ -5111,6 +5931,78 @@
             discContainer.appendChild(item);
           });
         }
+      }
+
+      const candidatesWrap = document.getElementById('criticCandidates');
+      const candidatesList = document.getElementById('criticCandidatesList');
+      const candidatesHead = document.getElementById('criticCandidatesHead');
+      const candidateEvaluations = Array.isArray(round.candidate_evaluations) ? round.candidate_evaluations : [];
+      if (candidatesWrap && candidatesList) {
+        candidatesList.textContent = '';
+        if (candidateEvaluations.length === 0) {
+          candidatesWrap.hidden = true;
+        } else {
+          candidatesWrap.hidden = false;
+          if (candidatesHead) {
+            candidatesHead.textContent = (currentLang === 'zh' ? 'BEST-OF-N 修复候选（' : 'BEST-OF-N REPAIR CANDIDATES (') + candidateEvaluations.length + ')';
+          }
+          // rank is a lexicographic tuple; the largest valid rank is the branch
+          // the agent loop actually adopted.
+          const validRanks = candidateEvaluations
+            .filter(item => item && item.status === 'valid' && Array.isArray(item.rank))
+            .map(item => item.rank);
+          const bestRank = validRanks.length
+            ? validRanks.reduce((acc, cur) => (cur.map((v, i) => v - (acc[i] || 0)).find(diff => diff !== 0) ?? 0) > 0 ? cur : acc, validRanks[0])
+            : null;
+          candidateEvaluations.forEach(item => {
+            if (!item) return;
+            const row = document.createElement('div');
+            row.className = 'candidate-row' + (bestRank && Array.isArray(item.rank) && item.status === 'valid' && item.rank.join(',') === bestRank.join(',') ? ' is-best' : '');
+            const idx = document.createElement('span');
+            idx.className = 'candidate-idx';
+            idx.textContent = '#' + (item.candidate !== undefined ? item.candidate : '-');
+            const status = document.createElement('span');
+            const statusKey = String(item.status || 'unknown');
+            status.className = 'candidate-status ' + statusKey;
+            status.textContent = statusKey === 'budget_exhausted' ? (currentLang === 'zh' ? '超时跳过' : 'SKIPPED') : statusKey.toUpperCase();
+            const patchCount = document.createElement('span');
+            patchCount.className = 'candidate-patches-count';
+            patchCount.textContent = (item.patch_count !== undefined ? item.patch_count : (Array.isArray(item.patches) ? item.patches.length : '--')) + (currentLang === 'zh' ? ' 补丁' : ' patches');
+            const metricsText = document.createElement('span');
+            metricsText.className = 'candidate-metrics';
+            const cm = item.metrics || {};
+            const cv = cm.volume_mm3 !== undefined ? Math.round(cm.volume_mm3) : '--';
+            const cb = cm.bbox_mm ? Math.round(cm.bbox_mm.x) + '×' + Math.round(cm.bbox_mm.y) + '×' + Math.round(cm.bbox_mm.z) : '--';
+            const degradedCount = Array.isArray(item.degraded_operations) ? item.degraded_operations.length : 0;
+            const rankText = Array.isArray(item.rank) ? item.rank.slice(0, 3).join('/') : '--';
+            metricsText.textContent = 'V ' + cv + ' mm³ · BBox ' + cb + ' · rank ' + rankText + (degradedCount ? ' · ⚠' + degradedCount : '');
+            if (Array.isArray(item.patches) && item.patches.length) {
+              row.title = item.patches.map(p => p && p.op ? p.op : '?').join(', ');
+            }
+            row.appendChild(idx);
+            row.appendChild(status);
+            row.appendChild(patchCount);
+            row.appendChild(metricsText);
+            if (row.classList.contains('is-best')) {
+              const bestTag = document.createElement('span');
+              bestTag.className = 'candidate-best-tag';
+              bestTag.textContent = ' ⭐ BEST';
+              row.appendChild(bestTag);
+            }
+            candidatesList.appendChild(row);
+          });
+        }
+      }
+
+      const staleDegradedNote = document.getElementById('criticDegradedNote');
+      if (staleDegradedNote && staleDegradedNote.parentNode) staleDegradedNote.parentNode.removeChild(staleDegradedNote);
+      if (criticMetrology && Array.isArray(round.degraded_operations) && round.degraded_operations.length) {
+        const degradedNames = round.degraded_operations.map(item => (item && item.op) || '?').join(', ');
+        const degradedNote = document.createElement('div');
+        degradedNote.id = 'criticDegradedNote';
+        degradedNote.textContent = '⚠ ' + (currentLang === 'zh' ? '静默降级操作' : 'Degraded ops') + ': ' + degradedNames;
+        degradedNote.style.cssText = 'margin-top:4px;color:#ecc94b;font-size:11px;';
+        criticMetrology.parentNode && criticMetrology.parentNode.insertBefore(degradedNote, criticMetrology.nextSibling);
       }
 
       const patchesDetails = document.getElementById('criticPatchesDetails');
@@ -5455,6 +6347,10 @@
       let timedOut = false;
       const timeoutWatcher = setTimeout(() => { timedOut = true; }, timeoutLimit - 50);
       generate.classList.add('loading');
+      generate.dataset.state = 'load';
+      if (window.showCadToast) {
+        window.showCadToast('wait', currentLang === 'zh' ? '正在规划并编译' : 'Compiling CAD Model', selectedMode === 'agent' ? (currentLang === 'zh' ? '视觉闭环自反思模式' : 'Agent Vision Rework Loop') : (currentLang === 'zh' ? '确定性 B-Rep 求解' : 'Solving Parametric B-Rep'));
+      }
       if (cancelGeneration) cancelGeneration.hidden = false;
       setGenerationError('');
       backendArtifact = null;
@@ -5524,6 +6420,21 @@
             : (nextSpec.profile_points || []),
         } : nextSpec;
         backendArtifact = remote && remote.artifacts ? Object.assign({}, remote.artifacts, { checks: remote.checks, profile: remote.profile, process: remote.process, analysis: remote.analysis, step_schema: remote.step_schema, design_ir: remote.design_ir }) : null;
+        // A new model invalidates any open parametric session (its base IR is stale).
+        if (typeof closeIrParamModalPanel === 'function') closeIrParamModalPanel();
+        currentModelId = remote && remote.model_id ? remote.model_id : null;
+        if (remote && !backendError) {
+          generate.dataset.state = 'ok';
+          setTimeout(() => { if (generate && generate.dataset.state === 'ok') generate.dataset.state = 'idle'; }, 2200);
+          if (window.showCadToast) {
+            window.showCadToast('ok', currentLang === 'zh' ? 'CAD 实体构建完成' : 'CAD Model Ready', displayTitle(modelSpec.title));
+          }
+        } else {
+          generate.dataset.state = 'idle';
+          if (backendError && window.showCadToast) {
+            window.showCadToast('err', currentLang === 'zh' ? '后端未连接，已降级' : 'Backend Offline, Fallback', currentLang === 'zh' ? '已展示本地参数化预览' : 'Showing local parametric preview');
+          }
+        }
         renderGenerationTrace(remote && remote.generation_trace ? remote.generation_trace : localGenerationTrace('preview'), remote ? 'complete' : 'complete');
         if (backendArtifact && backendArtifact.glb && backendUrl) loadThreePreview(resolveBackendUrl(backendArtifact.glb), modelSpec);
         else loadLocalThreePreview(modelSpec);
@@ -5602,6 +6513,7 @@
         clearTimeout(timeoutWatcher);
         if (sequence === generationSeq) {
           generate.classList.remove('loading');
+          if (generate.dataset.state !== 'ok') generate.dataset.state = 'idle';
           if (cancelGeneration) cancelGeneration.hidden = true;
           generateLabel.textContent = copy[currentLang].regenerate;
           generationController = null;
@@ -5752,6 +6664,440 @@
     bindArtifactExport(export3mf, '3mf');
     bindArtifactExport(exportGlb, 'glb');
     bindArtifactExport(exportGlbEntities, 'glb_entities');
+    if (exportDrawing) {
+      exportDrawing.addEventListener('click', () => {
+        if (!backendUrl || !currentModelId) {
+          if (window.showCadToast) {
+            window.showCadToast('info', currentLang === 'zh' ? '暂无蓝图' : 'No blueprint yet', currentLang === 'zh' ? '请先生成后端模型' : 'Generate a backend model first');
+          }
+          return;
+        }
+        openDrawingModal();
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // Viewport CAD review tools: section clipping, metrology HUD, render modes
+    // and the in-page 2D blueprint lightbox (drawingModal).
+    // ------------------------------------------------------------------------
+    const sectionBar = document.getElementById('viewportSectionBar');
+    const sectionSliderGroup = document.getElementById('sectionSliderGroup');
+    const sectionDepthSlider = document.getElementById('sectionDepthSlider');
+    const sectionDepthVal = document.getElementById('sectionDepthVal');
+    const sectionFlipBtn = document.getElementById('sectionFlipBtn');
+    const toggleSectionBarBtn = document.getElementById('toggleSectionBar');
+    const sectionState = { axis: 'none', depthPercent: 0, flipped: false };
+
+    function refreshSectionClipping() {
+      const renderer = threeState.renderer;
+      if (!renderer) return;
+      if (sectionState.axis === 'none' || !threeState.model || !threeState.THREE) {
+        renderer.clippingPlanes = [];
+        requestThreeRender();
+        return;
+      }
+      const THREE = threeState.THREE;
+      // fitThreeModel() recentres the model at the origin, so the plane slides
+      // across a half-extent window on the chosen axis.
+      const box = new THREE.Box3().setFromObject(threeState.model);
+      const size = box.getSize(new THREE.Vector3());
+      const half = Math.max(size[sectionState.axis] / 2, 0.001);
+      const offsetMm = (sectionState.depthPercent / 100) * half;
+      const normal = new THREE.Vector3(
+        sectionState.axis === 'x' ? 1 : 0,
+        sectionState.axis === 'y' ? 1 : 0,
+        sectionState.axis === 'z' ? 1 : 0
+      );
+      if (sectionState.flipped) normal.negate();
+      // THREE keeps fragments with n·p + constant >= 0, so constant=-offset keeps
+      // the positive side of a plane sitting at `offsetMm` along the axis.
+      renderer.clippingPlanes = [new THREE.Plane(normal, -offsetMm)];
+      if (sectionDepthVal) sectionDepthVal.textContent = offsetMm.toFixed(1) + ' mm';
+      requestThreeRender();
+    }
+
+    if (sectionBar) {
+      sectionBar.querySelectorAll('[data-section-axis]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          sectionBar.querySelectorAll('[data-section-axis]').forEach((other) => other.classList.toggle('active', other === btn));
+          sectionState.axis = btn.dataset.sectionAxis || 'none';
+          sectionState.depthPercent = 0;
+          if (sectionDepthSlider) sectionDepthSlider.value = '0';
+          if (sectionSliderGroup) sectionSliderGroup.style.display = sectionState.axis === 'none' ? 'none' : '';
+          refreshSectionClipping();
+        });
+      });
+    }
+    if (sectionDepthSlider) sectionDepthSlider.addEventListener('input', () => {
+      sectionState.depthPercent = parseFloat(sectionDepthSlider.value) || 0;
+      refreshSectionClipping();
+    });
+    if (sectionFlipBtn) sectionFlipBtn.addEventListener('click', () => {
+      sectionState.flipped = !sectionState.flipped;
+      sectionFlipBtn.classList.toggle('active', sectionState.flipped);
+      refreshSectionClipping();
+    });
+    if (toggleSectionBarBtn && sectionBar) toggleSectionBarBtn.addEventListener('click', () => {
+      const open = sectionBar.style.display === 'none';
+      sectionBar.style.display = open ? '' : 'none';
+      toggleSectionBarBtn.setAttribute('aria-pressed', String(open));
+      toggleSectionBarBtn.classList.toggle('active', open);
+    });
+
+    const measureHud = document.getElementById('viewportMeasureHud');
+    const toggleMeasureHudBtn = document.getElementById('toggleMeasureHud');
+    const closeMeasureHudBtn = document.getElementById('closeMeasureHud');
+
+    function setMeasureField(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    async function loadMeasureData() {
+      if (!backendUrl || !currentModelId) {
+        setMeasureField('measureBbox', '-- × -- × -- mm');
+        setMeasureField('measureVolume', '-- mm³');
+        setMeasureField('measureSurface', '-- mm²');
+        setMeasureField('measureTopology', '--');
+        setMeasureField('measureBboxDetail', currentLang === 'zh' ? '暂无后端模型量测数据' : 'No backend model measurements yet');
+        return;
+      }
+      try {
+        const response = await backendFetch(resolveBackendUrl('/v1/models/' + currentModelId + '/measure'));
+        if (!response.ok) throw new Error('measure returned HTTP ' + response.status);
+        const data = await response.json();
+        const dims = data.dimensions || {};
+        const bbox = data.bbox_mm || {};
+        setMeasureField('measureBbox', Number(dims.width || 0).toFixed(1) + ' × ' + Number(dims.depth || 0).toFixed(1) + ' × ' + Number(dims.height || 0).toFixed(1) + ' ' + (data.units || 'mm'));
+        setMeasureField('measureVolume', Number(data.volume_mm3 || 0).toFixed(1) + ' mm³');
+        setMeasureField('measureSurface', Number(data.surface_area_mm2 || 0).toFixed(1) + ' mm²');
+        setMeasureField('measureTopology', (data.solid_count || 1) + (currentLang === 'zh' ? ' 实体 · ' : ' solids · ') + (data.face_count || 0) + (currentLang === 'zh' ? ' 面 · ' : ' faces · ') + (data.valid_brep === false ? 'invalid B-Rep' : 'watertight B-Rep'));
+        setMeasureField('measureBboxDetail', 'BBox: X=' + Number(bbox.x || 0).toFixed(1) + ' · Y=' + Number(bbox.y || 0).toFixed(1) + ' · Z=' + Number(bbox.z || 0).toFixed(1) + ' mm');
+      } catch (error) {
+        setMeasureField('measureTopology', '--');
+        if (window.showCadToast) window.showCadToast('err', currentLang === 'zh' ? '量测数据获取失败' : 'Measure fetch failed', String((error && error.message) || error));
+      }
+    }
+
+    function setMeasureHud(open) {
+      if (!measureHud) return;
+      measureHud.style.display = open ? '' : 'none';
+      if (toggleMeasureHudBtn) {
+        toggleMeasureHudBtn.setAttribute('aria-pressed', String(open));
+        toggleMeasureHudBtn.classList.toggle('active', open);
+      }
+      if (open) loadMeasureData();
+    }
+    if (toggleMeasureHudBtn) toggleMeasureHudBtn.addEventListener('click', () => setMeasureHud(measureHud.style.display === 'none'));
+    if (closeMeasureHudBtn) closeMeasureHudBtn.addEventListener('click', () => setMeasureHud(false));
+
+    const renderModeSelect = document.getElementById('renderModeSelect');
+    function applyRenderMode(mode) {
+      if (!threeState.model) return;
+      applyPreviewMaterial(threeState.model, modelSpec || { material: selectedMaterial });
+      threeState.model.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (mode === 'xray') {
+            material.transparent = true;
+            material.opacity = 0.35;
+            material.depthWrite = false;
+            material.wireframe = false;
+          } else {
+            material.transparent = false;
+            material.opacity = 1;
+            material.depthWrite = true;
+            material.wireframe = mode === 'wireframe';
+          }
+          material.needsUpdate = true;
+        });
+      });
+      requestThreeRender();
+    }
+    if (renderModeSelect) renderModeSelect.addEventListener('change', () => {
+      if (!threeState.model || !threeState.renderer) {
+        renderModeSelect.value = 'shaded';
+        if (window.showCadToast) window.showCadToast('info', currentLang === 'zh' ? '暂无模型' : 'No model loaded', currentLang === 'zh' ? '生成模型后可切换渲染模式' : 'Generate a model first');
+        return;
+      }
+      applyRenderMode(renderModeSelect.value);
+    });
+
+    const drawingModal = document.getElementById('drawingModal');
+    const drawingModalBackdrop = document.getElementById('drawingModalBackdrop');
+    const drawingModalSvgWrap = document.getElementById('drawingModalSvgWrap');
+    const btnDownloadSvg = document.getElementById('btnDownloadSvg');
+    const btnPrintDrawing = document.getElementById('btnPrintDrawing');
+    const closeDrawingModalBtn = document.getElementById('closeDrawingModal');
+    let drawingSvgText = '';
+    let drawingPrintFrame = null;
+
+    function closeBlueprintModal() {
+      if (!drawingModal) return;
+      drawingModal.style.display = 'none';
+      if (drawingPrintFrame && drawingPrintFrame.parentNode) drawingPrintFrame.parentNode.removeChild(drawingPrintFrame);
+      drawingPrintFrame = null;
+    }
+
+    async function openDrawingModal() {
+      if (!drawingModal || !drawingModalSvgWrap) return;
+      drawingModalSvgWrap.textContent = currentLang === 'zh' ? '加载蓝图中…' : 'Loading blueprint…';
+      drawingModal.style.display = '';
+      try {
+        const response = await backendFetch(resolveBackendUrl('/v1/models/' + currentModelId + '/drawing'));
+        if (!response.ok) throw new Error('drawing returned HTTP ' + response.status);
+        const svgText = await response.text();
+        // Never innerHTML backend text directly: parse, then import only a real <svg> root.
+        const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+        const svgNode = parsed.documentElement && parsed.documentElement.nodeName.toLowerCase() === 'svg' ? parsed.documentElement : null;
+        if (!svgNode) throw new Error('drawing response is not SVG');
+        drawingSvgText = svgText;
+        drawingModalSvgWrap.textContent = '';
+        drawingModalSvgWrap.appendChild(document.importNode(svgNode, true));
+      } catch (error) {
+        closeBlueprintModal();
+        if (window.showCadToast) window.showCadToast('err', currentLang === 'zh' ? '蓝图加载失败' : 'Blueprint load failed', String((error && error.message) || error));
+        if (currentModelId) window.open(resolveBackendUrl('/v1/models/' + currentModelId + '/drawing'), '_blank', 'noopener,noreferrer');
+      }
+    }
+    if (btnDownloadSvg) btnDownloadSvg.addEventListener('click', () => {
+      if (!drawingSvgText) return;
+      const blob = new Blob([drawingSvgText], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'texttocad-blueprint.svg';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    });
+    if (btnPrintDrawing) btnPrintDrawing.addEventListener('click', () => {
+      if (!drawingSvgText) return;
+      if (!drawingPrintFrame) {
+        drawingPrintFrame = document.createElement('iframe');
+        drawingPrintFrame.setAttribute('aria-hidden', 'true');
+        drawingPrintFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+        document.body.appendChild(drawingPrintFrame);
+      }
+      const frameDoc = drawingPrintFrame.contentDocument;
+      frameDoc.open();
+      frameDoc.write('<!doctype html><html><head><title>TextToCAD Blueprint</title><style>body{margin:0;background:#fff;display:flex;justify-content:center}svg{max-width:100%;height:auto}</style></head><body>' + drawingSvgText + '</body></html>');
+      frameDoc.close();
+      drawingPrintFrame.onload = () => {
+        try { drawingPrintFrame.contentWindow.focus(); drawingPrintFrame.contentWindow.print(); } catch (error) {}
+      };
+    });
+    if (closeDrawingModalBtn) closeDrawingModalBtn.addEventListener('click', closeBlueprintModal);
+    if (drawingModalBackdrop) drawingModalBackdrop.addEventListener('click', closeBlueprintModal);
+
+    // --- IR parametric re-compile panel (POST /v1/ir/compile with persist) ---
+    const irParamModal = document.getElementById('irParamModal');
+    const irParamBackdrop = document.getElementById('irParamBackdrop');
+    const irParamBtn = document.getElementById('irParamBtn');
+    const closeIrParamModalBtn = document.getElementById('closeIrParamModal');
+    const irParamList = document.getElementById('irParamList');
+    const irParamMetricsText = document.getElementById('irParamMetricsText');
+    let irParamBaseIR = null;
+    let irParamCommitted = {};   // name -> last successfully compiled value
+    let irParamDebounceTimer = null;
+    let irParamRecompiling = false;
+
+    function closeIrParamModalPanel() {
+      if (!irParamModal) return;
+      irParamModal.style.display = 'none';
+      irParamBaseIR = null;
+      irParamCommitted = {};
+      if (irParamDebounceTimer) { clearTimeout(irParamDebounceTimer); irParamDebounceTimer = null; }
+      if (irParamBtn) {
+        irParamBtn.setAttribute('aria-pressed', 'false');
+        irParamBtn.classList.remove('active');
+      }
+    }
+
+    function irParamStepFor(value) {
+      if (Math.abs(value) >= 20) return 1;
+      if (Math.abs(value) >= 2) return 0.5;
+      return 0.1;
+    }
+
+    function renderIrParamMetrics(metrics) {
+      if (!irParamMetricsText || !metrics) return;
+      const bbox = metrics.bbox_mm || {};
+      irParamMetricsText.textContent =
+        Number(bbox.x || 0).toFixed(1) + ' × ' + Number(bbox.y || 0).toFixed(1) + ' × ' + Number(bbox.z || 0).toFixed(1) + ' mm · ' +
+        'V ' + Number(metrics.volume_mm3 || 0).toFixed(1) + ' mm³ · ' +
+        'A ' + Number(metrics.surface_area_mm2 || 0).toFixed(1) + ' mm²';
+    }
+
+    function renderIrParamList() {
+      if (!irParamList || !irParamBaseIR) return;
+      irParamList.textContent = '';
+      const parameters = (irParamBaseIR.parameters) || {};
+      let rendered = 0;
+      Object.keys(parameters).forEach((name) => {
+        const entry = parameters[name];
+        if (!entry || typeof entry !== 'object') return;
+        const value = entry.value;
+        const role = String(entry.role || '');
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return;
+        if (role !== 'dimension' && role !== 'manufacturing') return;
+        rendered += 1;
+        const row = document.createElement('div');
+        row.className = 'ir-param-row';
+        const label = document.createElement('label');
+        label.title = name + ' (' + role + ')';
+        label.textContent = name + (entry.unit ? ' [' + entry.unit + ']' : '');
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = String(Math.max(value * 0.1, 0.1));
+        slider.max = String(value * 3);
+        slider.step = String(irParamStepFor(value));
+        slider.value = String(value);
+        const numberInput = document.createElement('input');
+        numberInput.type = 'number';
+        numberInput.min = slider.min;
+        numberInput.max = slider.max;
+        numberInput.step = slider.step;
+        numberInput.value = String(value);
+        const commitValue = (nextValue, sourceControl) => {
+          const clamped = Math.min(Math.max(Number(nextValue), parseFloat(slider.min)), parseFloat(slider.max));
+          if (sourceControl !== slider) slider.value = String(clamped);
+          if (sourceControl !== numberInput) numberInput.value = String(clamped);
+          scheduleIrParamRecompile(name, clamped);
+        };
+        slider.addEventListener('input', () => commitValue(slider.value, slider));
+        numberInput.addEventListener('change', () => commitValue(numberInput.value, numberInput));
+        row.appendChild(label);
+        row.appendChild(slider);
+        row.appendChild(numberInput);
+        irParamList.appendChild(row);
+        irParamCommitted[name] = value;
+      });
+      if (!rendered) {
+        const empty = document.createElement('div');
+        empty.className = 'ir-param-empty';
+        empty.textContent = currentLang === 'zh' ? '该 IR 没有可调节数值参数。' : 'No tunable numeric parameters in this IR.';
+        irParamList.appendChild(empty);
+      }
+    }
+
+    function scheduleIrParamRecompile(name, value) {
+      if (!irParamBaseIR || irParamRecompiling) return;
+      if (irParamDebounceTimer) clearTimeout(irParamDebounceTimer);
+      irParamDebounceTimer = setTimeout(() => {
+        irParamDebounceTimer = null;
+        recompileIrParameters(name, value);
+      }, 600);
+    }
+
+    async function recompileIrParameters(name, value) {
+      if (!backendUrl || !irParamBaseIR) return;
+      const nextIR = JSON.parse(JSON.stringify(irParamBaseIR));
+      if (!nextIR.parameters || !nextIR.parameters[name]) return;
+      nextIR.parameters[name].value = Number(value);
+      irParamRecompiling = true;
+      if (irParamMetricsText) irParamMetricsText.textContent = currentLang === 'zh' ? '重新编译中…' : 'Recompiling…';
+      try {
+        const response = await backendFetch(resolveBackendUrl('/v1/ir/compile'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ir: nextIR, persist: true }),
+        });
+        if (!response.ok) {
+          let detail = 'HTTP ' + response.status;
+          try {
+            const errorBody = await response.json();
+            if (errorBody && errorBody.detail) detail = typeof errorBody.detail === 'string' ? errorBody.detail : JSON.stringify(errorBody.detail).slice(0, 160);
+          } catch (error) {}
+          throw new Error(detail);
+        }
+        const data = await response.json();
+        if (!data || !data.model_id || !data.artifacts || !data.artifacts.glb) {
+          throw new Error('compile response missing persisted artifacts');
+        }
+        irParamBaseIR = nextIR;
+        irParamCommitted[name] = Number(value);
+        currentModelId = data.model_id;
+        backendArtifact = Object.assign({}, backendArtifact, {
+          glb: data.artifacts.glb,
+          design_ir: nextIR,
+        });
+        renderIrParamMetrics(data.metrics);
+        await loadThreePreview(resolveBackendUrl(data.artifacts.glb), modelSpec);
+        // Preserve the viewer state the user had before the re-compile.
+        if (typeof applyRenderMode === 'function' && renderModeSelect && renderModeSelect.value !== 'shaded') {
+          applyRenderMode(renderModeSelect.value);
+        }
+        if (typeof refreshSectionClipping === 'function') refreshSectionClipping();
+        if (typeof setMeasureHud === 'function' && measureHud && measureHud.style.display !== 'none') loadMeasureData();
+      } catch (error) {
+        // Revert the failed control to the last committed value.
+        if (irParamList) {
+          const rows = irParamList.querySelectorAll('.ir-param-row');
+          rows.forEach((row) => {
+            const label = row.querySelector('label');
+            if (label && label.title && label.title.startsWith(name + ' ')) {
+              const slider = row.querySelector('input[type="range"]');
+              const numberInput = row.querySelector('input[type="number"]');
+              const restore = String(irParamCommitted[name]);
+              if (slider) slider.value = restore;
+              if (numberInput) numberInput.value = restore;
+            }
+          });
+        }
+        if (window.showCadToast) {
+          window.showCadToast('err', currentLang === 'zh' ? '参数重编译失败' : 'Parameter re-compile failed', String((error && error.message) || error));
+        }
+        renderIrParamMetrics(null);
+        if (irParamMetricsText) irParamMetricsText.textContent = '--';
+      } finally {
+        irParamRecompiling = false;
+      }
+    }
+
+    if (irParamBtn) irParamBtn.addEventListener('click', () => {
+      if (!backendArtifact || !backendArtifact.design_ir || !backendArtifact.design_ir.parameters) {
+        if (window.showCadToast) {
+          window.showCadToast('info', currentLang === 'zh' ? '暂无 IR 参数' : 'No IR parameters yet', currentLang === 'zh' ? '请先生成一个基于 IR 的后端模型' : 'Generate an IR-based backend model first');
+        }
+        return;
+      }
+      irParamBaseIR = JSON.parse(JSON.stringify(backendArtifact.design_ir));
+      irParamCommitted = {};
+      renderIrParamList();
+      if (irParamMetricsText) irParamMetricsText.textContent = currentLang === 'zh' ? '加载量测…' : 'Loading metrics…';
+      if (backendUrl && currentModelId) {
+        backendFetch(resolveBackendUrl('/v1/models/' + currentModelId + '/measure'))
+          .then((measureResponse) => (measureResponse.ok ? measureResponse.json() : null))
+          .then((measured) => {
+            if (irParamModal.style.display === 'none') return;
+            if (measured) {
+              renderIrParamMetrics({
+                bbox_mm: {
+                  x: measured.dimensions && measured.dimensions.width,
+                  y: measured.dimensions && measured.dimensions.depth,
+                  z: measured.dimensions && measured.dimensions.height,
+                },
+                volume_mm3: measured.volume_mm3,
+                surface_area_mm2: measured.surface_area_mm2,
+              });
+            } else if (irParamMetricsText) {
+              irParamMetricsText.textContent = '--';
+            }
+          })
+          .catch(() => { if (irParamMetricsText) irParamMetricsText.textContent = '--'; });
+      } else if (irParamMetricsText) {
+        irParamMetricsText.textContent = '--';
+      }
+      if (irParamModal) irParamModal.style.display = '';
+      irParamBtn.setAttribute('aria-pressed', 'true');
+      irParamBtn.classList.add('active');
+    });
+    if (closeIrParamModalBtn) closeIrParamModalBtn.addEventListener('click', closeIrParamModalPanel);
+    if (irParamBackdrop) irParamBackdrop.addEventListener('click', closeIrParamModalPanel);
+
     if (exportStep) exportStep.addEventListener('click', () => {
       if (!backendArtifact || !backendArtifact.step) return;
       downloadBackendArtifact(backendArtifact.step, 'step').catch(() => setGenerationError(currentLang === 'zh' ? '导出失败，请检查后端连接。' : 'Export failed; check the backend connection.'));
@@ -5765,7 +7111,142 @@
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     });
+    // ------------------------------------------------------------------------
+    // Lucian UX/UI Prompt Component Initializations (#039, #001, #070)
+    // ------------------------------------------------------------------------
+
+    // Lucian UX/UI Prompt #070 Stacking Toasts
+    window.showCadToast = (function initCadToastStack() {
+      const zone = document.getElementById('cadToastZone');
+      if (!zone) return () => {};
+      const live = zone.querySelector('.u070-live');
+      const ICONS = {
+        ok: '<svg viewBox="0 0 18 18"><path d="M4 9.4l3.2 3.2L14 5.6"/></svg>',
+        err: '<svg viewBox="0 0 18 18"><path d="M9 5v5M9 13h.01"/></svg>',
+        info: '<svg viewBox="0 0 18 18"><path d="M3.5 4.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+        wait: '<i></i>'
+      };
+      const COLORS = {
+        ok: '#48bb78',
+        err: '#ef4444',
+        info: '#38bdf8',
+        wait: '#d4ff4f'
+      };
+      const list = [];
+      let seq = 0;
+      function layout() {
+        list.forEach((t, i) => {
+          const el = t.el;
+          el.classList.toggle('back', i > 0);
+          el.style.setProperty('--y', -(i * 12) + 'px');
+          el.style.setProperty('--s', (1 - i * 0.05).toFixed(2));
+          el.style.setProperty('--o', i > 3 ? '0' : '1');
+          el.style.zIndex = 50 - i;
+        });
+      }
+      function remove(t) {
+        const i = list.indexOf(t);
+        if (i < 0) return;
+        list.splice(i, 1);
+        t.el.classList.add('leave');
+        setTimeout(() => t.el.remove(), 400);
+        layout();
+      }
+      return function(k, title, message, duration = 4000) {
+        const el = document.createElement('div');
+        el.className = 'u070-t enter';
+        el.style.setProperty('--c', COLORS[k] || COLORS.info);
+        // Only the trusted ICONS markup is injected; caller text goes through textContent.
+        el.innerHTML = `
+          <span class="u070-ic" aria-hidden="true">${ICONS[k] || ICONS.info}</span>
+          <span class="u070-tx"><b></b><small></small></span>
+          <button class="u070-x" type="button" aria-label="Dismiss"><svg viewBox="0 0 14 14"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg></button>
+          <span class="u070-bar" aria-hidden="true"></span>
+        `;
+        const textWrap = el.querySelector('.u070-tx');
+        textWrap.querySelector('b').textContent = String(title || '');
+        textWrap.querySelector('small').textContent = String(message || '');
+        const t = { el, left: duration };
+        zone.appendChild(el);
+        list.unshift(t);
+        void el.offsetWidth;
+        el.classList.remove('enter');
+        layout();
+        if (live) live.textContent = title + ': ' + (message || '');
+        el.querySelector('.u070-x').addEventListener('click', () => remove(t));
+        if (duration < Infinity) {
+          setTimeout(() => remove(t), duration);
+        }
+      };
+    })();
+
+    // Lucian UX/UI Prompt #039 Sliding Pill Tabs for Generation Engine Mode
+    function initModeSegmentedControl() {
+      const modeTabs = document.getElementById('u039ModeTabs');
+      const modePill = document.getElementById('u039ModePill');
+      const modeSelect = document.getElementById('generationMode');
+      if (!modeTabs || !modePill || !modeSelect) return;
+      const tabs = Array.from(modeTabs.querySelectorAll('.u039-tab'));
+
+      function syncPill(val, animate = true) {
+        const activeTab = tabs.find(t => t.dataset.val === val) || tabs[0];
+        tabs.forEach(t => {
+          const selected = t === activeTab;
+          t.setAttribute('aria-selected', String(selected));
+          t.tabIndex = selected ? 0 : -1;
+        });
+        if (!animate) modePill.style.transition = 'none';
+        modePill.style.setProperty('--x', activeTab.offsetLeft + 'px');
+        modePill.style.setProperty('--w', activeTab.offsetWidth + 'px');
+        if (!animate) { void modePill.offsetWidth; modePill.style.transition = ''; }
+      }
+
+      tabs.forEach((tab, idx) => {
+        tab.addEventListener('click', () => {
+          const val = tab.dataset.val;
+          if (modeSelect.value !== val) {
+            modeSelect.value = val;
+            modeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          syncPill(val, true);
+        });
+        tab.addEventListener('keydown', (e) => {
+          let dir = 0;
+          if (e.key === 'ArrowRight') dir = 1;
+          else if (e.key === 'ArrowLeft') dir = -1;
+          if (dir !== 0) {
+            e.preventDefault();
+            const nextIdx = (idx + dir + tabs.length) % tabs.length;
+            tabs[nextIdx].click();
+            tabs[nextIdx].focus();
+          }
+        });
+      });
+
+      modeSelect.addEventListener('change', () => {
+        syncPill(modeSelect.value, true);
+      });
+
+      window.addEventListener('resize', () => syncPill(modeSelect.value, false));
+      setTimeout(() => syncPill(modeSelect.value, false), 40);
+    }
+
+    // Lucian UX/UI Prompt #001 Pointer Magnetic Reflect Effect
+    function initGenerateButtonFX() {
+      const genBtn = document.getElementById('generate');
+      if (!genBtn) return;
+      genBtn.addEventListener('pointermove', (e) => {
+        const r = genBtn.getBoundingClientRect();
+        const mx = ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%';
+        const my = ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%';
+        genBtn.style.setProperty('--mx', mx);
+        genBtn.style.setProperty('--my', my);
+      });
+    }
+
     translate();
+    initModeSegmentedControl();
+    initGenerateButtonFX();
     initCriticWorkspace();
     processSelect.value = selectedProcess;
     modelSpec = parseModel(prompt.value);
