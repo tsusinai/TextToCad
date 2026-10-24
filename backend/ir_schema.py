@@ -70,14 +70,38 @@ class IROutput(IRBaseModel):
     format: list[str] = Field(default_factory=lambda: ["step", "stl", "glb"])
 
 
+class IRComponent(IRBaseModel):
+    id: str
+    nodes: list[IRNode] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    outputs: list[IROutput] = Field(default_factory=list)
+
+
+class IRInstance(IRBaseModel):
+    id: str
+    component: str
+    transform: dict[str, Any] | None = None
+
+
+class IRAssemblyJoint(IRBaseModel):
+    id: str
+    type: Literal["rigid", "revolute", "coaxial", "mate_flush", "distance", "spherical"] = "rigid"
+    first: dict[str, Any]
+    second: dict[str, Any]
+    limits: dict[str, Any] | None = None
+
+
 class CADIRDocument(IRBaseModel):
-    schema_version: Literal["0.2"] = IR_SCHEMA_VERSION
+    schema_version: Literal["0.2", "0.3"] = IR_SCHEMA_VERSION
     document: dict[str, Any] = Field(default_factory=dict)
     units: str = "mm"
     process: str = "fdm"
     parameters: dict[str, IRParameter] = Field(default_factory=dict)
     datums: list[IRDatum] = Field(default_factory=list)
     nodes: list[IRNode] = Field(default_factory=list)
+    components: list[IRComponent] = Field(default_factory=list)
+    instances: list[IRInstance] = Field(default_factory=list)
+    assembly_joints: list[IRAssemblyJoint] = Field(default_factory=list)
     constraints: list[IRConstraint] = Field(default_factory=list)
     outputs: list[IROutput] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)

@@ -14,6 +14,7 @@ Performs an end-to-end simulation of the Agent CAD Modeling pipeline:
 """
 from __future__ import annotations
 
+import copy
 import logging
 from pathlib import Path
 import sys
@@ -36,13 +37,31 @@ except ImportError:
     cq = None
 
 try:
-    from agent_loop import run_agent_modeling_loop
+    import agent_loop
+    from agent_loop import _select_patch_candidate, run_agent_modeling_loop
+    from ir_executor import IRExecutionError
     from ir_validate import validate_ir
     from PIL import Image
 except ImportError as err:
     raise ImportError(f"Required dependency missing for agent simulation: {err}") from err
 
 logger = logging.getLogger("test_agent_simulation")
+
+# Minimal valid box IR shared by the error-path unit tests.
+_BOX_IR: dict[str, Any] = {
+    "schema_version": "0.2",
+    "parameters": {},
+    "nodes": [
+        {
+            "id": "base_box",
+            "kind": "primitive",
+            "operation": "box",
+            "inputs": [],
+            "parameters": {"width": 20.0, "depth": 20.0, "height": 20.0},
+        },
+    ],
+    "outputs": [{"id": "primary", "node": "base_box", "format": ["step", "stl", "glb"]}],
+}
 
 
 def run_simulation() -> dict[str, Any]:
@@ -263,6 +282,193 @@ def test_agent_modeling_simulation() -> None:
     result = run_simulation()
     assert result["verdict"] == "PASSED"
     assert result["converged"] is True
+
+
+@pytest.mark.skipif(cq is None, reason="CadQuery is required for B-Rep simulation")
+def test_rollback_failure_raises_original_error(monkeypatch, tmp_path) -> None:
+    """A first-round kernel failure whose rollback also fails must surface the original
+    IRExecutionError, not a downstream FileNotFoundError from the renderer."""
+    original_error = IRExecutionError("kernel rejected node 'base_box': unregistered input")
+
+    def always_fail(ir):  # noqa: ANN001 - matches execute_ir signature loosely
+        raise original_error
+
+    monkeypatch.setattr(agent_loop, "execute_ir", always_fail)
+
+    with pytest.raises(IRExecutionError) as excinfo:
+        run_agent_modeling_loop(
+            initial_ir=copy.deepcopy(_BOX_IR),
+            prompt="a 20mm box",
+            process="cnc",
+            artifacts_dir=tmp_path / "artifacts",
+            llm_api_url=None,
+            llm_api_key=None,
+            llm_model=None,
+            max_rounds=2,
+        )
+    assert "unregistered input" in str(excinfo.value), (
+        "The raised error must carry the original kernel failure reason"
+    )
+    assert not isinstance(excinfo.value, FileNotFoundError)
+
+
+@pytest.mark.skipif(cq is None, reason="CadQuery is required for B-Rep simulation")
+def test_tie_break_prefers_fewer_patches(monkeypatch) -> None:
+    """When candidate branches score identically, the branch with fewer patches must win
+    (minimal-repair-first philosophy protects already-verified primitives)."""
+
+    def make_noop_patch(parameter: str) -> dict[str, Any]:
+        return {
+            "op": "replace_node_parameter",
+            "node": "base_box",
+            "parameter": parameter,
+            "value": 20.0,  # identical to the current value -> both branches stay equivalent
+        }
+
+    fewer = [make_noop_patch("width")]
+    more = [make_noop_patch("width"), make_noop_patch("depth"), make_noop_patch("height")]
+
+    # Force the candidate beam to exactly two functionally equivalent branches.
+    monkeypatch.setattr(agent_loop, "_patch_variants", lambda patches: [more, fewer])
+
+    best, evaluations = _select_patch_candidate(
+        current_ir=copy.deepcopy(_BOX_IR),
+        patches=fewer + more[1:],
+        prompt="a simple box",
+        process_profile=None,
+    )
+    assert best is not None, "At least one candidate branch must be executable"
+    assert len(evaluations) == 2
+    assert [ev["status"] for ev in evaluations] == ["valid", "valid"]
+    assert len(best["patches"]) == 1, "Tied ranks must prefer the branch with fewer patches"
+
+
+def test_time_budget_exits_early_with_best_candidate(monkeypatch, tmp_path) -> None:
+    """AGENT_TIME_BUDGET_SECONDS=0 must exit the loop before any round runs, keep the
+    return structure intact, adopt the current best candidate (the initial IR), and flag
+    budget_exhausted."""
+    monkeypatch.setenv("AGENT_TIME_BUDGET_SECONDS", "0")
+
+    result = run_agent_modeling_loop(
+        initial_ir=copy.deepcopy(_BOX_IR),
+        prompt="a 20mm box",
+        process="cnc",
+        artifacts_dir=tmp_path / "artifacts",
+        llm_api_url=None,
+        llm_api_key=None,
+        llm_model=None,
+        max_rounds=3,
+    )
+
+    assert result["budget_exhausted"] is True
+    assert result["total_rounds"] == 0, "No repair round should start once the budget is gone"
+    assert result["history"] == []
+    assert result["final_ir"] == _BOX_IR, "Initial IR is the best available candidate"
+    assert result["converged"] is False
+    # Return structure stays intact for downstream consumers.
+    for key in ("final_ir", "best_round", "total_rounds", "converged", "final_score", "final_certificate", "history"):
+        assert key in result
+    assert not (tmp_path / "artifacts" / "rounds").exists(), "No round artifacts should be created"
+
+
+def test_collect_degraded_operations_flattens_trace() -> None:
+    execution = {
+        "trace": [
+            {"id": "body", "operation": "box", "status": "succeeded"},
+            {
+                "id": "edge_treatment",
+                "operation": "fillet",
+                "status": "succeeded",
+                "degraded_operations": [{"op": "fillet", "reason": "radius 999 exceeded edge limits"}],
+            },
+            {
+                "id": "shell_1",
+                "operation": "shell",
+                "status": "succeeded",
+                "degraded_operations": [
+                    {"op": "shell", "reason": "thickness out of range"},
+                    {"op": "shell", "reason": "fallback to input solid"},
+                ],
+            },
+        ]
+    }
+    degraded = agent_loop._collect_degraded_operations(execution)
+    assert [(d["node"], d["op"]) for d in degraded] == [
+        ("edge_treatment", "fillet"),
+        ("shell_1", "shell"),
+        ("shell_1", "shell"),
+    ]
+    assert "radius 999" in degraded[0]["reason"]
+    assert agent_loop._collect_degraded_operations({"trace": []}) == []
+
+
+def _inspect_with_degraded(degraded):
+    inspector = agent_loop.MultiGateInspector(target_score=9.0)
+    metrics = {
+        "valid_brep": True, "solid_count": 1, "volume_mm3": 8000.0,
+        "face_count": 6, "bbox_mm": {"x": 20.0, "y": 20.0, "z": 20.0},
+    }
+    critique = {"score": 9.5, "verdict": "ACCEPT", "discrepancies": []}
+    dfm_report = {"valid": True, "violations": []}
+    current_ir = {
+        "schema_version": "0.2",
+        "nodes": [{"id": "body", "kind": "primitive", "operation": "box",
+                   "parameters": {"size": [20, 20, 20]}}],
+        "outputs": [{"id": "main", "node": "body"}],
+    }
+    return inspector.inspect_round(
+        round_idx=0,
+        prompt="a 20mm cube",
+        current_ir=current_ir,
+        metrics=metrics,
+        dfm_report=dfm_report,
+        critique=critique,
+        model_id="abc123",
+        degraded_operations=degraded,
+    )
+
+
+def test_inspect_round_surfaces_degraded_warning() -> None:
+    certificate = _inspect_with_degraded(
+        [{"node": "edge_treatment", "op": "fillet", "reason": "radius too large"}]
+    )
+    assert certificate["degraded_operations"] == [
+        {"node": "edge_treatment", "op": "fillet", "reason": "radius too large"}
+    ]
+    topology_gate = next(g for g in certificate["gates"] if g["id"] == "gate_topology")
+    assert "degraded op(s)" in topology_gate["evidence"]
+    # Warning-level only: a clean-elsewhere round must still certify.
+    assert certificate["passed"] is True
+
+    clean = _inspect_with_degraded(None)
+    assert clean["degraded_operations"] == []
+    clean_gate = next(g for g in clean["gates"] if g["id"] == "gate_topology")
+    assert "degraded op(s)" not in clean_gate["evidence"]
+
+
+@pytest.mark.skipif(cq is None, reason="CadQuery required for kernel degradation path")
+def test_kernel_degraded_fillet_is_collected() -> None:
+    from ir_executor import execute_ir
+    import app as backend_app
+
+    ir = {
+        "schema_version": "0.2",
+        "document": {"id": "degraded-fillet", "intent": "box with impossible fillet", "units": "mm"},
+        "units": "mm", "process": "fdm", "parameters": {},
+        "datums": [{"id": "xy", "type": "plane"}],
+        "nodes": [
+            {"id": "body", "kind": "primitive", "operation": "box",
+             "parameters": {"size": [20, 20, 20]}, "frame": "xy"},
+            {"id": "edge_treatment", "kind": "feature", "operation": "fillet",
+             "inputs": ["body"], "parameters": {"radius": 999}},
+        ],
+        "constraints": [],
+        "outputs": [{"id": "main", "node": "edge_treatment"}],
+    }
+    execution = execute_ir(backend_app.validate_ir(ir))
+    degraded = agent_loop._collect_degraded_operations(execution)
+    assert degraded, "impossible fillet radius must be collected as a degraded operation"
+    assert degraded[0]["op"] == "fillet"
 
 
 def main() -> None:

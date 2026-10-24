@@ -68,6 +68,42 @@ def _clean_target_id(raw_id: Any, node_by_id: dict[str, Any], candidate: dict[st
     return None
 
 
+def _splice_node_replacement(candidate: dict[str, Any], old_id: str, new_id: str) -> None:
+    """Updates candidate outputs and downstream consumer inputs when a node is transformed."""
+    updated = False
+    if candidate.get("outputs"):
+        for output in candidate["outputs"]:
+            if output.get("node") == old_id:
+                output["node"] = new_id
+                updated = True
+
+    # Rewire downstream nodes that took old_id as an input or mount target
+    for other_node in candidate.get("nodes", []):
+        if other_node.get("id") == new_id:
+            continue
+        inputs = other_node.get("inputs")
+        if isinstance(inputs, list):
+            for idx, inp in enumerate(inputs):
+                if inp == old_id:
+                    inputs[idx] = new_id
+                    updated = True
+        mount = other_node.get("mount")
+        if isinstance(mount, dict) and mount.get("target") == old_id:
+            mount["target"] = new_id
+            updated = True
+        param_mount = (other_node.get("parameters") or {}).get("mount")
+        if isinstance(param_mount, dict) and param_mount.get("target") == old_id:
+            param_mount["target"] = new_id
+            updated = True
+
+    if not updated:
+        if not candidate.get("outputs"):
+            candidate["outputs"] = [{"id": "primary", "node": new_id, "format": ["step", "stl", "glb"]}]
+        elif len(candidate.get("nodes", [])) == 1 or not any(out.get("node") for out in candidate["outputs"]):
+            candidate["outputs"][0]["node"] = new_id
+
+
+
 def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> dict[str, Any]:
     if not patches:
         return validate_ir(copy.deepcopy(ir))
@@ -128,7 +164,15 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             node_id = patch.get("node")
             if node_id not in node_by_id:
                 raise ValueError(f"patch[{index}] references an unknown node")
-            if any(node_id in (node.get("inputs") or []) for node in nodes if isinstance(node, dict)):
+            has_input_ref = any(node_id in (node.get("inputs") or []) for node in nodes if isinstance(node, dict))
+            has_mount_ref = any(
+                isinstance(node, dict) and (
+                    (isinstance(node.get("mount"), dict) and node["mount"].get("target") == node_id) or
+                    (isinstance((node.get("parameters") or {}).get("mount"), dict) and node["parameters"]["mount"].get("target") == node_id)
+                )
+                for node in nodes
+            )
+            if has_input_ref or has_mount_ref:
                 raise ValueError(f"patch[{index}] cannot remove a referenced node")
             if any(output.get("node") == node_id for output in candidate.get("outputs", [])):
                 raise ValueError(f"patch[{index}] cannot remove an output node")
@@ -237,17 +281,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             }
             nodes.append(cut_node)
             node_by_id[cut_id] = cut_node
-
-            updated_output = False
-            if candidate.get("outputs"):
-                for output in candidate["outputs"]:
-                    if output.get("node") == target_id:
-                        output["node"] = cut_id
-                        updated_output = True
-                if not updated_output:
-                    candidate["outputs"][0]["node"] = cut_id
-            else:
-                candidate["outputs"] = [{"id": "primary", "node": cut_id, "format": ["step", "stl", "glb"]}]
+            _splice_node_replacement(candidate, target_id, cut_id)
         elif operation in {"add_chamfer", "add_fillet"}:
             actual_op = "chamfer" if operation == "add_chamfer" else "fillet"
             target_id = _clean_target_id(patch.get("target_node") or patch.get("node"), node_by_id, candidate, nodes)
@@ -292,17 +326,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             }
             nodes.append(edge_node)
             node_by_id[edge_id] = edge_node
-
-            updated_output = False
-            if candidate.get("outputs"):
-                for output in candidate["outputs"]:
-                    if output.get("node") == target_id:
-                        output["node"] = edge_id
-                        updated_output = True
-                if not updated_output:
-                    candidate["outputs"][0]["node"] = edge_id
-            else:
-                candidate["outputs"] = [{"id": "primary", "node": edge_id, "format": ["step", "stl", "glb"]}]
+            _splice_node_replacement(candidate, target_id, edge_id)
         elif operation == "shell_hollow":
             target_id = _clean_target_id(patch.get("target_node") or patch.get("node"), node_by_id, candidate, nodes)
             if not target_id or target_id not in node_by_id:
@@ -338,17 +362,7 @@ def apply_patches(ir: dict[str, Any], patches: list[dict[str, Any]] | None) -> d
             }
             nodes.append(shell_node)
             node_by_id[shell_id] = shell_node
-
-            updated_output = False
-            if candidate.get("outputs"):
-                for output in candidate["outputs"]:
-                    if output.get("node") == target_id:
-                        output["node"] = shell_id
-                        updated_output = True
-                if not updated_output:
-                    candidate["outputs"][0]["node"] = shell_id
-            else:
-                candidate["outputs"] = [{"id": "primary", "node": shell_id, "format": ["step", "stl", "glb"]}]
+            _splice_node_replacement(candidate, target_id, shell_id)
         elif operation == "mount_component":
             raw_node = patch.get("node")
             node_id = _clean_target_id(raw_node, node_by_id, candidate, nodes)

@@ -316,6 +316,53 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
         if not output.format:
             issues.append(_issue("empty_output", "output format list cannot be empty", f"{path}.format"))
 
+    component_ids = [component.id for component in document.components]
+    instance_ids = [instance.id for instance in document.instances]
+    for label, values in (("component", component_ids), ("instance", instance_ids)):
+        duplicates = sorted({value for value in values if values.count(value) > 1})
+        invalid = sorted({value for value in values if not ID_RE.fullmatch(value)})
+        if duplicates:
+            issues.append(_issue("duplicate_id", f"duplicate {label} id(s): {', '.join(duplicates)}", label))
+        if invalid:
+            issues.append(_issue("invalid_id", f"invalid {label} id(s): {', '.join(invalid)}", label))
+    known_components = set(component_ids)
+    known_instances = set(instance_ids)
+    for index, component in enumerate(document.components):
+        component_node_ids = {node.id for node in component.nodes}
+        for out_index, output in enumerate(component.outputs):
+            if output.node not in component_node_ids:
+                issues.append(_issue(
+                    "missing_output",
+                    f"component output node '{output.node}' does not exist in component '{component.id}'",
+                    f"components[{index}].outputs[{out_index}].node",
+                ))
+    for index, instance in enumerate(document.instances):
+        if instance.component not in known_components:
+            issues.append(_issue(
+                "missing_component",
+                f"instance component '{instance.component}' does not exist",
+                f"instances[{index}].component",
+            ))
+    for index, joint in enumerate(document.assembly_joints):
+        for side_name in ("first", "second"):
+            side = getattr(joint, side_name, None)
+            reference = side.get("instance") if isinstance(side, dict) else None
+            if reference and reference not in known_instances:
+                issues.append(_issue(
+                    "missing_instance",
+                    f"joint '{joint.id}' {side_name} instance '{reference}' does not exist",
+                    f"assembly_joints[{index}].{side_name}.instance",
+                ))
+    # The 0.2 executor only runs top-level nodes; an assembly-only v0.3
+    # document would have its structure silently dropped, so reject it
+    # explicitly until component execution ships.
+    if document.components and not document.nodes and not document.outputs:
+        issues.append(_issue(
+            "assembly_only_document",
+            "assembly-only IR v0.3 documents are not executable yet; provide top-level nodes/outputs",
+            "components",
+        ))
+
     for index, constraint in enumerate(document.constraints):
         path = f"constraints[{index}]"
         targets = constraint.target if isinstance(constraint.target, list) else [constraint.target]

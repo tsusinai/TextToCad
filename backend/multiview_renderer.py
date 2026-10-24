@@ -335,9 +335,8 @@ class HeadlessCADRenderer:
         return rendered
 
     def _render_matplotlib(self, stl_path: Path, output_dir: Path) -> dict[str, Path]:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
         verts, faces = _load_stl_triangles(stl_path)
@@ -356,23 +355,21 @@ class HeadlessCADRenderer:
 
         rendered: dict[str, Path] = {}
         for view_name, (elev, azim) in view_angles.items():
-            fig = plt.figure(figsize=(self.resolution / 100, self.resolution / 100), dpi=100)
-            try:
-                ax = fig.add_subplot(111, projection="3d")
-                poly = Poly3DCollection(tri_verts, alpha=0.92, facecolor="#4589c9", edgecolor="#1a2530", linewidth=0.25)
-                ax.add_collection3d(poly)
-                ax.set_xlim([min_b[0], max_b[0]])
-                ax.set_ylim([min_b[1], max_b[1]])
-                ax.set_zlim([min_b[2], max_b[2]])
-                ax.view_init(elev=elev, azim=azim)
-                ax.axis("off")
-                plt.tight_layout()
+            fig = Figure(figsize=(self.resolution / 100, self.resolution / 100), dpi=100)
+            FigureCanvasAgg(fig)
+            ax = fig.add_subplot(111, projection="3d")
+            poly = Poly3DCollection(tri_verts, alpha=0.92, facecolor="#4589c9", edgecolor="#1a2530", linewidth=0.25)
+            ax.add_collection3d(poly)
+            ax.set_xlim([min_b[0], max_b[0]])
+            ax.set_ylim([min_b[1], max_b[1]])
+            ax.set_zlim([min_b[2], max_b[2]])
+            ax.view_init(elev=elev, azim=azim)
+            ax.axis("off")
+            fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
-                view_file = output_dir / f"{view_name}.png"
-                plt.savefig(str(view_file), bbox_inches="tight", pad_inches=0.02)
-                rendered[view_name] = view_file
-            finally:
-                plt.close(fig)
+            view_file = output_dir / f"{view_name}.png"
+            fig.savefig(str(view_file), bbox_inches="tight", pad_inches=0.02)
+            rendered[view_name] = view_file
 
         return rendered
 

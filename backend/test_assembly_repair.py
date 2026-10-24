@@ -223,6 +223,30 @@ def test_apply_patches_scale_component_box_size():
     assert hull_node["scale"] == 0.5
 
 
+def test_apply_patches_subcomponent_feature_preserves_assembly_outputs():
+    base_ir = _sample_tank_ir()
+    patch = [{"op": "add_chamfer", "target_node": "hull", "distance": 2.0}]
+    repaired = apply_patches(base_ir, patch)
+    # The output should STILL be tank_model, NOT chamfer_1
+    assert repaired["outputs"][0]["node"] == "tank_model"
+    # And tank_model's inputs should be updated to use chamfer_1 instead of hull
+    tank_node = next(n for n in repaired["nodes"] if n["id"] == "tank_model")
+    assert "chamfer_1" in tank_node["inputs"]
+    assert "hull" not in tank_node["inputs"]
+
+
+def test_apply_patches_subcomponent_feature_rewires_mount_target():
+    base_ir = _sample_tank_ir()
+    turret_node = next(n for n in base_ir["nodes"] if n["id"] == "turret")
+    turret_node["mount"] = {"target": "hull", "face": ">Z"}
+    patch = [{"op": "add_chamfer", "target_node": "hull", "distance": 2.0}]
+    repaired = apply_patches(base_ir, patch)
+    repaired_turret = next(n for n in repaired["nodes"] if n["id"] == "turret")
+    assert repaired_turret["mount"]["target"] == "chamfer_1"
+
+
+
+
 def test_apply_patches_scale_component_separate_dimensions():
     ir = {
         "schema_version": "0.2",

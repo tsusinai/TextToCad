@@ -516,9 +516,9 @@ def test_cadquery_full_assembly_semantic_mount_smoke():
     metrics = app.shape_metrics(execution["shape"])
     assert metrics["valid_brep"] is True
     # Verify overall bounding box reflects proper mounting:
-    # Hull Z: 20, Turret Z: 10 -> total Z = 30
-    assert math.isclose(metrics["bbox_mm"]["z"], 30.0, abs_tol=1e-2)
-    # Hull Y: [-30, 30], Turret Y: [-15, 15], Barrel extends from 15 to 15+40=55
-    # Total Y extent: [-30, 55] -> 85
-    assert math.isclose(metrics["bbox_mm"]["y"], 85.0, abs_tol=1e-2)
+    # Hull Z: 20, Turret Z: 10 with 0.05 mm coplanar overlap -> total Z = 29.95
+    assert math.isclose(metrics["bbox_mm"]["z"], 29.95, abs_tol=1e-2)
+    # Hull Y: [-30, 30], Turret Y: [-15, 15], Barrel with 1.5 mm side cylinder overlap
+    # extends from 15 - 1.5 = 13.5 to 13.5 + 40 = 53.5 -> Total Y: [-30, 53.5] -> 83.5
+    assert math.isclose(metrics["bbox_mm"]["y"], 83.5, abs_tol=1e-2)
 

@@ -7,11 +7,17 @@ and later used by the main generation path.
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import logging
 import math
+from threading import Lock
 from typing import Any
 
 logger = logging.getLogger("ir_executor")
+_NODE_SHAPE_CACHE: dict[str, Any] = {}
+_NODE_SHAPE_CACHE_LOCK = Lock()
+_MAX_SHAPE_CACHE_SIZE = 128
 
 try:
     from .feature_metrics import measure_occt_features
@@ -94,9 +100,17 @@ def _resolve(value: Any, parameters: dict[str, Any]) -> Any:
                     raise IRExecutionError("division by zero in parameter expression")
                 return left / right
             if isinstance(node.op, ast.Mod):
+                if abs(right) <= 1e-12:
+                    raise IRExecutionError("division by zero in parameter expression")
                 return left % right
-            return left ** right
-        raise IRExecutionError("unsupported parameter expression")
+            if isinstance(node.op, ast.Pow):
+                if not (-10000 <= left <= 10000) or not (-10 <= right <= 10):
+                    raise IRExecutionError("exponentiation arguments out of safe bounds in parameter expression")
+                res = left ** right
+                if not math.isfinite(res) or abs(res) > 1e12:
+                    raise IRExecutionError("exponentiation result out of bounds in parameter expression")
+                return res
+            raise IRExecutionError("unsupported parameter operator")
 
     try:
         return evaluate(tree)
@@ -239,7 +253,20 @@ def _as_shape(value: Any, node_id: str) -> Any:
     return value
 
 
-def _combine(inputs: list[Any], operation: str) -> Any:
+def _note_degraded(
+    degraded_operations: list[dict[str, Any]] | None,
+    op: str,
+    reason: str,
+) -> None:
+    if degraded_operations is not None:
+        degraded_operations.append({"op": op, "reason": str(reason)[:200]})
+
+
+def _combine(
+    inputs: list[Any],
+    operation: str,
+    degraded_operations: list[dict[str, Any]] | None = None,
+) -> Any:
     valid_inputs = [item for item in inputs if item is not None]
     if not valid_inputs:
         return None
@@ -254,7 +281,8 @@ def _combine(inputs: list[Any], operation: str) -> Any:
                 result = result.cut(item)
             elif operation == "intersect":
                 result = result.intersect(item)
-        except Exception:
+        except Exception as exc:
+            _note_degraded(degraded_operations, operation, f"boolean operand ignored after failure: {type(exc).__name__}: {exc}")
             continue
     return result
 
@@ -688,6 +716,7 @@ def _raw_node_shape(
     parameters: dict[str, Any],
     selector_metadata: dict[str, Any] | None = None,
     has_mount: bool = False,
+    degraded_operations: list[dict[str, Any]] | None = None,
 ) -> Any:
     operation = str(node.get("operation", ""))
     values = node.get("parameters") or {}
@@ -873,7 +902,7 @@ def _raw_node_shape(
                     tool = tool.translate((x, y, z))
                     return getattr(inputs[0], operation)(tool)
             return inputs[0]
-        return _combine(inputs, operation)
+        return _combine(inputs, operation, degraded_operations)
     if operation == "translate":
         if len(inputs) != 1:
             raise IRExecutionError("translate requires exactly one input")
@@ -919,10 +948,12 @@ def _raw_node_shape(
                 shape = res.val()
                 if hasattr(shape, "isValid") and callable(shape.isValid) and not shape.isValid():
                     logger.warning(f"{operation} produced invalid shape, falling back to base input")
+                    _note_degraded(degraded_operations, operation, "produced an invalid shape")
                     return inputs[0]
             return res
         except Exception as exc:
             logger.warning(f"{operation} failed ({exc}), falling back to base input")
+            _note_degraded(degraded_operations, operation, f"{type(exc).__name__}: {exc}")
             return inputs[0]
     if operation == "shell":
         if len(inputs) != 1:
@@ -939,10 +970,12 @@ def _raw_node_shape(
                 shape = res.val()
                 if hasattr(shape, "isValid") and callable(shape.isValid) and not shape.isValid():
                     logger.warning("shell produced invalid shape, falling back to base input")
+                    _note_degraded(degraded_operations, "shell", "produced an invalid shape")
                     return inputs[0]
             return res
         except Exception as exc:
             logger.warning(f"shell failed ({exc}), falling back to base input")
+            _note_degraded(degraded_operations, "shell", f"{type(exc).__name__}: {exc}")
             return inputs[0]
     if operation == "mirror":
         if len(inputs) != 1:
@@ -958,13 +991,21 @@ def _node_shape(
     parameters: dict[str, Any],
     selector_metadata: dict[str, Any] | None = None,
     shapes: dict[str, Any] | None = None,
+    degraded_operations: list[dict[str, Any]] | None = None,
 ) -> Any:
     mount = node.get("mount")
     if mount is None and isinstance(node.get("parameters"), dict):
         mount = node["parameters"].get("mount")
 
     has_mount = mount is not None and isinstance(mount, dict)
-    res = _raw_node_shape(node, inputs, parameters, selector_metadata, has_mount=has_mount)
+    res = _raw_node_shape(
+        node,
+        inputs,
+        parameters,
+        selector_metadata,
+        has_mount=has_mount,
+        degraded_operations=degraded_operations,
+    )
     if has_mount and res is not None:
         if shapes is None:
             raise IRExecutionError(f"node '{node.get('id')}' has mount configuration but shapes mapping is not provided")
@@ -1001,6 +1042,26 @@ def _topological_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def _cache_lookup(node_hash: str) -> Any | None:
+    with _NODE_SHAPE_CACHE_LOCK:
+        shape = _NODE_SHAPE_CACHE.pop(node_hash, None)
+    if shape is not None:
+        # Re-inserting after the pop marks the entry most-recently-used, so
+        # eviction below removes the least recently used key instead of the
+        # oldest inserted one (LRU, not FIFO).
+        _cache_store(node_hash, shape)
+    return shape
+
+
+def _cache_store(node_hash: str, shape: Any) -> None:
+    with _NODE_SHAPE_CACHE_LOCK:
+        if len(_NODE_SHAPE_CACHE) >= _MAX_SHAPE_CACHE_SIZE:
+            oldest = next(iter(_NODE_SHAPE_CACHE), None)
+            if oldest is not None:
+                _NODE_SHAPE_CACHE.pop(oldest, None)
+        _NODE_SHAPE_CACHE[node_hash] = shape
+
+
 def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
     """Execute a validated generic IR and return shapes plus a stable trace."""
     if cq is None:
@@ -1010,14 +1071,72 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
     ordered = _topological_nodes(nodes)
     shapes: dict[str, Any] = {}
     trace: list[dict[str, Any]] = []
+    node_hashes: dict[str, str] = {}
     for node in ordered:
         node_id = str(node["id"])
-        inputs = [shapes[reference] for reference in node.get("inputs", [])]
+        # A reference without a computed hash would silently shrink the cache
+        # key and risk colliding with a genuinely smaller node; such nodes are
+        # not cached at all (prefer slow over wrong).
+        cacheable = True
+        input_hashes: list[str] = []
+        for ref in node.get("inputs", []):
+            ref_hash = node_hashes.get(ref)
+            if ref_hash is None:
+                cacheable = False
+                continue
+            input_hashes.append(ref_hash)
+        resolved_params = {}
+        for k, v in (node.get("parameters") or {}).items():
+            try:
+                resolved_params[k] = _resolve(v, parameters)
+            except Exception:
+                resolved_params[k] = str(v)
+        has_mount = bool(node.get("mount") or (node.get("parameters") or {}).get("mount"))
+        mount_data = (node.get("mount") or (node.get("parameters") or {}).get("mount")) if has_mount else None
+        mount_target_hash = None
+        if cacheable and isinstance(mount_data, dict):
+            mount_target_hash = node_hashes.get(str(mount_data.get("target")))
+            if mount_target_hash is None:
+                # _apply_mount positions the child against the target's live
+                # bounding box, so a key without the target geometry hash
+                # cannot be trusted.
+                cacheable = False
+        # The whole node dict is hashed: node-level frame/rotation/orientation
+        # and the id itself (keyword-driven overlap defaults and cutter
+        # centering in _apply_mount read the id) all change the geometry.
+        node_hash_data = {
+            "node": node,
+            "resolved_params": resolved_params,
+            "global_parameters": parameters,
+            "inputs": input_hashes,
+            "mount_target_hash": mount_target_hash,
+        }
+        node_hash = hashlib.sha256(json.dumps(node_hash_data, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        node_hashes[node_id] = node_hash
+
+        degraded_operations: list[dict[str, Any]] = []
         selector_metadata: dict[str, Any] = {}
-        shape = _node_shape(node, inputs, parameters, selector_metadata, shapes=shapes)
-        shapes[node_id] = _as_shape(shape, node_id)
-        if selector_metadata:
-            _finalize_selector_metadata(selector_metadata, shapes[node_id])
+        cached_shape = _cache_lookup(node_hash) if cacheable else None
+
+        if cached_shape is not None:
+            shapes[node_id] = cached_shape
+        else:
+            inputs = [shapes[reference] for reference in node.get("inputs", [])]
+            shape = _node_shape(
+                node,
+                inputs,
+                parameters,
+                selector_metadata,
+                shapes=shapes,
+                degraded_operations=degraded_operations,
+            )
+            shapes[node_id] = _as_shape(shape, node_id)
+            if selector_metadata:
+                _finalize_selector_metadata(selector_metadata, shapes[node_id])
+            # Degraded fallbacks and selector metadata must stay observable on
+            # every execution, so their results are never cached.
+            if cacheable and not degraded_operations and not selector_metadata:
+                _cache_store(node_hash, shapes[node_id])
         trace_event = {
             "id": node_id,
             "operation": node.get("operation"),
@@ -1038,6 +1157,8 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
             }
             if selector_metadata:
                 trace_event["selector_matches"] = selector_metadata
+        if degraded_operations:
+            trace_event["degraded_operations"] = degraded_operations
         trace.append(trace_event)
     output_nodes = ir.get("outputs") or ([{"node": ordered[-1]["id"]}] if ordered else [])
     output_ids = [item.get("node") for item in output_nodes if isinstance(item, dict)]

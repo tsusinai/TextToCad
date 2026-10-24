@@ -13,9 +13,11 @@ import hashlib
 import json
 import logging
 import math
+import os
 from pathlib import Path
 import re
 import shutil
+import time
 from typing import Any, Callable
 import urllib.request
 import urllib.error
@@ -50,6 +52,25 @@ _ALLOWED_CRITIQUE_PATCHES = {
     "mount_component", "orient_component", "scale_component",
 }
 _PROMPT_UNIT_TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}
+_DEFAULT_TIME_BUDGET_SECONDS = 80.0
+
+
+def _agent_time_budget_seconds() -> float:
+    """Wall-clock budget for one agent loop run (AGENT_TIME_BUDGET_SECONDS).
+
+    Honors 0/negative values (budget already exhausted); malformed values fall
+    back to the 80s default. The frontend aborts generation jobs at 90s, so the
+    default leaves headroom for artifact finalization.
+    """
+    raw = os.getenv("AGENT_TIME_BUDGET_SECONDS", "80") or "80"
+    try:
+        budget = float(raw)
+    except ValueError:
+        logger.warning(f"Invalid AGENT_TIME_BUDGET_SECONDS={raw!r}; using {_DEFAULT_TIME_BUDGET_SECONDS}s")
+        return _DEFAULT_TIME_BUDGET_SECONDS
+    if math.isnan(budget):
+        return _DEFAULT_TIME_BUDGET_SECONDS
+    return budget
 
 
 def _normalize_critique(payload: Any) -> dict[str, Any]:
@@ -601,6 +622,7 @@ def call_vlm_critic(
     metrics: dict[str, Any] | None = None,
     patch_history: list[dict[str, Any]] | None = None,
     repair_reports: list[dict[str, Any]] | None = None,
+    degraded_operations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Query a Vision-Language Model to critique the 4-view CAD rendering against the design intent."""
     if not llm_api_url or not llm_api_key:
@@ -653,6 +675,15 @@ def call_vlm_critic(
         "- Bottom features: pockets or cutouts on the underside (-Z face) are occluded in top views; confirm via Ground-Truth Metrology.\n"
         "Give a score >= 9.0 and verdict ACCEPT when all requested functional features, holes, cuts, and proportions match the prompt."
     )
+    if degraded_operations:
+        ops_text = "; ".join(
+            f"{item.get('node', '?')}/{item.get('op', '?')}" for item in degraded_operations
+        )
+        system_prompt += (
+            "\nDEGRADED OPERATIONS WARNING: the CAD kernel silently fell back on: "
+            + ops_text
+            + ". These requested features are MISSING from the rendered geometry; propose patches to re-parameterize them (e.g. a smaller fillet radius) and reflect the loss in your score."
+        )
 
     ground_truth_text = ""
     if metrics:
@@ -821,9 +852,9 @@ def call_vlm_critic(
         with urllib.request.urlopen(req, timeout=35) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             content = data["choices"][0]["message"]["content"]
-            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, flags=re.DOTALL | re.IGNORECASE)
-            if match:
-                json_str = match.group(1)
+            code_block_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", content, flags=re.DOTALL | re.IGNORECASE)
+            if code_block_match:
+                json_str = code_block_match.group(1)
             else:
                 brace_match = re.search(r"(\{.*\})", content, flags=re.DOTALL)
                 json_str = brace_match.group(1) if brace_match else content.strip()
@@ -867,6 +898,7 @@ class MultiGateInspector:
         critique: dict[str, Any],
         model_id: str = "",
         process_profile: dict[str, Any] | None = None,
+        degraded_operations: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         gates: list[dict[str, Any]] = []
 
@@ -964,6 +996,13 @@ class MultiGateInspector:
         all_passed = gate1_passed and gate2_passed and gate3_passed and gate4_passed
         passed_count = sum(1 for g in gates if g["passed"])
 
+        # Warning-level signal: degraded ops do not fail a gate on their own, but
+        # they must stay visible on the certificate and in the VLM repair prompt
+        # so the next round can re-parameterize the missing features.
+        degraded_operations = degraded_operations or []
+        if degraded_operations:
+            gates[0]["evidence"] += f" ⚠ {len(degraded_operations)} degraded op(s)"
+
         cert_hash = hashlib.sha256(f"{model_id}:{round_idx}:{score}:{vol}:{all_passed}".encode("utf-8")).hexdigest()[:12].upper()
         cert_id = f"AC-{model_id[:6].upper() if model_id else 'CAD'}-R{round_idx}-{cert_hash[:6]}"
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -986,16 +1025,25 @@ class MultiGateInspector:
             "timestamp": timestamp,
             "inspector": "Autonomous CAD Quality Arbiter & VLM Inspector",
             "digest_hash": cert_hash,
+            "degraded_operations": degraded_operations,
         }
 
         return certificate
 
 
-def _patch_variants(patches: list[dict[str, Any]], max_candidates: int = 4) -> list[list[dict[str, Any]]]:
-    """Build a small beam of repair plans instead of trusting one patch list."""
+def _patch_variants(patches: list[dict[str, Any]], max_candidates: int = 6) -> list[list[dict[str, Any]]]:
+    """Build a multi-branch candidate beam of repair plans instead of trusting one patch list."""
     if not patches:
         return []
     variants: list[list[dict[str, Any]]] = [copy.deepcopy(patches)]
+    if len(patches) >= 3:
+        for i in range(len(patches)):
+            for j in range(i + 1, len(patches)):
+                if len(variants) >= max_candidates - len(patches):
+                    break
+                pair = [copy.deepcopy(patches[i]), copy.deepcopy(patches[j])]
+                if pair not in variants:
+                    variants.append(pair)
     for patch in patches:
         if len(variants) >= max_candidates:
             break
@@ -1010,8 +1058,14 @@ def _select_patch_candidate(
     patches: list[dict[str, Any]],
     prompt: str,
     process_profile: dict[str, Any] | None,
+    deadline: float | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    """Apply and cheaply score a few repair branches before committing one."""
+    """Apply and cheaply score a few repair branches before committing one.
+
+    `deadline` is a time.monotonic() timestamp. Once it passes, remaining branches
+    are skipped and recorded with status="budget_exhausted" (kernel execution is the
+    expensive step here) so the caller can end the agent loop early.
+    """
     evaluations: list[dict[str, Any]] = []
     best: dict[str, Any] | None = None
     best_rank: tuple[int, int, int, int, int] = (-1, -1, -1, -10_000, -10_000)
@@ -1021,6 +1075,13 @@ def _select_patch_candidate(
             "patch_count": len(variant),
             "patches": copy.deepcopy(variant),
         }
+        if deadline is not None and time.monotonic() >= deadline:
+            evaluation.update({
+                "status": "budget_exhausted",
+                "reason": "Skipped: agent time budget exhausted before this branch could be evaluated.",
+            })
+            evaluations.append(evaluation)
+            continue
         try:
             candidate_ir = apply_patches(current_ir, variant)
             execution = execute_ir(candidate_ir)
@@ -1039,12 +1100,15 @@ def _select_patch_candidate(
                 1 if feature_ok else 0,
                 1 if dfm_ok else 0,
                 -high_issue_count,
-                -len(candidate_ir.get("nodes", [])),
+                # Minimal-repair-first: among otherwise tied branches, prefer the one
+                # touching the fewest patches so already-verified primitives stay protected.
+                -len(variant),
             )
             evaluation.update({
                 "status": "valid" if valid else "invalid",
                 "rank": list(rank),
                 "metrics": metrics,
+                "degraded_operations": _collect_degraded_operations(execution),
                 "dfm_valid": dfm_ok,
                 "semantic_issues": issues,
             })
@@ -1059,6 +1123,23 @@ def _select_patch_candidate(
             })
         evaluations.append(evaluation)
     return best, evaluations
+
+
+def _collect_degraded_operations(execution: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten per-node ``degraded_operations`` entries from an execution trace.
+
+    A non-empty result means the kernel silently fell back (e.g. fillet that
+    could not be built), so the requested feature is missing from the geometry.
+    """
+    degraded: list[dict[str, Any]] = []
+    for event in execution.get("trace") or []:
+        for item in event.get("degraded_operations") or []:
+            degraded.append({
+                "node": str(event.get("id") or ""),
+                "op": str(item.get("op", "")),
+                "reason": str(item.get("reason", ""))[:200],
+            })
+    return degraded
 
 
 def run_agent_modeling_loop(
@@ -1088,7 +1169,21 @@ def run_agent_modeling_loop(
     rounds_history: list[dict[str, Any]] = []
     repair_reports: list[dict[str, Any]] = []
 
+    # Wall-clock latency budget: the frontend aborts generation jobs at 90s, so the
+    # loop must bail out early and adopt the best candidate produced so far.
+    deadline = time.monotonic() + _agent_time_budget_seconds()
+    budget_exhausted = False
+
     for round_idx in range(max(1, min(max_rounds, 4))):
+        # >= (not >) so an already-exhausted budget (AGENT_TIME_BUDGET_SECONDS=0)
+        # fires deterministically even on coarse-granularity monotonic clocks.
+        if time.monotonic() >= deadline:
+            logger.warning(
+                f"Agent time budget of {_agent_time_budget_seconds()}s exhausted before round {round_idx} "
+                f"({len(rounds_history)} round(s) completed); exiting early with the best candidate so far."
+            )
+            budget_exhausted = True
+            break
         round_dir = artifacts_dir / "rounds" / str(round_idx)
         round_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1114,8 +1209,27 @@ def run_agent_modeling_loop(
                 repair_hint="Regenerate the failing operation with registered inputs and parameters.",
             )]
             current_ir = copy.deepcopy(last_valid_ir)
-            execution = execute_ir(current_ir)
-            primary_shape = execution["shape"]
+            try:
+                execution = execute_ir(current_ir)
+                primary_shape = execution["shape"]
+            except Exception as rollback_err:
+                # Neither the patched IR nor the rollback IR is executable. There is
+                # no geometry left to render or critique, so the loop cannot enter a
+                # repair round; surface the original kernel failure instead of
+                # continuing with primary_shape=None (which would crash the renderer
+                # with a misleading FileNotFoundError).
+                logger.error(
+                    f"Round {round_idx} rollback execution also failed: {rollback_err}. "
+                    "Re-raising the original kernel execution error."
+                )
+                raise exec_err from rollback_err
+
+        degraded_operations = _collect_degraded_operations(execution)
+        if degraded_operations:
+            logger.warning(
+                f"Round {round_idx} executed with {len(degraded_operations)} degraded operation(s): "
+                f"{[item['op'] or 'op' for item in degraded_operations]}"
+            )
 
         # Deterministic Ground-Truth Metrology from Kernel
         shape_stats: dict[str, Any] = {}
@@ -1170,6 +1284,7 @@ def run_agent_modeling_loop(
             metrics=shape_stats,
             patch_history=all_applied_patches,
             repair_reports=repair_reports,
+            degraded_operations=degraded_operations,
         ))
 
         discrepancies = critique.get("discrepancies", [])
@@ -1203,6 +1318,7 @@ def run_agent_modeling_loop(
             critique=critique,
             model_id=artifacts_dir.name,
             process_profile=process_profile,
+            degraded_operations=degraded_operations,
         )
 
         semantic_issues = _semantic_requirement_issues(prompt, current_ir, shape_stats)
@@ -1247,6 +1363,7 @@ def run_agent_modeling_loop(
             "proposed_patches": critique.get("proposed_patches", []),
             "metrics": shape_stats,
             "certificate": certificate,
+            "degraded_operations": degraded_operations,
             "requirement_spec": extract_requirement_spec(prompt),
             "retrieved_feature_recipes": retrieve_feature_recipes(prompt),
             "repair_reports": copy.deepcopy(repair_reports),
@@ -1292,8 +1409,18 @@ def run_agent_modeling_loop(
                 patches,
                 prompt,
                 process_profile,
+                deadline=deadline,
             )
             round_record["candidate_evaluations"] = candidate_evaluations
+            if any(ev.get("status") == "budget_exhausted" for ev in candidate_evaluations):
+                # The budget ran out mid-evaluation: keep the best completed round
+                # instead of committing a half-elected repair branch.
+                budget_exhausted = True
+                logger.warning(
+                    f"Agent time budget exhausted while evaluating repair candidates in round {round_idx}; "
+                    "keeping the best completed round."
+                )
+                break
             if selected_candidate is None:
                 repair_reports.append(make_repair_report(
                     phase="repair",
@@ -1317,6 +1444,10 @@ def run_agent_modeling_loop(
     # Tag best round in history
     for r in rounds_history:
         r["is_best"] = (r["round"] == best_round_idx)
+    # Record early exit on the last completed round so the history itself carries
+    # the budget marker (total_rounds already reports how many rounds completed).
+    if budget_exhausted and rounds_history:
+        rounds_history[-1]["budget_exhausted"] = True
 
     converged = bool(
         rounds_history
@@ -1334,4 +1465,5 @@ def run_agent_modeling_loop(
         "final_score": final_score,
         "final_certificate": final_cert,
         "history": rounds_history,
+        "budget_exhausted": budget_exhausted,
     }
