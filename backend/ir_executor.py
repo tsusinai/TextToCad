@@ -1223,6 +1223,7 @@ def shape_metrics(shape: Any) -> dict[str, Any]:
     bbox = solid.BoundingBox()
     metrics = {
         "volume_mm3": round(float(solid.Volume()), 6),
+        "surface_area_mm2": round(float(solid.Area()), 6),
         "bbox_mm": {
             "x": round(float(bbox.xlen), 6),
             "y": round(float(bbox.ylen), 6),
