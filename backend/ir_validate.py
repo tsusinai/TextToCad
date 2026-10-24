@@ -271,6 +271,14 @@ def validate_ir(payload: dict[str, Any], *, max_nodes: int = 128, max_constraint
                 issues.append(_issue("missing_reference", f"node input '{reference}' does not exist", f"{path}.inputs[{input_index}]"))
             else:
                 adjacency[node.id].append(reference)
+        if node.operation in {"linear_pattern", "polar_pattern"}:
+            pattern_target = (node.parameters or {}).get("pattern_of")
+            if pattern_target is not None and str(pattern_target) not in known_nodes:
+                issues.append(_issue(
+                    "missing_reference",
+                    f"pattern_of target '{pattern_target}' does not exist",
+                    f"{path}.parameters.pattern_of",
+                ))
         if node.frame and node.frame not in known_datums:
             issues.append(_issue("missing_datum", f"frame '{node.frame}' does not exist", f"{path}.frame"))
         for name, value in node.parameters.items():

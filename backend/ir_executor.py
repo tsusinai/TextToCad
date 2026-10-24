@@ -717,6 +717,7 @@ def _raw_node_shape(
     selector_metadata: dict[str, Any] | None = None,
     has_mount: bool = False,
     degraded_operations: list[dict[str, Any]] | None = None,
+    shapes: dict[str, Any] | None = None,
 ) -> Any:
     operation = str(node.get("operation", ""))
     values = node.get("parameters") or {}
@@ -849,6 +850,21 @@ def _raw_node_shape(
             raise IRExecutionError("linear_pattern requires exactly one input")
         count = int(_number(parameters, values.get("count", 2), "linear_pattern.count", 0))
         spacing = _vector(parameters, values.get("spacing", [10, 0, 0]), "linear_pattern.spacing")
+        pattern_of = values.get("pattern_of")
+        if pattern_of is not None:
+            # Negative-feature semantics: array the referenced cutter node and
+            # subtract every instance (index 0 included — the host never
+            # contained the cutter) instead of unioning copies of the input.
+            cutter = (shapes or {}).get(str(pattern_of))
+            if cutter is None:
+                raise IRExecutionError(
+                    f"linear_pattern.pattern_of references unknown node '{pattern_of}'"
+                )
+            result = inputs[0]
+            for index in range(count):
+                vector = tuple(component * index for component in spacing)
+                result = result.cut(cutter if index == 0 else cutter.translate(vector))
+            return result
         result = inputs[0]
         for index in range(1, count):
             vector = tuple(component * index for component in spacing)
@@ -860,6 +876,21 @@ def _raw_node_shape(
         count = int(_number(parameters, values.get("count", 2), "polar_pattern.count", 0))
         angle = float(_resolve(values.get("angle", 360), parameters))
         axis = _vector(parameters, values.get("axis", [0, 0, 1]), "polar_pattern.axis")
+        pattern_of = values.get("pattern_of")
+        if pattern_of is not None:
+            cutter = (shapes or {}).get(str(pattern_of))
+            if cutter is None:
+                raise IRExecutionError(
+                    f"polar_pattern.pattern_of references unknown node '{pattern_of}'"
+                )
+            result = inputs[0]
+            for index in range(count):
+                rotated = (
+                    cutter if index == 0
+                    else cutter.rotate((0, 0, 0), axis, angle * index / count)
+                )
+                result = result.cut(rotated)
+            return result
         result = inputs[0]
         for index in range(1, count):
             result = result.union(inputs[0].rotate((0, 0, 0), axis, angle * index / count))
@@ -1005,6 +1036,7 @@ def _node_shape(
         selector_metadata,
         has_mount=has_mount,
         degraded_operations=degraded_operations,
+        shapes=shapes,
     )
     if has_mount and res is not None:
         if shapes is None:
@@ -1101,6 +1133,14 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
                 # bounding box, so a key without the target geometry hash
                 # cannot be trusted.
                 cacheable = False
+        pattern_target_hash = None
+        pattern_of_value = (node.get("parameters") or {}).get("pattern_of")
+        if cacheable and pattern_of_value is not None:
+            pattern_target_hash = node_hashes.get(str(pattern_of_value))
+            if pattern_target_hash is None:
+                # pattern_of subtracts the referenced cutter's live geometry;
+                # a key without its hash cannot be trusted.
+                cacheable = False
         # The whole node dict is hashed: node-level frame/rotation/orientation
         # and the id itself (keyword-driven overlap defaults and cutter
         # centering in _apply_mount read the id) all change the geometry.
@@ -1110,6 +1150,7 @@ def execute_ir(ir: dict[str, Any]) -> dict[str, Any]:
             "global_parameters": parameters,
             "inputs": input_hashes,
             "mount_target_hash": mount_target_hash,
+            "pattern_target_hash": pattern_target_hash,
         }
         node_hash = hashlib.sha256(json.dumps(node_hash_data, sort_keys=True, default=str).encode("utf-8")).hexdigest()
         node_hashes[node_id] = node_hash

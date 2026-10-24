@@ -667,6 +667,7 @@ def call_vlm_critic(
         "- 'scale_component': multiplies the dimensions of an individual component node by factor (e.g. factor 0.5 halves dimensions).\n"
         "- 'scale_parameter': scales an existing parameter value by factor (e.g. factor 1.25 enlarges by 25%, factor 0.8 shrinks).\n"
         "- 'add_hole_pattern': expands into polar array cut nodes: generating count cutter cylinders placed at (circle_radius * cos(theta), circle_radius * sin(theta)) and subtracting them from target_node.\n"
+        "- 'pattern_of' (on add_node linear_pattern/polar_pattern): set parameters.pattern_of to a standalone cutter node id; the kernel arrays that cutter (count x spacing / angle) and subtracts every instance from the pattern node's input host — prefer this over hand-writing N cut nodes.\n"
         "- 'add_chamfer' / 'add_fillet': bevels or rounds edges of target_node with specified distance or radius.\n"
         "- 'shell_hollow': adds a shell or inner pocket cut node to create a hollow cavity with specified wall thickness.\n"
         "- 'set_parameter' / 'replace_node_parameter': edits specific scalar parameters directly.\n"
