@@ -34,14 +34,14 @@ try:
     from .ir_constraints import solve_constraints
     from .multiview_renderer import HeadlessCADRenderer
     from .agent_contracts import extract_requirement_spec, make_repair_report, verify_requirement_spec
-    from .feature_catalog import retrieve_feature_recipes
+    from .feature_catalog import collect_metrology_notes, horizontal_barrel_fragment, retrieve_feature_recipes
 except ImportError:
     from ir_executor import execute_ir, IRExecutionError, shape_metrics
     from ir_repair import apply_patches
     from ir_constraints import solve_constraints
     from multiview_renderer import HeadlessCADRenderer
     from agent_contracts import extract_requirement_spec, make_repair_report, verify_requirement_spec
-    from feature_catalog import retrieve_feature_recipes
+    from feature_catalog import collect_metrology_notes, horizontal_barrel_fragment, retrieve_feature_recipes
 
 logger = logging.getLogger("agent_loop")
 
@@ -694,80 +694,17 @@ def call_vlm_critic(
         if assy.get("detected"):
             vs = assy.get("vertical_stacking", {})
             hp = assy.get("horizontal_protrusion", {})
-            cyl_faces = f_metrics.get("cylindrical_faces") or []
-            bounds = f_metrics.get("bounds_mm") or {}
-            horiz_cyls = [
-                c
-                for c in cyl_faces
-                if abs(c.get("axis", (0, 0, 1))[2]) < 0.35 and float(c.get("extent_mm", 0.0)) > 10.0
-            ]
-            barrel_len_note = ""
-            if horiz_cyls:
-                best_cyl = max(horiz_cyls, key=lambda c: float(c.get("extent_mm", 0.0)))
-                ext_mm = round(float(best_cyl.get("extent_mm", 0.0)), 1)
-                center_z = round(float((best_cyl.get("center") or [0, 0, 0])[2]), 1)
-                barrel_len_note = f", full horizontal cylinder length = {ext_mm} mm, centered at Z = {center_z} mm (mid-height of upper turret stage)"
-
-            rolling_wheels = [
-                c
-                for c in cyl_faces
-                if abs(c.get("axis", (0, 0, 1))[0]) > 0.85 and float(c.get("radius_mm", 0.0)) >= 8.0
-            ]
-            wheel_note = ""
-            if len(rolling_wheels) >= 2:
-                ground_clearance = max(0.0, round(float(bounds.get("zmin", 0.0)) * -1.0, 1)) if bounds.get("zmin", 0.0) < 0 else 0.0
-                wheel_note = (
-                    f"  * Rolling Wheels (Kernel Metrology Measured):\n"
-                    f"    - VERIFIED {len(rolling_wheels)} ROLLING WHEELS with transverse rotational axles along X (axes [±1, 0, 0]).\n"
-                    f"    - Wheels extend {ground_clearance} mm below chassis bottom (overall Z=[{bounds.get('zmin', 0)}, {bounds.get('zmax', 0)}] mm), lifting chassis off the ground.\n"
-                    f"    - NOTE: In 2D orthographic projections, rolling wheels appear as vertical silhouettes on the sides; do NOT confuse them with vertical discs, as the OCCT kernel has mathematically confirmed transverse rolling axles along X!\n"
-                )
-
-            # Orthogonal Pipe Manifold Metrology
-            pipe_note = ""
-            if len(cyl_faces) >= 2:
-                ortho_found = False
-                for i in range(len(cyl_faces)):
-                    for j in range(i + 1, len(cyl_faces)):
-                        ax_i = cyl_faces[i].get("axis", (0, 0, 1))
-                        ax_j = cyl_faces[j].get("axis", (0, 0, 1))
-                        dot = abs(ax_i[0] * ax_j[0] + ax_i[1] * ax_j[1] + ax_i[2] * ax_j[2])
-                        if dot < 0.35:
-                            ortho_found = True
-                            break
-                    if ortho_found:
-                        break
-                if ortho_found:
-                    pipe_note = (
-                        f"  * Pipe Manifold Junction (OCCT Kernel Measured):\n"
-                        f"    - VERIFIED perpendicular pipe intersection at 90 degrees (orthogonal cylinder axes).\n"
-                        f"    - Continuous flow passage connecting main run and perpendicular branch pipe.\n"
-                    )
-
-            # Bearing Housing Metrology
-            bearing_note = ""
-            bearing_bores = [
-                c for c in cyl_faces
-                if abs(c.get("axis", (0, 0, 1))[1]) > 0.85 and float(c.get("radius_mm", 0.0)) >= 10.0
-            ]
-            if bearing_bores:
-                b_cyl = bearing_bores[0]
-                dia = round(float(b_cyl.get("radius_mm", 12.5)) * 2.0, 1)
-                bearing_note = (
-                    f"  * Bearing Housing Metrology (OCCT Kernel Measured):\n"
-                    f"    - VERIFIED horizontal through-bore with axis along Y and diameter {dia} mm.\n"
-                    f"    - VERIFIED left and right lateral ear mounting features cut through the base (matching prompt mounting specifications).\n"
-                    f"    - NOTE: Do NOT report mounting holes or slots as a discrepancy when cut features are present matching the specified dimensions!\n"
-                )
-
+            # Object-family metrology annotations (wheels/pipes/bearings/barrel)
+            # live in feature_catalog.METROLOGY_RULES; this prompt block only
+            # stitches them together in registry order.
+            barrel_len_note = horizontal_barrel_fragment(f_metrics)
+            metrology_notes = "".join(collect_metrology_notes(f_metrics))
             assy_text = (
                 f"- Assembly Verification (OCCT Kernel Measured):\n"
                 f"  * Vertical Stacking: {'VERIFIED' if vs.get('detected') else 'NONE'} ({vs.get('stage_count', 0)} vertical stages, total height {vs.get('stacked_height_mm', '?')} mm)\n"
                 f"  * Horizontal Protrusion (e.g. Forward Barrel/Shaft): {'VERIFIED HORIZONTAL ALONG ' + str(hp.get('direction', '+Y')).upper() if hp.get('detected') else 'NONE'} (overhangs {hp.get('protrusion_mm', 0)} mm past base bumper{barrel_len_note})\n"
                 f"  * NOTE: In the 2D Top View (+Z), forward direction (+Y) points towards the top of the image frame. The kernel has verified that the barrel/protrusion is HORIZONTAL along Y and centered vertically on its host stage!\n"
-                f"{wheel_note}"
-                f"{pipe_note}"
-                f"{bearing_note}"
+                f"{metrology_notes}"
             )
         ground_truth_text = (
             f"Ground-Truth OCCT Physical Metrology (Measured directly by CAD Kernel):\n"

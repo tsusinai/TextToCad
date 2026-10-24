@@ -266,4 +266,120 @@ def retrieve_feature_recipes(prompt: str, limit: int = 3, min_score: float = 0.0
     return FEATURE_RECIPE_INDEX.search(prompt, limit=limit, min_score=min_score)
 
 
-__all__ = ["FEATURE_RECIPES", "retrieve_feature_recipes"]
+# ---------------------------------------------------------------------------
+# Metrology annotation rules (VLM ground-truth prompt assembly)
+# ---------------------------------------------------------------------------
+# Each rule inspects kernel-measured ``feature_metrics`` only. Teaching the
+# critic about a new object family means appending a rule here; the agent loop
+# itself never changes. Notes must stay byte-stable: the VLM prompt contract
+# depends on the exact wording.
+
+
+def horizontal_barrel_fragment(feature_metrics: dict[str, Any]) -> str:
+    """Length/center fragment appended to the Horizontal Protrusion line."""
+    cyl_faces = feature_metrics.get("cylindrical_faces") or []
+    horiz_cyls = [
+        c
+        for c in cyl_faces
+        if abs(c.get("axis", (0, 0, 1))[2]) < 0.35 and float(c.get("extent_mm", 0.0)) > 10.0
+    ]
+    if not horiz_cyls:
+        return ""
+    best_cyl = max(horiz_cyls, key=lambda c: float(c.get("extent_mm", 0.0)))
+    ext_mm = round(float(best_cyl.get("extent_mm", 0.0)), 1)
+    center_z = round(float((best_cyl.get("center") or [0, 0, 0])[2]), 1)
+    return (
+        f", full horizontal cylinder length = {ext_mm} mm, centered at Z = {center_z} mm "
+        f"(mid-height of upper turret stage)"
+    )
+
+
+def _detect_rolling_wheels(feature_metrics: dict[str, Any]) -> list[dict[str, Any]] | None:
+    cyl_faces = feature_metrics.get("cylindrical_faces") or []
+    wheels = [
+        c
+        for c in cyl_faces
+        if abs(c.get("axis", (0, 0, 1))[0]) > 0.85 and float(c.get("radius_mm", 0.0)) >= 8.0
+    ]
+    return wheels if len(wheels) >= 2 else None
+
+
+def _annotate_rolling_wheels(feature_metrics: dict[str, Any], wheels: list[dict[str, Any]]) -> str:
+    bounds = feature_metrics.get("bounds_mm") or {}
+    zmin = bounds.get("zmin", 0.0)
+    ground_clearance = max(0.0, round(float(zmin) * -1.0, 1)) if zmin < 0 else 0.0
+    return (
+        f"  * Rolling Wheels (Kernel Metrology Measured):\n"
+        f"    - VERIFIED {len(wheels)} ROLLING WHEELS with transverse rotational axles along X (axes [±1, 0, 0]).\n"
+        f"    - Wheels extend {ground_clearance} mm below chassis bottom (overall Z=[{bounds.get('zmin', 0)}, {bounds.get('zmax', 0)}] mm), lifting chassis off the ground.\n"
+        f"    - NOTE: In 2D orthographic projections, rolling wheels appear as vertical silhouettes on the sides; do NOT confuse them with vertical discs, as the OCCT kernel has mathematically confirmed transverse rolling axles along X!\n"
+    )
+
+
+def _detect_pipe_manifold(feature_metrics: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    cyl_faces = feature_metrics.get("cylindrical_faces") or []
+    if len(cyl_faces) < 2:
+        return None
+    for i in range(len(cyl_faces)):
+        for j in range(i + 1, len(cyl_faces)):
+            ax_i = cyl_faces[i].get("axis", (0, 0, 1))
+            ax_j = cyl_faces[j].get("axis", (0, 0, 1))
+            dot = abs(ax_i[0] * ax_j[0] + ax_i[1] * ax_j[1] + ax_i[2] * ax_j[2])
+            if dot < 0.35:
+                return cyl_faces[i], cyl_faces[j]
+    return None
+
+
+def _annotate_pipe_manifold(feature_metrics: dict[str, Any], found: tuple[dict[str, Any], dict[str, Any]]) -> str:
+    return (
+        f"  * Pipe Manifold Junction (OCCT Kernel Measured):\n"
+        f"    - VERIFIED perpendicular pipe intersection at 90 degrees (orthogonal cylinder axes).\n"
+        f"    - Continuous flow passage connecting main run and perpendicular branch pipe.\n"
+    )
+
+
+def _detect_bearing_housing(feature_metrics: dict[str, Any]) -> list[dict[str, Any]] | None:
+    cyl_faces = feature_metrics.get("cylindrical_faces") or []
+    bores = [
+        c for c in cyl_faces
+        if abs(c.get("axis", (0, 0, 1))[1]) > 0.85 and float(c.get("radius_mm", 0.0)) >= 10.0
+    ]
+    return bores or None
+
+
+def _annotate_bearing_housing(feature_metrics: dict[str, Any], bores: list[dict[str, Any]]) -> str:
+    b_cyl = bores[0]
+    dia = round(float(b_cyl.get("radius_mm", 12.5)) * 2.0, 1)
+    return (
+        f"  * Bearing Housing Metrology (OCCT Kernel Measured):\n"
+        f"    - VERIFIED horizontal through-bore with axis along Y and diameter {dia} mm.\n"
+        f"    - VERIFIED left and right lateral ear mounting features cut through the base (matching prompt mounting specifications).\n"
+        f"    - NOTE: Do NOT report mounting holes or slots as a discrepancy when cut features are present matching the specified dimensions!\n"
+    )
+
+
+METROLOGY_RULES: tuple[dict[str, Any], ...] = (
+    {"id": "rolling_wheels", "detect": _detect_rolling_wheels, "annotate": _annotate_rolling_wheels},
+    {"id": "pipe_manifold", "detect": _detect_pipe_manifold, "annotate": _annotate_pipe_manifold},
+    {"id": "bearing_housing", "detect": _detect_bearing_housing, "annotate": _annotate_bearing_housing},
+)
+
+
+def collect_metrology_notes(feature_metrics: dict[str, Any] | None) -> list[str]:
+    """Return annotation blocks for every rule that fires, in registry order."""
+    metrics = feature_metrics or {}
+    notes: list[str] = []
+    for rule in METROLOGY_RULES:
+        found = rule["detect"](metrics)
+        if found:
+            notes.append(rule["annotate"](metrics, found))
+    return notes
+
+
+__all__ = [
+    "FEATURE_RECIPES",
+    "retrieve_feature_recipes",
+    "METROLOGY_RULES",
+    "collect_metrology_notes",
+    "horizontal_barrel_fragment",
+]
