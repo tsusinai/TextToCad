@@ -974,6 +974,137 @@ def test_ir_expressions_with_numbers_and_parentheses():
     assert validated["parameters"]["padded"]["expression"] == "(width + 10) / 2"
 
 
+def test_ir_expression_pow_dos_protection():
+    from ir_executor import IRExecutionError, _resolve
+    with pytest.raises(IRExecutionError, match="safe bounds|out of bounds"):
+        _resolve("2 ** 10000000", {})
+
+
+def _v0_3_hybrid_document():
+    return {
+        "schema_version": "0.3",
+        "parameters": {},
+        "components": [
+            {
+                "id": "wheel",
+                "nodes": [
+                    {"id": "rim", "kind": "primitive", "operation": "cylinder", "parameters": {"radius": 15, "height": 8}}
+                ],
+                "outputs": [{"id": "out", "node": "rim"}]
+            }
+        ],
+        "instances": [
+            {"id": "wheel_left", "component": "wheel"},
+            {"id": "wheel_right", "component": "wheel"},
+        ],
+        "assembly_joints": [
+            {
+                "id": "joint1",
+                "type": "revolute",
+                "first": {"instance": "wheel_left", "face": ">Z"},
+                "second": {"instance": "wheel_right", "face": "<X"}
+            }
+        ],
+        "nodes": [
+            {"id": "axle", "kind": "primitive", "operation": "cylinder", "parameters": {"radius": 4, "height": 90}}
+        ],
+        "outputs": [{"id": "main", "node": "axle"}],
+    }
+
+
+def test_ir_schema_v0_3_hybrid_document_valid():
+    validated = app.validate_ir(_v0_3_hybrid_document())
+    assert validated["schema_version"] == "0.3"
+    assert len(validated["components"]) == 1
+    assert len(validated["instances"]) == 2
+    assert len(validated["assembly_joints"]) == 1
+    assert [node["id"] for node in validated["nodes"]] == ["axle"]
+
+
+def test_ir_schema_v0_3_assembly_only_document_rejected():
+    document = _v0_3_hybrid_document()
+    document["nodes"] = []
+    document["outputs"] = []
+    with pytest.raises(app.IRValidationError) as exc:
+        app.validate_ir(document)
+    messages = " ".join(issue["message"] for issue in exc.value.issues)
+    assert "assembly-only" in messages
+
+
+def test_ir_schema_v0_3_dangling_instance_component_rejected():
+    document = _v0_3_hybrid_document()
+    document["instances"][0]["component"] = "missing"
+    with pytest.raises(app.IRValidationError) as exc:
+        app.validate_ir(document)
+    messages = " ".join(issue["message"] for issue in exc.value.issues)
+    assert "missing" in messages and "component" in messages
+
+
+def test_ir_schema_v0_3_dangling_joint_instance_rejected():
+    document = _v0_3_hybrid_document()
+    document["assembly_joints"][0]["second"]["instance"] = "ghost"
+    with pytest.raises(app.IRValidationError) as exc:
+        app.validate_ir(document)
+    messages = " ".join(issue["message"] for issue in exc.value.issues)
+    assert "ghost" in messages
+
+
+def test_ir_schema_v0_3_dangling_component_output_rejected():
+    document = _v0_3_hybrid_document()
+    document["components"][0]["outputs"][0]["node"] = "not_in_component"
+    with pytest.raises(app.IRValidationError) as exc:
+        app.validate_ir(document)
+    messages = " ".join(issue["message"] for issue in exc.value.issues)
+    assert "not_in_component" in messages
+
+
+def test_ir_schema_v0_3_duplicate_component_and_instance_ids_rejected():
+    document = _v0_3_hybrid_document()
+    document["instances"][1]["id"] = "wheel_left"
+    with pytest.raises(app.IRValidationError) as exc:
+        app.validate_ir(document)
+    messages = " ".join(issue["message"] for issue in exc.value.issues)
+    assert "duplicate" in messages
+
+
+def test_model_drawing_and_measure_endpoints(tmp_path):
+    import json
+    import shutil
+    model_id = "b" * 32
+    target_dir = app.ARTIFACT_ROOT / model_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "title": "Bracket <X & Y>",
+        "units": "mm",
+        "geometry_metrics": {
+            "valid_brep": True,
+            "solid_count": 1,
+            "face_count": 6,
+            "volume_mm3": 12000.0,
+            "surface_area_mm2": 3200.0,
+            "bbox_mm": {"x": 40.0, "y": 30.0, "z": 10.0},
+        }
+    }
+    (target_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    try:
+        drawing_resp = app.get_model_drawing(model_id)
+        assert drawing_resp.media_type == "image/svg+xml"
+        body = drawing_resp.body.decode("utf-8")
+        assert "40.0" in body
+        assert "&lt;X &amp; Y&gt;" in body
+        assert "<X & Y>" not in body
+
+        data = app.measure_model(model_id)
+        assert data["valid_brep"] is True
+        assert data["dimensions"]["width"] == 40.0
+        assert data["volume_mm3"] == 12000.0
+    finally:
+        shutil.rmtree(target_dir, ignore_errors=True)
+
+
+
+
+
 @pytest.mark.skipif(app.cq is None, reason="CadQuery is available in the Docker quality environment")
 def test_agent_modeling_loop_convergence(tmp_path):
     from agent_loop import run_agent_modeling_loop

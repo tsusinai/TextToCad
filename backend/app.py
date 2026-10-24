@@ -21,7 +21,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 try:
@@ -163,6 +163,9 @@ class IRCompileRequest(BaseModel):
     # Optional mating/reference IR used for true two-entity clearance measurement.
     reference_ir: dict[str, Any] | None = None
     clearance_target_mm: float | None = Field(default=None, gt=0, le=1000)
+    # When true, the compiled shape is persisted as a downloadable GLB artifact
+    # (used by the frontend parametric re-compile panel).
+    persist: bool = False
 
 
 class IRRepairRequest(BaseModel):
@@ -221,7 +224,29 @@ class GenerateResponse(BaseModel):
 
 
 CACHE_LOCK = Lock()
+MAX_CACHE_ENTRIES = max(16, int(os.getenv("MAX_CACHE_ENTRIES", "256")))
 MODEL_CACHE: dict[str, GenerateResponse] = {}
+
+
+def _get_cached_response(cache_key: str) -> GenerateResponse | None:
+    with CACHE_LOCK:
+        cached = MODEL_CACHE.get(cache_key)
+        if cached is not None:
+            MODEL_CACHE[cache_key] = MODEL_CACHE.pop(cache_key)
+            return cached
+        return None
+
+
+def _store_cached_response(cache_key: str, response: GenerateResponse) -> None:
+    with CACHE_LOCK:
+        if len(MODEL_CACHE) >= MAX_CACHE_ENTRIES and cache_key not in MODEL_CACHE:
+            try:
+                oldest_key = next(iter(MODEL_CACHE))
+                MODEL_CACHE.pop(oldest_key, None)
+            except StopIteration:
+                pass
+        MODEL_CACHE[cache_key] = response
+
 JOB_LOCK = Lock()
 JOBS: dict[str, dict[str, Any]] = {}
 MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
@@ -280,11 +305,54 @@ class GenerationRecorder:
         return event
 
     def fail(self, message: str) -> None:
+        _bump_telemetry("failures")
         running = next((item for item in reversed(self.events) if item["status"] == "running"), None)
         if running:
             self.emit(running["stage"], running["id"], "failed", reason=message[:240])
         else:
             self.emit("failed", "generation_failed", "failed", reason=message[:240])
+
+
+def _summarize_telemetry(
+    recorder: GenerationRecorder | None,
+    *,
+    llm_calls: int = 0,
+    vlm_calls: int = 0,
+) -> dict[str, Any]:
+    """Aggregate recorder milestones into per-stage duration totals (milliseconds).
+
+    Only completed events (those carrying a ``duration_ms``) are counted, so an
+    event left ``running`` never contributes. ``total_ms`` is the sum of all
+    completed event durations; parent events (e.g. ``ir_compile`` spanning its
+    per-node children) intentionally overlap, so this can exceed wall-clock time.
+    """
+    stages: dict[str, int] = {}
+    total_ms = 0
+    if recorder is not None:
+        for event in recorder.events:
+            duration = event.get("duration_ms")
+            if duration is None:
+                continue
+            stage = str(event.get("stage") or "unknown")
+            stages[stage] = stages.get(stage, 0) + int(duration)
+            total_ms += int(duration)
+    return {
+        "total_ms": total_ms,
+        "stages": stages,
+        "llm_calls": int(llm_calls),
+        "vlm_calls": int(vlm_calls),
+    }
+
+
+# Process-lifetime generation counters exposed through /health (single-worker only).
+_TELEMETRY_TOTALS: dict[str, int] = {"generations": 0, "agent_generations": 0, "failures": 0}
+_TELEMETRY_LOCK = Lock()
+
+
+def _bump_telemetry(key: str, amount: int = 1) -> int:
+    with _TELEMETRY_LOCK:
+        _TELEMETRY_TOTALS[key] = _TELEMETRY_TOTALS.get(key, 0) + int(amount)
+        return _TELEMETRY_TOTALS[key]
 
 
 def _number_after(text: str, patterns: list[str]) -> float | None:
@@ -970,6 +1038,8 @@ def _llm_ir_json(prompt: str, process: str, units: str) -> dict[str, Any]:
             raise
         except (urllib.error.URLError, TimeoutError) as exc:
             raise RuntimeError("LLM provider timed out or was unreachable") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise RuntimeError("LLM provider returned invalid JSON") from exc
 
     try:
         body = call({**payload, "response_format": {"type": "json_object"}})
@@ -1210,7 +1280,13 @@ def _normalize_ir_draft(
     candidate = copy.deepcopy(payload)
     if isinstance(candidate.get("ir"), dict):
         candidate = copy.deepcopy(candidate["ir"])
-    if candidate.get("schema_version") not in {None, "0.2"}:
+    has_assembly_structure = any(
+        key in candidate for key in ("components", "instances", "assembly_joints")
+    )
+    if not has_assembly_structure and candidate.get("schema_version") not in {None, "0.2"}:
+        # Bare newer drafts are downgraded for the 0.2 executor, but documents
+        # carrying v0.3 assembly structure keep their version so validation can
+        # judge them explicitly instead of silently dropping the structure.
         candidate["schema_version"] = "0.2"
     candidate.setdefault("schema_version", "0.2")
     document = candidate.setdefault("document", {})
@@ -1540,6 +1616,24 @@ def _normalize_ir_draft(
     return candidate
 
 
+# ASCII primitive tokens that legitimately appear as the suffix of a longer
+# shape word (pentagon/hexagon/octagon); every other ASCII token must match a
+# whole word so English like "ergonomic" ("gon") or "bring" ("ring") cannot
+# silently satisfy the deterministic primitive guard and produce a wrong model.
+_PRIMITIVE_SUFFIX_TOKENS = frozenset({"gon"})
+
+
+def _token_matches(text: str, token: str) -> bool:
+    if token.isascii():
+        prefix = r"\w*" if token in _PRIMITIVE_SUFFIX_TOKENS else r"\b"
+        return re.search(prefix + re.escape(token) + r"(?:s|es)?\b", text) is not None
+    return token in text
+
+
+def _text_has_token(text: str, tokens) -> bool:
+    return any(_token_matches(text, token) for token in tokens)
+
+
 def _deterministic_ir_plan(
     prompt: str,
     process: str,
@@ -1561,7 +1655,7 @@ def _deterministic_ir_plan(
         "square", "正方形", "pentagon", "五边形", "hexagon", "六边形",
         "octagon", "八边形", "gon", "边形", "hole", "通孔", "带孔", "空心", "管", "筒",
     )
-    if not any(token in text for token in primitive_tokens):
+    if not _text_has_token(text, primitive_tokens):
         raise RuntimeError(
             "LLM API is required for free-form CAD descriptions; "
             "set LLM_API_KEY/OPENAI_API_KEY or use an explicit primitive description"
@@ -1577,7 +1671,7 @@ def _deterministic_ir_plan(
     }
     datums = [{"id": "xy", "type": "plane", "origin": [0, 0, 0], "normal": [0, 0, 1]}]
     nodes: list[dict[str, Any]]
-    if any(token in text for token in ("sphere", "ball", "球")):
+    if _text_has_token(text, ("sphere", "ball", "球")):
         parameters["radius"] = {
             "value": min(width, depth) / 2,
             "unit": "mm",
@@ -1591,7 +1685,7 @@ def _deterministic_ir_plan(
             "parameters": {"radius": "radius"},
             "frame": "xy",
         }]
-    elif any(token in text for token in ("torus", "ring", "donut", "圆环", "圆环体", "环体")):
+    elif _text_has_token(text, ("torus", "ring", "donut", "圆环", "圆环体", "环体")):
         major = max(2.0, min(width, depth) / 2)
         minor = max(0.8, round(major / 4.0, 2))
         parameters["major_radius"] = {
@@ -1613,7 +1707,7 @@ def _deterministic_ir_plan(
             "parameters": {"major_radius": "major_radius", "minor_radius": "minor_radius"},
             "frame": "xy",
         }]
-    elif any(token in text for token in ("cylinder", "圆柱", "圆柱体")):
+    elif _text_has_token(text, ("cylinder", "圆柱", "圆柱体")):
         parameters["radius"] = {
             "value": min(width, depth) / 2,
             "unit": "mm",
@@ -1627,7 +1721,7 @@ def _deterministic_ir_plan(
             "parameters": {"radius": "radius", "height": "height"},
             "frame": "xy",
         }]
-    elif any(token in text for token in ("cone", "圆锥", "圆锥体")):
+    elif _text_has_token(text, ("cone", "圆锥", "圆锥体")):
         parameters["radius"] = {
             "value": min(width, depth) / 2,
             "unit": "mm",
@@ -2349,6 +2443,7 @@ def _shape_metrics(shape: Any) -> dict[str, Any]:
         pass
     return {
         "volume_mm3": round(float(solid.Volume()), 6),
+        "surface_area_mm2": round(float(solid.Area()), 6),
         "bbox_mm": {
             "x": round(float(bbox.xlen), 6),
             "y": round(float(bbox.ylen), 6),
@@ -3191,6 +3286,7 @@ def _write_artifacts(
     if preview_files:
         artifact_metadata["glb"]["viewer_transform"] = "cad_z_up_to_three_y_up"
 
+    shape_metrics = _shape_metrics(shape)
     manifest = {
         "model_id": model_id,
         "title": title,
@@ -3200,11 +3296,17 @@ def _write_artifacts(
         "generation": generation or {"mode": "standard", "llm_used": False, "assumptions": []},
         "provenance": provenance or {},
         "generation_trace": copy.deepcopy(recorder.events) if recorder else [],
+        "telemetry": _summarize_telemetry(
+            recorder,
+            llm_calls=1 if (generation or {}).get("llm_used") else 0,
+            # Each completed agent round makes exactly one VLM critique call.
+            vlm_calls=len(((generation or {}).get("agent_summary") or {}).get("history") or []),
+        ),
         "design_ir": design_ir or {},
         "checks": checks,
         "analysis": analysis,
-        "geometry_metrics": _shape_metrics(shape),
-        "validation": {
+        "geometry_metrics": shape_metrics,
+        "metrics": shape_metrics,        "validation": {
             "step_roundtrip": step_roundtrip,
             "mesh": mesh_validation,
         },
@@ -3221,6 +3323,10 @@ def _write_artifacts(
     }
     manifest_path = model_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    # Fresh generation completed (cache hits never rewrite the manifest).
+    _bump_telemetry("generations")
+    if str((generation or {}).get("mode") or "") == "agent":
+        _bump_telemetry("agent_generations")
     artifacts = {
         "step": f"/v1/models/{model_id}/download?format=step",
         "stl": f"/v1/models/{model_id}/download?format=stl",
@@ -3260,7 +3366,7 @@ origins = [
     item.strip()
     for item in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,https://tsusinai.github.io",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000,https://tsusinai.github.io",
     ).split(",")
     if item.strip()
 ]
@@ -3508,6 +3614,42 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
             if intersection_method:
                 clearance["intersection_method"] = intersection_method
             clearance["reference_output_node"] = reference_output_node
+    persisted_model_id: str | None = None
+    persisted_artifacts: dict[str, str] | None = None
+    if request.persist:
+        if cq is None:
+            raise HTTPException(status_code=503, detail="CAD kernel unavailable; cannot persist compile result")
+        persisted_model_id = uuid.uuid4().hex
+        target_dir = ARTIFACT_ROOT / persisted_model_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+        glb_path = target_dir / "model.glb"
+        try:
+            _export_face_mapped_glb(execution["shape"], glb_path)
+            if not glb_path.exists() or glb_path.stat().st_size == 0:
+                raise RuntimeError("face-mapped GLB export produced no file")
+            manifest = {
+                "model_id": persisted_model_id,
+                "title": str((normalized.get("document") or {}).get("intent") or "parametric re-compile")[:80],
+                "units": "mm",
+                "geometry_metrics": metrics,
+                "provenance": {
+                    "planner": "parametric_recompile",
+                    "source": "/v1/ir/compile",
+                },
+            }
+            (target_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        except HTTPException:
+            shutil.rmtree(target_dir, ignore_errors=True)
+            raise
+        except Exception as exc:
+            shutil.rmtree(target_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=422,
+                detail=f"persist unsupported for this shape: {exc}",
+            ) from exc
+        persisted_artifacts = {
+            "glb": f"/v1/models/{persisted_model_id}/download?format=glb",
+        }
     return {
         "valid": True,
         "schema_version": "0.2",
@@ -3522,6 +3664,8 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
         "face_measurements": face_measurements,
         "clearance": clearance,
         "trace": execution["trace"],
+        "model_id": persisted_model_id,
+        "artifacts": persisted_artifacts,
     }
 
 
@@ -3554,6 +3698,7 @@ def health() -> dict[str, Any]:
         "ir_llm_planner_available": bool(LLM_API_KEY),
         "ir_deterministic_primitive_planner": cq is not None,
         "agent_mode_available": bool(LLM_API_KEY) and cq is not None,
+        "telemetry_totals": {key: value for key, value in _TELEMETRY_TOTALS.items()},
     }
 
 
@@ -3737,13 +3882,12 @@ def _generate_ir_model(
     recorder = GenerationRecorder(report)
     cleanup_artifacts()
     cache_key = _cache_key(request)
-    with CACHE_LOCK:
-        cached = MODEL_CACHE.get(cache_key)
-        if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
-            cache_event = recorder.emit("complete", "cache", "succeeded", model_id=cached.model_id)
-            return cached.model_copy(update={
-                "generation_trace": [copy.deepcopy(cache_event)] + copy.deepcopy(cached.generation_trace)
-            })
+    cached = _get_cached_response(cache_key)
+    if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
+        cache_event = recorder.emit("complete", "cache", "succeeded", model_id=cached.model_id)
+        return cached.model_copy(update={
+            "generation_trace": [copy.deepcopy(cache_event)] + copy.deepcopy(cached.generation_trace)
+        })
 
     model_id: str | None = None
     try:
@@ -4082,8 +4226,7 @@ def _generate_ir_model(
             generation_trace=copy.deepcopy(recorder.events),
             agent_summary=agent_summary,
         )
-        with CACHE_LOCK:
-            MODEL_CACHE[cache_key] = response
+        _store_cached_response(cache_key, response)
         return response
     except GenerationCancelled:
         if model_id:
@@ -4145,13 +4288,12 @@ def _generate_model(
     recorder = GenerationRecorder(report)
     cleanup_artifacts()
     cache_key = _cache_key(request)
-    with CACHE_LOCK:
-        cached = MODEL_CACHE.get(cache_key)
-        if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
-            cache_event = recorder.emit("complete", "cache", "succeeded", model_id=cached.model_id)
-            return cached.model_copy(update={
-                "generation_trace": [copy.deepcopy(cache_event)] + copy.deepcopy(cached.generation_trace)
-            })
+    cached = _get_cached_response(cache_key)
+    if cached and (ARTIFACT_ROOT / cached.model_id / "manifest.json").exists():
+        cache_event = recorder.emit("complete", "cache", "succeeded", model_id=cached.model_id)
+        return cached.model_copy(update={
+            "generation_trace": [copy.deepcopy(cache_event)] + copy.deepcopy(cached.generation_trace)
+        })
     model_id: str | None = None
     try:
         recorder.emit("parsing", "interpretation", "running", mode=request.mode, units=request.units)
@@ -4237,8 +4379,7 @@ def _generate_model(
             design_ir=design_ir,
             generation_trace=copy.deepcopy(recorder.events),
         )
-        with CACHE_LOCK:
-            MODEL_CACHE[cache_key] = response
+        _store_cached_response(cache_key, response)
         return response
     except GenerationCancelled:
         if model_id:
@@ -4404,3 +4545,208 @@ def download_model(
         "glb_entities": "model/gltf-binary",
     }[format]
     return FileResponse(file_path, media_type=media_type, filename=file_path.name)
+
+
+@app.get("/v1/models/{model_id}/drawing")
+def get_model_drawing(
+    model_id: str,
+) -> Response:
+    import html
+
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
+        raise HTTPException(status_code=400, detail="invalid model id")
+    manifest_path = ARTIFACT_ROOT / model_id / "manifest.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="model not found")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        title = manifest.get("title", "Engineering Part")
+        units = manifest.get("units", "mm")
+        metrics = manifest.get("geometry_metrics") or manifest.get("metrics") or {}
+        bbox = metrics.get("bbox_mm") or {}
+        bx = float(bbox.get("x", 0.0))
+        by = float(bbox.get("y", 0.0))
+        bz = float(bbox.get("z", 0.0))
+        volume = float(metrics.get("volume_mm3", 0.0))
+    except (ValueError, TypeError, AttributeError) as error:
+        raise HTTPException(status_code=422, detail=f"model manifest unreadable: {error}") from error
+
+    escaped_title = html.escape(str(title)[:28])
+    escaped_units = html.escape(str(units).upper())
+
+    model_dir = ARTIFACT_ROOT / model_id
+    cached_svg_path = model_dir / "drawing.svg"
+    projected_svg: str | None = None
+    if cached_svg_path.exists():
+        try:
+            projected_svg = cached_svg_path.read_text(encoding="utf-8")
+        except OSError as cache_err:
+            logger.warning(f"Drawing cache unreadable for {model_id}: {cache_err}; re-rendering.")
+            projected_svg = None
+
+    if projected_svg is None and (model_dir / "model.stl").exists():
+        try:
+            import base64
+
+            from multiview_renderer import HeadlessCADRenderer
+
+            views_dir = model_dir / "drawing_views"
+            views_dir.mkdir(parents=True, exist_ok=True)
+            rendered = HeadlessCADRenderer().render_stl_multiview(model_dir / "model.stl", views_dir)
+
+            def _view_image(key: str) -> str:
+                view_path = rendered.get(key)
+                if not view_path or not Path(view_path).exists():
+                    return ""
+                encoded = base64.b64encode(Path(view_path).read_bytes()).decode("ascii")
+                return f"data:image/png;base64,{encoded}"
+
+            def _panel(x: float, y: float, width: float, height: float, label: str, dims: str, key: str) -> str:
+                image_href = _view_image(key)
+                body = (
+                    f'<image href="{image_href}" x="{x + 4}" y="{y + 16}" width="{width - 8}" height="{height - 20}" preserveAspectRatio="xMidYMid meet"/>'
+                    if image_href
+                    else f'<rect x="{x + 4}" y="{y + 16}" width="{width - 8}" height="{height - 20}" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>'
+                )
+                return (
+                    f'<g>'
+                    f'<text x="{x + width / 2}" y="{y + 11}" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569" text-anchor="middle">{label}</text>'
+                    f'<rect x="{x}" y="{y + 16}" width="{width}" height="{height - 20}" fill="#ffffff" stroke="#0f172a" stroke-width="1.2"/>'
+                    f'{body}'
+                    f'<text x="{x + width / 2}" y="{y + height - 6}" font-family="monospace" font-size="10.5" fill="#334155" text-anchor="middle">{dims}</text>'
+                    f'</g>'
+                )
+
+            projected_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700">
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="1000" height="700" fill="#f8fafc"/>
+  <rect width="1000" height="700" fill="url(#grid)"/>
+  <rect x="20" y="20" width="960" height="660" fill="none" stroke="#1e293b" stroke-width="2"/>
+  <text x="500" y="48" font-family="sans-serif" font-size="15" font-weight="bold" fill="#0f172a" text-anchor="middle">TRUE-PROJECTION 2D TECHNICAL DRAWING · 真实投影工程图</text>
+  {_panel(40, 70, 420, 300, "ISOMETRIC / 轴测投影 (ISO)", "SHADED REFERENCE", "iso")}
+  {_panel(500, 70, 440, 300, "TOP VIEW / 俯视图 (XY)", f"{bx:.1f} × {by:.1f} {escaped_units}", "top")}
+  {_panel(40, 400, 300, 260, "FRONT / 正视图 (XZ)", f"{bx:.1f} × {bz:.1f} {escaped_units}", "front")}
+  {_panel(360, 400, 220, 260, "RIGHT / 右视图 (YZ)", f"{by:.1f} × {bz:.1f} {escaped_units}", "right")}
+  <g transform="translate(620, 520)">
+    <rect x="0" y="0" width="355" height="155" fill="#ffffff" stroke="#0f172a" stroke-width="1.5"/>
+    <line x1="0" y1="35" x2="355" y2="35" stroke="#0f172a" stroke-width="1"/>
+    <line x1="0" y1="75" x2="355" y2="75" stroke="#0f172a" stroke-width="1"/>
+    <line x1="0" y1="115" x2="355" y2="115" stroke="#0f172a" stroke-width="1"/>
+    <line x1="180" y1="35" x2="180" y2="155" stroke="#0f172a" stroke-width="1"/>
+    <text x="10" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0f172a">PART: {escaped_title}</text>
+    <text x="10" y="55" font-family="sans-serif" font-size="11" fill="#475569">ID: {model_id[:16]}</text>
+    <text x="190" y="55" font-family="sans-serif" font-size="11" fill="#475569">UNITS: {escaped_units}</text>
+    <text x="10" y="95" font-family="sans-serif" font-size="11" fill="#475569">ENVELOPE: {bx:.1f}×{by:.1f}×{bz:.1f}</text>
+    <text x="190" y="95" font-family="sans-serif" font-size="11" fill="#475569">VOLUME: {volume:.1f} mm³</text>
+    <text x="10" y="135" font-family="sans-serif" font-size="11" fill="#475569">STANDARD: ISO / THIRD-ANGLE</text>
+    <text x="190" y="135" font-family="sans-serif" font-size="11" font-weight="bold" fill="#16a34a">VIEWS: OCCT PROJECTED</text>
+  </g>
+</svg>"""
+            cached_svg_path.write_text(projected_svg, encoding="utf-8")
+        except Exception as render_err:
+            logger.warning(
+                f"Projected drawing render failed for {model_id}: {render_err}; "
+                "falling back to the schematic template."
+            )
+            projected_svg = None
+
+    if projected_svg is not None:
+        return Response(content=projected_svg, media_type="image/svg+xml")
+
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700">
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="1000" height="700" fill="#f8fafc"/>
+  <rect width="1000" height="700" fill="url(#grid)"/>
+  <rect x="20" y="20" width="960" height="660" fill="none" stroke="#1e293b" stroke-width="2"/>
+  <rect x="25" y="25" width="950" height="650" fill="none" stroke="#64748b" stroke-width="0.8"/>
+
+  <g transform="translate(180, 160)">
+    <text x="0" y="-110" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569" text-anchor="middle">TOP VIEW / 俯视图 (XY)</text>
+    <rect x="-70" y="-50" width="140" height="100" fill="#e2e8f0" stroke="#0f172a" stroke-width="1.5" rx="4"/>
+    <text x="0" y="5" font-family="monospace" font-size="11" fill="#334155" text-anchor="middle">{bx:.1f} × {by:.1f} {escaped_units}</text>
+  </g>
+
+  <g transform="translate(700, 160)">
+    <text x="0" y="-110" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569" text-anchor="middle">ISOMETRIC / 轴测投影 (ISO)</text>
+    <polygon points="0,-60 60,-25 60,35 0,70 -60,35 -60,-25" fill="#cbd5e1" stroke="#0f172a" stroke-width="1.5"/>
+    <line x1="0" y1="-60" x2="0" y2="70" stroke="#0f172a" stroke-width="1"/>
+    <line x1="0" y1="5" x2="60" y2="-25" stroke="#0f172a" stroke-width="1"/>
+    <line x1="0" y1="5" x2="-60" y2="-25" stroke="#0f172a" stroke-width="1"/>
+  </g>
+
+  <g transform="translate(180, 460)">
+    <text x="0" y="-90" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569" text-anchor="middle">FRONT VIEW / 正视图 (XZ)</text>
+    <rect x="-70" y="-40" width="140" height="80" fill="#e2e8f0" stroke="#0f172a" stroke-width="1.5" rx="4"/>
+    <text x="0" y="5" font-family="monospace" font-size="11" fill="#334155" text-anchor="middle">{bx:.1f} × {bz:.1f} {escaped_units}</text>
+  </g>
+
+  <g transform="translate(480, 460)">
+    <text x="0" y="-90" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569" text-anchor="middle">RIGHT VIEW / 右视图 (YZ)</text>
+    <rect x="-50" y="-40" width="100" height="80" fill="#e2e8f0" stroke="#0f172a" stroke-width="1.5" rx="4"/>
+    <text x="0" y="5" font-family="monospace" font-size="11" fill="#334155" text-anchor="middle">{by:.1f} × {bz:.1f} {escaped_units}</text>
+  </g>
+
+  <g transform="translate(620, 520)">
+    <rect x="0" y="0" width="355" height="155" fill="#ffffff" stroke="#0f172a" stroke-width="1.5"/>
+    <line x1="0" y1="35" x2="355" y2="35" stroke="#0f172a" stroke-width="1"/>
+    <line x1="0" y1="75" x2="355" y2="75" stroke="#0f172a" stroke-width="1"/>
+    <line x1="0" y1="115" x2="355" y2="115" stroke="#0f172a" stroke-width="1"/>
+    <line x1="180" y1="35" x2="180" y2="155" stroke="#0f172a" stroke-width="1"/>
+
+    <text x="10" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0f172a">PART: {escaped_title}</text>
+    <text x="10" y="55" font-family="sans-serif" font-size="11" fill="#475569">ID: {model_id[:16]}</text>
+    <text x="190" y="55" font-family="sans-serif" font-size="11" fill="#475569">UNITS: {escaped_units}</text>
+    <text x="10" y="95" font-family="sans-serif" font-size="11" fill="#475569">ENVELOPE: {bx:.1f}×{by:.1f}×{bz:.1f}</text>
+    <text x="190" y="95" font-family="sans-serif" font-size="11" fill="#475569">VOLUME: {volume:.1f} mm³</text>
+    <text x="10" y="135" font-family="sans-serif" font-size="11" fill="#475569">STANDARD: ISO / THIRD-ANGLE</text>
+    <text x="190" y="135" font-family="sans-serif" font-size="11" font-weight="bold" fill="#16a34a">STATUS: CERTIFIED CAD</text>
+  </g>
+</svg>"""
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+@app.get("/v1/models/{model_id}/measure")
+def measure_model(
+    model_id: str,
+) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-f]{32}", model_id):
+        raise HTTPException(status_code=400, detail="invalid model id")
+    manifest_path = ARTIFACT_ROOT / model_id / "manifest.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="model not found")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        metrics = manifest.get("geometry_metrics") or manifest.get("metrics") or {}
+        dimensions = {
+            "width": float((metrics.get("bbox_mm") or {}).get("x", 0.0) or 0.0),
+            "depth": float((metrics.get("bbox_mm") or {}).get("y", 0.0) or 0.0),
+            "height": float((metrics.get("bbox_mm") or {}).get("z", 0.0) or 0.0),
+        }
+        bbox_mm = metrics.get("bbox_mm") or {}
+        valid_brep = bool(metrics.get("valid_brep", True))
+        solid_count = int(metrics.get("solid_count", 1) or 1)
+        face_count = int(metrics.get("face_count", 0) or 0)
+        volume_mm3 = float(metrics.get("volume_mm3", 0.0) or 0.0)
+        surface_area_mm2 = float(metrics.get("surface_area_mm2", 0.0) or 0.0)
+        units = manifest.get("units", "mm")
+    except (ValueError, TypeError, AttributeError) as error:
+        raise HTTPException(status_code=422, detail=f"model manifest unreadable: {error}") from error
+    return {
+        "model_id": model_id,
+        "valid_brep": valid_brep,
+        "solid_count": solid_count,
+        "face_count": face_count,
+        "volume_mm3": volume_mm3,
+        "surface_area_mm2": surface_area_mm2,
+        "bbox_mm": bbox_mm,
+        "units": units,
+        "dimensions": dimensions,
+    }

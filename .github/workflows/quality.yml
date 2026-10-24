@@ -27,3 +27,5 @@ jobs:
         run: docker build --tag texttocad-backend:kernel-smoke ./backend
       - name: Run geometry kernel smoke checks
         run: docker run --rm texttocad-backend:kernel-smoke python kernel_smoke.py
+      - name: Run full backend test matrix in container
+        run: docker run --rm texttocad-backend:kernel-smoke sh -c "pip install --quiet pytest pillow matplotlib && python -m pytest -q /app/test_*.py"
