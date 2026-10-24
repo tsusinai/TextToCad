@@ -3678,6 +3678,9 @@ def compile_ir_endpoint(request: IRCompileRequest) -> dict[str, Any]:
             _export_face_mapped_glb(execution["shape"], glb_path)
             if not glb_path.exists() or glb_path.stat().st_size == 0:
                 raise RuntimeError("face-mapped GLB export produced no file")
+            # The STL keeps /drawing able to render true projections for
+            # recompiled models instead of falling back to the schematic.
+            cq.exporters.export(execution["shape"], str(target_dir / "model.stl"))
             manifest = {
                 "model_id": persisted_model_id,
                 "title": str((normalized.get("document") or {}).get("intent") or "parametric re-compile")[:80],

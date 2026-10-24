@@ -45,12 +45,16 @@ def test_compile_persist_writes_glb_and_manifest():
         glb_path = target_dir / "model.glb"
         assert glb_path.exists() and glb_path.stat().st_size > 0
         assert glb_path.read_bytes()[:4] == b"glTF"
+        assert (target_dir / "model.stl").exists(), "persist must export STL for true-projection drawings"
         manifest_path = target_dir / "manifest.json"
         assert manifest_path.exists()
         # The persisted manifest must keep /v1/models/{id}/measure working.
         measured = app.measure_model(model_id)
         assert measured["solid_count"] == 1
         assert measured["dimensions"]["width"] == pytest.approx(60.0, abs=0.05)
+        # The drawing endpoint must produce true projections from the STL.
+        drawing = app.get_model_drawing(model_id)
+        assert b"data:image/png;base64" in drawing.body
     finally:
         shutil.rmtree(target_dir, ignore_errors=True)
 
