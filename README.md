@@ -12,13 +12,14 @@
 | 能力 | 当前实现 |
 | --- | --- |
 | 自然语言 | 中文/英文尺寸、单位换算、通用 Semantic CAD IR 规划、隔间、壁厚、倒角、排水孔、走线槽 |
-| 3D 预览 | Three.js 参数化预览、GLB/OrbitControls、等距/顶视/前视、X/Y/Z 90° 旋转反转、XY/XZ/YZ 平面镜像与翻转、一键姿态重置 |
-| 几何内核 | CadQuery/OCCT 参数化 B-Rep |
-| 导出 | STEP、STL，条件支持 3MF、GLB；前端保留 OBJ 概念导出 |
+| 3D 视口审查 | React + Three.js 视口，集成 3D 实时剖切平面审查（X/Y/Z轴深度剖切）、物理拓扑量测仪表盘（HUD）、GLB/OrbitControls、线框/透视模式；旧版 `index.html` 保留姿态变换工具 |
+| 工程出图与量测 | 动态生成符合 ISO 第三视角标准的 2D 矢量工程制图蓝图（SVG），支持在线弹窗审查、打印 PDF 与高精度量测接口 |
+| 几何内核 | CadQuery/OCCT 参数化 B-Rep，节点级内容哈希缓存加速二次生成 |
+| 导出 | STEP、STL，条件支持 3MF、GLB、2D 矢量蓝图（SVG）；前端保留 OBJ 概念导出 |
 | 制造检查 | FDM、SLA、CNC、注塑工艺配置，B-Rep、实体、体积、包围盒和名义壁厚检查 |
 | 高级模式 | OpenAI-compatible LLM、DeepSeek 示例、受限 JSON、失败回退 |
-| 可追溯性 | manifest、Semantic CAD IR、逐字段 provenance、assumptions、revision history |
-| 通用建模路线 | 原语 + 特征 + 约束 + 基准的族型无关 IR（方案见 docs/SEMANTIC_CAD_IR.md） |
+| 可追溯性 | manifest、Semantic CAD IR (v0.2 / v0.3)、逐字段 provenance、assumptions、revision history |
+| 通用建模路线 | 原语 + 特征 + 约束 + 基准的族型无关 IR（支持 v0.3 原生装配配合副，方案见 docs/SEMANTIC_CAD_IR.md） |
 | 建模过程 | 异步 job 实时阶段、真实 CAD 特征事件、导出校验状态、中间 GLB 步骤预览 |
 
 ## Live 预览
@@ -58,10 +59,12 @@ curl http://localhost:8787/health
 
 健康检查应包含 cadquery_available=true；配置密钥后还应包含 advanced_mode_available=true 和安全的 llm_provider 字段。
 
-启动静态前端：
+启动新版 React + Tailwind 前端（需要 Node.js 22+）：
 
 ~~~bash
-python3 -m http.server 5173
+cd frontend
+npm install
+npm run dev
 ~~~
 
 打开 [http://localhost:5173/](http://localhost:5173/)。本机页面会自动尝试连接 http://localhost:8787；也可以显式传入：
@@ -69,6 +72,8 @@ python3 -m http.server 5173
 ~~~text
 http://localhost:5173/?backend=http://localhost:8787
 ~~~
+
+生产构建使用 `npm run build`，产物位于 `frontend/dist/`。未连接后端时，新版会明确进入交互演示模式，不会把程序化样品冒充为工业 CAD 结果。根目录 `index.html` 保留为旧版完整编辑器；`start_frontend.bat` 与 `start_all.bat` 默认启动新版。
 
 ## 从文字到 CAD 的链路
 
@@ -119,6 +124,8 @@ LLM 只负责理解设计意图，不生成或执行 CadQuery 代码。后端会
 | GET | /v1/models/{id}/ir | Semantic CAD IR |
 | GET | /v1/models/{id}/analysis | 壁厚采样和制造问题 |
 | GET | /v1/models/{id}/download?format=step | 下载 STEP、STL、3MF 或 GLB |
+| GET | /v1/models/{id}/drawing | 获取符合 ISO 第三视角标准的 2D 矢量工程制图蓝图 (SVG) |
+| GET | /v1/models/{id}/measure | 查询零件真实 B-Rep 包络长宽高、表面积、体积与流形指标 |
 | GET | /v1/models/{id}/rounds/{round_idx}/views/{view_name} | 查看 Agent 模式各轮次多视向渲染图 (iso, top, front, right, composite, annotated_composite) |
 | GET | /v1/models/{id}/rounds/{round_idx}/model.glb | 查看 Agent 模式各轮次中间 CAD 3D GLB 实体 |
 | POST | /v1/ir/plan | 自然语言编译为通用 v0.2 IR 草案 |

@@ -1,0 +1,27 @@
+.u002{--bg:var(--acid);--fg:#12150f;--blob:linear-gradient(135deg,#d7ff43,#a8ed5f 60%,#74c89b);position:relative;width:340px;max-width:100%;height:200px;display:grid;place-items:center;pointer-events:none}
+.u002-mag{transition:translate .9s var(--ux-spring)}
+.u002-btn{position:relative;display:flex;align-items:center;gap:18px;height:76px;padding:0 10px 0 32px;border:0;border-radius:999px;background:var(--bg);color:var(--fg);overflow:hidden;isolation:isolate;pointer-events:auto;box-shadow:0 24px 40px -24px rgba(163,211,54,.34),0 0 0 1px color-mix(in srgb,var(--fg) 8%,transparent);transition:transform .6s var(--ux-spring),box-shadow .6s var(--ux-ease)}
+.u002-btn:hover{box-shadow:0 30px 52px -22px rgba(183,255,67,.5),0 0 0 1px transparent}
+.u002-btn:active{transform:scale(.96)}
+.u002-btn:disabled{cursor:wait;opacity:.86}
+.u002-btn:focus-visible{outline:2px solid var(--ux-accent);outline-offset:5px}
+.u002-fill{position:absolute;inset:0;z-index:-1;background:var(--blob);clip-path:circle(28px at calc(100% - 38px) 50%);transition:clip-path .8s var(--ux-ease)}
+.u002-btn:hover .u002-fill,.u002-btn:focus-visible .u002-fill{clip-path:circle(160% at calc(100% - 38px) 50%)}
+.u002-txt{position:relative;overflow:hidden;padding:5px 0;font-size:19px;font-weight:700;letter-spacing:-.03em;white-space:nowrap;transition:translate .7s var(--ux-spring),color .5s var(--ux-ease)}
+.u002-btn:hover .u002-txt{color:#10150d}
+.u002-txt span{display:block;transition:transform .6s var(--ux-spring),opacity .35s var(--ux-ease)}
+.u002-txt span+span{position:absolute;left:0;top:5px;transform:translateY(130%);opacity:0}
+.u002[data-state="go"] .u002-txt span:first-child{transform:translateY(-130%);opacity:0}
+.u002[data-state="go"] .u002-txt span+span{transform:none;opacity:1}
+.u002-orb{position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;color:#10150d;background:rgba(16,21,13,.08);overflow:hidden;flex:none;transition:translate .7s var(--ux-spring)}
+.u002-orb svg{position:absolute;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.u002-orb svg:last-child{transform:translateX(-46px)}
+.u002[data-state="go"] .u002-orb svg:first-child{animation:u002-out .55s var(--ux-ease) forwards}
+.u002[data-state="go"] .u002-orb svg:last-child{animation:u002-in .6s var(--ux-spring) .28s forwards}
+@keyframes u002-out{to{transform:translateX(46px)}}
+@keyframes u002-in{to{transform:none}}
+.u002-glow{position:absolute;left:50%;top:50%;width:300px;height:110px;margin:-40px 0 0 -150px;border-radius:50%;background:var(--blob);filter:blur(36px);opacity:0;z-index:-1;transition:opacity .7s var(--ux-ease)}
+.u002:hover .u002-glow{opacity:.25}
+.u002-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.u002-spinner{width:22px;height:22px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:u002-spin .8s linear infinite}
+@keyframes u002-spin{to{transform:rotate(360deg)}}

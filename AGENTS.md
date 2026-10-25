@@ -2,8 +2,8 @@
 
 ## Overview & Architecture
 
-- **Stack**: Single-file static frontend (`index.html`) + Python FastAPI CadQuery/OCCT geometry backend (`backend/`).
-- **No Node.js/npm**: Frontend has no `package.json`, build step, or bundler; it loads Three.js 0.161.0 via ESM importmap CDN. Do not create `package.json` or add npm dependencies.
+- **Stack**: Primary React + TypeScript + Tailwind CSS frontend (`frontend/`) + Python FastAPI CadQuery/OCCT geometry backend (`backend/`). The original single-file static frontend remains at root `index.html` as the legacy/full-feature editor.
+- **Frontend Toolchain**: `frontend/` uses Vite, npm, Tailwind CSS v4 and Three.js. Run its commands from `frontend/`; do not add Node.js dependencies to the backend or assume the legacy static page uses the React bundle.
 - **Two-Layer CAD Pipeline**: The LLM never writes or executes Python/CadQuery code directly. The LLM only plans or patches **Semantic CAD IR v0.2** (`docs/SEMANTIC_CAD_IR.md`). CadQuery/OCCT executes the IR deterministically.
 - **Deterministic Fallback**: If LLM API keys are unset or the provider fails, explicit primitive and CSG prompts fall back to local rule-based parsing. Unconfigured free-form prompts return HTTP 503 instead of falling back to legacy templates.
 - **Single-Worker Constraint**: Generation job queues (`MAX_CONCURRENT_JOBS`) and task state in `backend/app.py` are process-local. Uvicorn/Docker must run with `--workers 1`.
@@ -31,13 +31,16 @@
   ```
 
 ### Frontend Server
-- **Local static server**:
+- **React + Tailwind (primary UI, Node.js 22+)**:
   ```powershell
-  backend\.venv\Scripts\python.exe -m http.server 8000
-  # Alternatively: start_frontend.bat (port 8000)
-  # Access UI: http://localhost:8000/?backend=http://localhost:8787
+  cd frontend
+  npm install
+  npm run dev
+  # Production: npm run build (output: frontend/dist/)
+  # Access UI: http://localhost:5173/?backend=http://localhost:8787
   ```
-- **Batch Launcher**: `start_all.bat` starts both backend (port 8787) and frontend (port 8000).
+- **Legacy static editor**: serve root `index.html` with `backend\.venv\Scripts\python.exe -m http.server 8000`.
+- **Batch Launcher**: `start_all.bat` starts backend (port 8787) and the React frontend (port 5173).
 
 ### Verification & Tests
 - **Fast contract tests (CI equivalent, mock-friendly, no CAD kernel needed)**:

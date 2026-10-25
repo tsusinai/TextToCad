@@ -10,11 +10,11 @@ start "TextToCad Backend" cmd /k "cd /d "%~dp0backend" && call .venv\Scripts\act
 
 timeout /t 3 /nobreak >nul
 
-echo [2/2] Starting Frontend static server on port 8000...
-start "TextToCad Frontend" cmd /k "cd /d "%~dp0" && start http://localhost:8000 && backend\.venv\Scripts\python.exe -m http.server 8000"
+echo [2/2] Starting FORMA React Studio on port 5173...
+start "FORMA Frontend" cmd /k "cd /d "%~dp0frontend" && if not exist node_modules call npm install && start http://localhost:5173 && npm run dev -- --host 0.0.0.0"
 
 echo ========================================================
 echo Both services started!
-echo Frontend: http://localhost:8000
+echo Frontend: http://localhost:5173
 echo Backend:  http://localhost:8787
 echo ========================================================
